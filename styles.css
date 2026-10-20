@@ -181,3 +181,13 @@ header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .preview{padding:14px;border:1px dashed var(--line);border-radius:12px;background:var(--bg)}
 .preview .cartbtn{display:flex}
 .qr .sharetog{margin:6px auto 2px;display:block;font-size:12px;padding:4px 10px}
+/* diner accounts */
+.optin{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:14px;line-height:1.45;cursor:pointer}
+.optin input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--accent)}
+.orline{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px;margin:16px 0}
+.orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--line)}
+.linkbtn{border:none;background:none;padding:0;color:var(--hop);font-weight:600;text-decoration:underline;font-size:inherit}
+.welcome{margin-top:10px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--hop);background:var(--surface)}
+.welcome .usual{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:14px}
+.acct{display:flex;gap:14px;align-items:center}
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--hop-soft);color:var(--fg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;flex:none}

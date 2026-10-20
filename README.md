@@ -24,6 +24,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 | Diner at table 4 (what a table QR opens; `k` is the table's secret key) | `?t=4&k=…` |
 | Join a friend's table or group with its current code (the Share invite; stops working when it closes) | `?c=1234` |
 | A bare table number (`?t=4`) asks for the table code instead of joining | |
+| Diner's account: visits at every restaurant, offers setting, sign out, delete | `#account` |
 | Waiter | `#waiter` |
 | Kitchen / Bar / Grill | `#kitchen`, `#bar`, `#grill` |
 
@@ -32,6 +33,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 - `index.html`, `styles.css`, `app.js`: the app (no build step)
 - `demo.html`, `demo.js`: demo stage that frames several app screens on one device
 - `menu.js`: the starting menu, waiters and tables. After the owner first opens `#owner`, the menu and staff live in the database and are edited there.
+- `account.js`: diner sign-in (Firebase Authentication: Google, and phone number with SMS code). Optional; guests still join with a first name.
 - `photos.js`, `img/`: generic menu photos matched to items by name (free-licence photos from [Pexels](https://www.pexels.com/license/), 320px). An owner-uploaded photo always takes priority.
 - `metrics.js`: dashboard calculations (prep, pickup and order-to-table times, waiter response times and sales, sales by hour and day, best sellers) and the sample-week generator
 - `firebase.js`: Firebase project connection (public by design; access is controlled by Firestore rules)
@@ -47,6 +49,8 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 - `sessions/{session}`: one record per closed table (opened, closed, waiter, guests, total)
 - `config/restaurant`: shared table numbers, menu sections and items (with sold-out flags and photo ids), waiters, owner PIN, manager PIN, brand (name, logo id, two colours, font pair)
 - `photos/{id}`: logo and menu photos, resized on the owner's phone (JPEG about 640px, logo PNG 360px) and stored as data URLs so no paid Storage plan is needed. Move to Firebase Storage or a CDN before scaling up.
+- `diners/{uid}`: signed-in diner's profile (first name, phone or email, offers opt-in). One account works at every restaurant.
+- `visits/{uid}_{session}_{person}`: a signed-in diner's visit, saved when the waiter closes the table (restaurant id and name, table, items, their share). Each restaurant only reads visits with its own `rid`; enforce this in Firestore rules before launch.
 - Sample data from the dashboard is marked `sample: true` and can be removed from the dashboard
 
 The database currently runs in Firebase **test mode**, which allows anyone to read and write and expires after 30 days. Replace with proper rules and sign-in before real restaurant use.

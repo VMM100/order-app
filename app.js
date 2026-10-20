@@ -11,7 +11,8 @@ import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction,
   updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT } from "./menu.js";
+import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
+import { onUser, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "./account.js";
 import { computeMetrics, sampleData } from "./metrics.js";
 import { genericPhoto } from "./photos.js";
 
@@ -20,6 +21,7 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmt = (n) => Number(n || 0).toLocaleString("en-US");
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? m + " min ago" : Math.floor(m / 60) + " h ago"; };
+const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
 const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -87,6 +89,22 @@ function watcher() {
 const tablesCol = collection(db, "tables"), linesCol = collection(db, "lines"), alertsCol = collection(db, "alerts");
 const tableRef = (n) => doc(db, "tables", String(n));
 const sessionsCol = collection(db, "sessions");
+// Diner accounts work across every restaurant on the platform. diners/{uid} is the profile;
+// each visit is a document in visits, labelled with its restaurant (rid).
+const dinersCol = collection(db, "diners"), visitsCol = collection(db, "visits");
+const dinerRef = (u) => doc(db, "diners", u);
+async function myVisits(u) { const s = await getDocs(query(visitsCol, where("uid", "==", u))); return s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.date - a.date); }
+// The two items a diner orders most here, still on the menu and not sold out.
+function usualFrom(visits) {
+  const count = {};
+  visits.forEach((v) => (v.items || []).forEach((it) => { const k = it.n + "|" + (it.v || ""); count[k] = (count[k] || 0) + 1; }));
+  const found = [];
+  Object.entries(count).sort((a, b) => b[1] - a[1]).forEach(([k]) => {
+    if (found.length >= 2) return; const [n, v] = k.split("|");
+    MENU.forEach((sec) => sec.items.forEach((it) => { if (it.n !== n || it.out) return; const opt = it.v.find(([l]) => (l || "") === v); if (opt && !found.some((f) => f.n === n && f.v === v)) found.push({ n, v, pr: opt[1], st: sec.st }); }));
+  });
+  return found;
+}
 
 // Each table has a secret key printed in its QR code, so a table can't be joined by guessing its number.
 const keyRef = (n) => doc(db, "tablekeys", String(n));
@@ -284,11 +302,24 @@ else if (view === "waiter") waiterScreen();
 else if (view === "setup") setupScreen();
 else if (view === "owner") ownerScreen("owner");
 else if (view === "manager") ownerScreen("manager");
+else if (view === "account") accountScreen();
 else dinerScreen();
 
 // ================= DINER =================
 function dinerScreen() {
-  const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "" };
+  const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "",
+    user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "" };
+  // Signed-in diners: load their profile and their visits to this restaurant.
+  onUser(async (u) => {
+    S.user = u || null; S.profile = null; S.visits = [];
+    if (u) { try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
+      S.visits = (await myVisits(u.uid)).filter((v) => v.rid === RESTAURANT_ID); } catch {} }
+    const justSignedIn = S.step === "code" || S.step === "phone" || S.step === "google";
+    if (justSignedIn) S.step = u && !(S.profile && S.profile.name) ? "name" : "";
+    // Signed in just now and already known: join straight away, no extra tap.
+    if (justSignedIn && u && S.profile && S.profile.name && S.g && S.g.open && !S.me) { try { await joinAs(S.profile.name, u); return; } catch {} }
+    render();
+  });
   // On the demo page several diners share one browser, so each gets its own slot (?as=1, ?as=2).
   const meKey = () => `dees-me-${S.n}${params.get("as") ? "-" + params.get("as") : ""}`;
   let subGroup = null, subLines = null, subAlerts = null;
@@ -368,6 +399,57 @@ function dinerScreen() {
       <button class="btn big" data-act="newgroup">Start a new group</button>
       <p class="note">Each group orders and pays separately, so you only see your own bill.</p></section>`);
   }
+  // Joining: signed-in diners join in one tap; others choose phone, Google, or just a first name.
+  function joinScreen(g, shared) {
+    const names = Object.values(g.people || {}).map((p) => esc(p.name)), unit = shared ? "group" : "table";
+    const bar = `<div class="tablebar"><b>Table ${esc(S.n)}</b><span class="note" style="margin:0">${names.length ? `With ${names.join(", ")}` : shared ? "Starting a new group" : "You're the first one here"}</span></div>`;
+    const err = S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : "";
+    const back = `<button class="btn ghost" data-act="authback">Back</button>`;
+    if (S.step === "phone") return `<section>${bar}<div class="label">Your phone number</div>
+      <p style="margin-top:0">We'll text you a 6-digit code. No password to remember.</p>
+      <form id="phoneform" class="grid"><div class="vrow"><span class="field" style="flex:0 0 auto;width:auto">+255</span>
+        <input class="field num" id="phonein" inputmode="tel" autocomplete="tel" placeholder="748 227 000" value="${esc(S.phone)}" aria-label="Mobile number"></div>
+        <label class="optin"><input type="checkbox" id="offersin" ${S.offers ? "checked" : ""}> <span>Send me ${esc(rname())}'s offers on WhatsApp. <span class="note">Optional. Stop any time.</span></span></label>
+        <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Sending…" : "Send code"}</button></form>${err}${back}</section>`;
+    if (S.step === "code") return `<section>${bar}<div class="label">Enter the code</div>
+      <p style="margin-top:0">Sent by SMS to <b>${esc(S.phoneFull || "")}</b>.</p>
+      <form id="smsform" class="grid"><input class="field num" id="smsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="6-digit code">
+        <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Checking…" : "Confirm"}</button></form>${err}
+      <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="resend">Send a new code</button>${back}</div></section>`;
+    if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
+      <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
+        <button class="btn primary big">Join ${unit}</button></form>${err}</section>`;
+    if (S.user && S.profile && S.profile.name) return `<section>${bar}
+      <button class="btn primary big" data-act="joinme" style="margin-top:16px">Join as ${esc(S.profile.name)}</button>
+      <p class="note">Not ${esc(S.profile.name)}? <button class="linkbtn" data-act="signout">Sign out</button></p>${err}</section>`;
+    return `<section>${bar}<div class="label">Join the ${unit}</div>
+      <p style="margin-top:0">Sign in to keep your receipts and order your usual in one tap. Or just use your first name.</p>
+      <div class="grid"><button class="btn primary big" data-act="auth-phone">Continue with phone number</button>
+        <button class="btn big" data-act="auth-google" ${S.busy ? "disabled" : ""}>Continue with Google</button></div>${err}
+      <div class="orline"><span>or</span></div>
+      <form id="joinform" class="grid"><label class="note" for="namein" style="margin:0">Just your first name, no account</label>
+        <input class="field" id="namein" maxlength="16" placeholder="First name" autocomplete="given-name" value="${esc(S.name)}">
+        <button class="btn big">Join ${unit}</button></form>
+      <p class="note">Signing in is optional. Ordering and splitting the bill work the same either way.</p></section>`;
+  }
+  // Welcome card for signed-in diners: visit number here, their usual, and a link to their account.
+  function welcomeCard() {
+    if (!S.user || !S.profile || S.tab !== "menu") return "";
+    const n = S.visits.length + 1, usual = usualFrom(S.visits);
+    return `<div class="welcome"><div class="row" style="justify-content:space-between"><b>${S.visits.length ? `Welcome back, ${esc(S.profile.name)}` : `Hi ${esc(S.profile.name)}`}</b>
+      <a class="note" style="margin:0" href="${BASE}#account">My account</a></div>
+      <div class="note" style="margin:2px 0 0">${S.visits.length ? `Your ${ordinal(n)} visit to ${esc(rname())}` : "Your visits here will be saved to your account"}</div>
+      ${usual.length ? `<div class="usual"><span>Your usual: ${usual.map((u) => esc(u.n) + (u.v ? ` · ${esc(u.v)}` : "")).join(" + ")}</span>
+        <button class="btn primary" data-act="usual">Add my usual</button></div>` : ""}</div>`;
+  }
+  async function joinAs(name, u) {
+    const pid = uid("p"), person = { name, t: Date.now() }, patch = {};
+    if (u) person.uid = u.uid;
+    patch[`people.${pid}`] = person; if (!S.g.label) patch.label = name;
+    await updateDoc(groupRef(S.sid), patch);
+    store.set(meKey(), { pid, name, session: S.sid }); S.me = { pid, name, session: S.sid };
+    store.set("dees-lasttable", location.href); render();
+  }
   function render() {
     if (!S.n || !S.access) return;
     const shared = isShared(S.n), g = S.g;
@@ -377,15 +459,7 @@ function dinerScreen() {
         ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
         : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
-    if (!S.me) {
-      $("#cart").hidden = true;
-      const names = Object.values(g.people || {}).map((p) => esc(p.name));
-      return paint(`<section><div class="tablebar"><b>Table ${esc(S.n)}</b><span class="note" style="margin:0">${names.length ? `With ${names.join(", ")}` : shared ? "Starting a new group" : "You're the first one here"}</span></div>
-        <div class="label">What's your name?</div>
-        <form id="joinform" class="grid"><input class="field" id="namein" maxlength="16" placeholder="First name" autocomplete="given-name" value="${esc(S.name)}">
-        <button class="btn primary big">Join ${shared ? "group" : "table"}</button></form>
-        <p class="note">Your name shows on your orders so ${shared ? "your group" : "the table"} can split the bill.</p></section>`);
-    }
+    if (!S.me) { $("#cart").hidden = true; return paint(joinScreen(g, shared)); }
     const open = S.alerts.filter((a) => !a.done);
     const banners = open.filter((a) => a.ack).map((a) => `<div class="ontheway" role="status"><span>${esc(wname(a.ackBy) || "Your waiter")} ${a.type === "bill" ? "is bringing your bill" : "is on the way to your table"}</span><span class="note">${ago(a.ack)}</span></div>`).join("");
     const tabs = [["menu", "Menu"], ["orders", `${shared ? "Our order" : "Table order"}${S.lines.length ? ` (${S.lines.length})` : ""}`], ["bill", "Bill"]];
@@ -405,7 +479,7 @@ function dinerScreen() {
     paint(`<section>
       <div class="tablebar"><div><b>Table ${esc(S.n)}</b><div class="note" style="margin:2px 0 0">${shared ? `${esc(gname(g))} · ` : ""}Hi ${esc(S.me.name)} · friends join with code</div></div>
        <div class="row"><span class="code num">${esc(g.code)}</span><button class="btn" data-act="share">Share</button></div></div>
-      ${banners}
+      ${banners}${welcomeCard()}
       <div class="waitbar"><div><div class="note" style="margin:0">Your waiter</div><b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned…"}</b></div>
        <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
          return `<button class="btn${a ? "" : " primary"}" data-alert="${k}" ${a ? "disabled" : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
@@ -470,11 +544,25 @@ function dinerScreen() {
     }
     if (e.target.id === "joinform") {
       const name = $("#namein").value.trim(); if (!name) return;
-      const pid = uid("p"), patch = { [`people.${pid}`]: { name, t: Date.now() } };
-      if (!S.g.label) patch.label = name;
-      try { await updateDoc(groupRef(S.sid), patch);
-        store.set(meKey(), { pid, name, session: S.sid }); S.me = { pid, name, session: S.sid }; render();
-      } catch (err) { fail(err); }
+      try { await joinAs(name, null); } catch (err) { fail(err); }
+    }
+    if (e.target.id === "phoneform") {
+      S.phone = $("#phonein").value; S.offers = $("#offersin").checked;
+      const full = normalisePhone(S.phone); if (!full) { S.authErr = "That doesn't look like a phone number. Try 0748 227 000."; return render(); }
+      S.phoneFull = full; S.busy = true; S.authErr = ""; render();
+      try { await phoneStart(full); S.step = "code"; } catch (err) { S.authErr = authMessage(err); }
+      S.busy = false; render();
+    }
+    if (e.target.id === "smsform") {
+      const code = $("#smsin").value.replace(/\D/g, ""); if (code.length !== 6) return;
+      S.busy = true; S.authErr = ""; render();
+      try { await phoneConfirm(code); } catch (err) { S.authErr = authMessage(err); S.busy = false; render(); return; }
+      S.busy = false;
+    }
+    if (e.target.id === "profileform") {
+      const name = $("#profilein").value.trim(); if (!name || !S.user) return;
+      const prof = { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: !!S.offers, created: Date.now() };
+      try { await setDoc(dinerRef(S.user.uid), prof); S.profile = prof; S.step = ""; await joinAs(name, S.user); } catch (err) { fail(err); }
     }
   });
   document.addEventListener("input", (e) => { if (e.target.id === "note") S.note = e.target.value; if (e.target.id === "namein") S.name = e.target.value; });
@@ -505,6 +593,17 @@ function dinerScreen() {
       try { if (navigator.share) { await navigator.share({ text: txt }); return; } } catch { return; }
       try { await navigator.clipboard.writeText(txt); toast("Invite copied. Paste it in WhatsApp."); } catch { toast(`Code: ${S.g.code}`); }
     }
+    else if (d.act === "auth-phone") { S.step = "phone"; S.authErr = ""; render(); }
+    else if (d.act === "authback") { S.step = ""; S.authErr = ""; render(); }
+    else if (d.act === "resend") { S.step = "phone"; S.authErr = ""; render(); }
+    else if (d.act === "auth-google" && !S.busy) {
+      S.busy = true; S.step = "google"; S.authErr = ""; render();
+      try { await googleSignIn(); } catch (err) { S.authErr = authMessage(err); S.step = ""; }
+      S.busy = false; render();
+    }
+    else if (d.act === "joinme" && S.profile) { try { await joinAs(S.profile.name, S.user); } catch (err) { fail(err); } }
+    else if (d.act === "signout") { try { await signOutUser(); } catch {} S.step = ""; render(); }
+    else if (d.act === "usual") { usualFrom(S.visits).forEach((u) => S.cart.push({ ...u })); toast("Your usual is in the basket"); renderCart(); }
     else if (d.act === "newgroup" && S.viaKey) { S.choosing = false; try { attach(await startGroup(S.n)); } catch (err) { fail(err); } }
     else if (d.act === "newsession" && S.viaKey) { S.access = false; S.sid = null; S.g = null; S.me = null; start(); }
   });
@@ -633,6 +732,13 @@ function waiterScreen() {
       waiter: g.waiter || null, guests: Object.keys(g.people || {}).length, total: tableTotal(all.docs.map((x) => x.data())),
       paid: Object.keys(g.paid || {}).length });
     batch.update(groupRef(sid), { open: false, closed: now });
+    // Signed-in diners get this visit saved to their account: what they had and their share.
+    const allLines = all.docs.map((x) => x.data()), owed = shares(g, allLines);
+    Object.entries(g.people || {}).forEach(([pid, p]) => {
+      if (!p.uid) return; const sh = owed.find((x) => x.pid === pid);
+      batch.set(doc(db, "visits", `${p.uid}_${sid}_${pid}`), { uid: p.uid, rid: RESTAURANT_ID, rname: rname(), table: g.table, session: sid, date: now,
+        items: allLines.filter((l) => l.pid === pid).map((l) => ({ n: l.n, v: l.v || "", pr: l.pr })), share: sh ? sh.amt : 0, groupTotal: tableTotal(allLines) });
+    });
     await batch.commit();
   }
   setInterval(render, 30000);
@@ -967,6 +1073,64 @@ function ownerScreen(role) {
           await batch.commit(); }
         toast("Sample data removed"); } catch (err) { fail(err); }
       S.busy = ""; S.m = null; render();
+    }
+  });
+  render();
+}
+
+// ================= MY ACCOUNT (diners) =================
+// One account across every restaurant on the platform: visits are listed by restaurant.
+function accountScreen() {
+  $("#sub").textContent = "My account"; document.title = "My account";
+  const S = { user: null, profile: null, visits: [], loading: true, armed: false, err: "" };
+  onUser(async (u) => {
+    S.user = u || null; S.loading = !!u;
+    if (u) { try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null; S.visits = await myVisits(u.uid); } catch (e) { S.err = "Couldn't load your visits. Check your connection."; } }
+    S.loading = false; render();
+  });
+  const back = () => { const t = store.get("dees-lasttable"); return t ? `<a class="btn" href="${esc(t)}">Back to your table</a>` : ""; };
+  const day = (t) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  function render() {
+    if (S.loading) return paint(`<p class="empty">Loading…</p>`);
+    if (!S.user) return paint(`<section><div class="label" style="margin-top:0">My account</div>
+      <p>You're not signed in on this phone. Scan the QR code on a table and choose "Continue with phone number" or Google to sign in.</p>
+      ${back()}</section>`);
+    const by = {}; S.visits.forEach((v) => { (by[v.rid] ||= { name: v.rname, list: [] }).list.push(v); });
+    const groups = Object.values(by).sort((a, b) => b.list[0].date - a.list[0].date);
+    const who = S.user.phoneNumber || S.user.email || "";
+    paint(`<section>
+      <div class="acct"><div class="avatar">${esc(((S.profile && S.profile.name) || "?").slice(0, 1).toUpperCase())}</div>
+        <div><b style="font-size:20px">${esc((S.profile && S.profile.name) || "Diner")}</b><div class="note" style="margin:0">${esc(who)}</div></div></div>
+      ${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}
+      <div class="label">Your visits</div>
+      ${groups.length ? groups.map((g) => `<div class="ticket preparing" style="margin-bottom:12px">
+          <header><b>${esc(g.name)}</b><span class="note" style="margin:0">${g.list.length} visit${g.list.length > 1 ? "s" : ""} · TSh ${fmt(g.list.reduce((a, v) => a + (v.share || 0), 0))}</span></header>
+          ${g.list.map((v) => `<div class="oline"><span class="l">${day(v.date)} · Table ${v.table}<br><span class="note">${(v.items || []).map((i) => esc(i.n)).join(", ") || "Nothing ordered"}</span></span><span class="num">TSh ${fmt(v.share)}</span></div>`).join("")}
+        </div>`).join("") : `<p class="note">No visits yet. They'll appear here after your table's bill is closed.</p>`}
+      <div class="label">Settings</div>
+      <label class="optin"><input type="checkbox" id="acctoffers" ${S.profile && S.profile.offers ? "checked" : ""}> <span>WhatsApp offers from restaurants I've visited</span></label>
+      <div class="grid" style="margin-top:20px">${back()}
+        <button class="btn" data-act="signout">Sign out</button>
+        <button class="btn danger" data-act="delete">${S.armed ? "Tap again to delete everything" : "Delete my account and data"}</button></div>
+      <p class="note">Each restaurant only sees your visits to it, never your visits elsewhere.</p></section>`);
+  }
+  document.addEventListener("change", async (e) => {
+    if (e.target.id !== "acctoffers" || !S.user) return;
+    try { await updateDoc(dinerRef(S.user.uid), { offers: e.target.checked }); S.profile = { ...(S.profile || {}), offers: e.target.checked }; toast("Saved"); } catch (err) { fail(err); }
+  });
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b || !S.user) return; const d = b.dataset;
+    if (d.act === "signout") { try { await signOutUser(); } catch {} toast("Signed out"); }
+    if (d.act === "delete") {
+      if (!S.armed) { S.armed = true; render(); setTimeout(() => { S.armed = false; render(); }, 4000); return; }
+      b.disabled = true; b.textContent = "Deleting…";
+      try {
+        const u = S.user.uid, batch = writeBatch(db);
+        (await getDocs(query(visitsCol, where("uid", "==", u)))).docs.forEach((x) => batch.delete(x.ref));
+        batch.delete(dinerRef(u)); await batch.commit();
+        await deleteMe(); toast("Your account and visits are deleted");
+      } catch (err) { S.err = authMessage(err); }
+      S.armed = false; render();
     }
   });
   render();

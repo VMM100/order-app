@@ -2,6 +2,9 @@
 // Prices are from public menu photos of Crafty Dee's; confirm with the restaurant before showing them.
 
 export const RESTAURANT = "Crafty Dee's";
+// Short permanent id for this restaurant. Diner accounts work across restaurants; their visits are
+// labelled with this id so each restaurant only ever looks at its own guests.
+export const RESTAURANT_ID = "craftydees";
 export const TABLE_COUNT = 10;
 
 // Placeholder staff names. Replace with the restaurant's real waiters.
