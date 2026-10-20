@@ -4,7 +4,8 @@
 //   index.html#waiter     waiter phone
 //   index.html#kitchen    kitchen screen (also #bar, #grill)
 //   index.html#setup      links, table QR codes and demo reset
-//   index.html#owner      owner: menu editor, staff, dashboard (PIN protected)
+//   index.html#owner      owner: dashboard, menu, look, staff, PINs (owner PIN)
+//   index.html#manager    manager: menu and staff only (manager PIN)
 import { db } from "./firebase.js";
 import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction,
@@ -90,7 +91,7 @@ const sessionsCol = collection(db, "sessions");
 // Until the owner saves for the first time, the starting menu from menu.js is used.
 // The database can't store a list inside a list, so prices are saved as {l, p} pairs.
 const cfgRef = doc(db, "config", "restaurant");
-let MENU = START_MENU, WAITERS = START_WAITERS, PIN = "1234", CFG_SAVED = false;
+let MENU = START_MENU, WAITERS = START_WAITERS, PIN = "1234", MPIN = "5678", CFG_SAVED = false;
 let BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...(store.get("dees-brand") || {}) };
 const cfgListeners = new Set();
 const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
@@ -98,11 +99,11 @@ const menuToDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: c.items.m
   const o = { n: it.n, v: it.v.map(([l, p]) => ({ l: l || "", p: Number(p) || 0 })) };
   if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (it.out) o.out = true; if (it.img) o.img = it.img; return o; }) }));
 onSnapshot(cfgRef, (snap) => {
-  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; if (d.brand) { BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }; store.set("dees-brand", BRAND); } CFG_SAVED = true; }
+  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; if (d.mpin) MPIN = d.mpin; if (d.brand) { BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }; store.set("dees-brand", BRAND); } CFG_SAVED = true; }
   applyBrand();
   cfgListeners.forEach((f) => f());
 }, () => {});
-const saveConfig = () => setDoc(cfgRef, { sections: menuToDb(MENU), waiters: WAITERS, pin: PIN, brand: BRAND, updated: Date.now() });
+const saveConfig = () => setDoc(cfgRef, { sections: menuToDb(MENU), waiters: WAITERS, pin: PIN, mpin: MPIN, brand: BRAND, updated: Date.now() });
 
 // ---------- branding: name, logo and two colours chosen by the owner ----------
 const hex2rgb = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
@@ -240,7 +241,8 @@ const params = new URLSearchParams(location.search);
 if (STATIONS[view]) stationScreen(view);
 else if (view === "waiter") waiterScreen();
 else if (view === "setup") setupScreen();
-else if (view === "owner") ownerScreen();
+else if (view === "owner") ownerScreen("owner");
+else if (view === "manager") ownerScreen("manager");
 else dinerScreen();
 
 // ================= DINER =================
@@ -516,7 +518,7 @@ function setupScreen() {
   let armed = false;
   function render() {
     paint(`<section><div class="label" style="margin-top:0">Staff screens · open each on its own phone</div>
-      <div class="links">${link(BASE + "#owner", "Owner (menu, staff, dashboard)")}${link(BASE + "#waiter", "Waiter")}${Object.entries(STATIONS).map(([k, v]) => link(BASE + "#" + k, v)).join("")}</div>
+      <div class="links">${link(BASE + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "#manager", "Manager (menu and staff)")}${link(BASE + "#waiter", "Waiter")}${Object.entries(STATIONS).map(([k, v]) => link(BASE + "#" + k, v)).join("")}</div>
       <div class="label">Table QR codes · diners scan these</div>
       <div class="qrs">${Array.from({ length: TABLE_COUNT }, (_, i) => `<div class="qr"><div class="box" id="qr${i + 1}"></div><b>Table ${i + 1}</b><a class="note" href="${BASE}?t=${i + 1}">Open</a></div>`).join("")}</div>
       <p class="note">Screenshot a code, or open this page on a laptop and show it, for the demo table.</p>
@@ -545,10 +547,13 @@ function setupScreen() {
 }
 
 // ================= OWNER =================
-function ownerScreen() {
-  $("#wrap").classList.add("wide"); $("#sub").textContent = "Owner"; document.title = "Owner · " + rname();
-  let unlocked = false; try { unlocked = sessionStorage.getItem("dees-owner") === "1"; } catch {}
-  const S = { tab: "dash", edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "" };
+// The owner sees everything. A manager (own PIN) sees only Menu and Staff, and can't change PINs.
+function ownerScreen(role) {
+  const owner = role === "owner", Title = owner ? "Owner" : "Manager";
+  $("#wrap").classList.add("wide"); $("#sub").textContent = Title; document.title = Title + " · " + rname();
+  let unlocked = false; try { unlocked = sessionStorage.getItem("dees-" + role) === "1"; } catch {}
+  const TABS = owner ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["menu", "Menu"], ["staff", "Staff"]];
+  const S = { tab: TABS[0][0], edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "" };
   const STN = Object.entries(STATIONS);
 
   const dur = (ms) => { if (ms == null) return "–"; const s = ms / 1000; if (s < 60) return Math.round(s) + " s";
@@ -560,13 +565,13 @@ function ownerScreen() {
   const arm = (key) => { S.armed = key; render(); setTimeout(() => { if (S.armed === key) { S.armed = null; render(); } }, 4000); };
 
   function render() {
-    if (!unlocked) return paint(`<section><div class="label" style="margin-top:0">Owner PIN</div>
+    if (!unlocked) return paint(`<section><div class="label" style="margin-top:0">${Title} PIN</div>
       <form id="pinform" class="grid" style="max-width:320px"><input class="field num" id="pinin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off">
-      <button class="btn primary big">Open owner page</button></form>
-      <p class="note">${CFG_SAVED ? "Ask the owner for the PIN." : "First time? The starting PIN is 1234. Change it under Staff."}</p></section>`);
-    const tabs = [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]];
-    paint(`<div class="seg" role="tablist" style="max-width:520px">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-otab="${k}">${l}</button>`).join("")}</div>
-      ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : S.tab === "brand" ? brandTab() : dashTab()}`);
+      <button class="btn primary big">Open ${Title.toLowerCase()} page</button></form>
+      <p class="note">${CFG_SAVED ? (owner ? "Ask the owner for the PIN." : "Ask the owner for the manager PIN.") : owner ? "First time? The starting PIN is 1234. Change it under Staff." : "First time? The starting manager PIN is 5678. The owner can change it."}</p></section>`);
+    if (!TABS.some(([k]) => k === S.tab)) S.tab = TABS[0][0];
+    paint(`<div class="seg" role="tablist" style="max-width:520px">${TABS.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-otab="${k}">${l}</button>`).join("")}</div>
+      ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
   }
 
   // ----- menu editor -----
@@ -643,13 +648,15 @@ function ownerScreen() {
   // ----- staff -----
   function staffTab() {
     return `<section><div class="label" style="margin-top:0">Waiters</div>
-      <p class="note" style="margin-top:0">These names appear on the waiter phones and the dashboard.</p>
+      <p class="note" style="margin-top:0">These names appear on the waiter phones${owner ? " and the dashboard" : ""}.</p>
       <div class="grid" style="max-width:520px">${WAITERS.map((w, i) => `<div class="vrow"><input class="field" id="wn-${i}" data-f="wname" data-i="${i}" value="${esc(w.name)}" aria-label="Waiter name">
         <button class="btn danger" data-delw="${i}">${S.armed === "w" + i ? "Tap again" : "Remove"}</button></div>`).join("")}</div>
       <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name"><button class="btn primary">Add</button></form>
-      <div class="label">Owner PIN</div>
-      <form id="pinchange" class="vrow" style="max-width:520px"><input class="field num" id="newpin" type="password" inputmode="numeric" maxlength="6" placeholder="New PIN, 4 to 6 digits" autocomplete="new-password"><button class="btn">Change PIN</button></form>
-      <p class="note">The PIN keeps diners and staff out of this page during the demo. Real sign-in comes before launch.</p></section>`;
+      ${owner ? `<div class="label">Owner PIN</div>
+      <form id="pinchange" class="vrow" style="max-width:520px"><input class="field num" id="newpin" type="password" inputmode="numeric" maxlength="6" placeholder="New owner PIN, 4 to 6 digits" autocomplete="new-password"><button class="btn">Change</button></form>
+      <div class="label">Manager PIN</div>
+      <form id="mpinchange" class="vrow" style="max-width:520px"><input class="field num" id="newmpin" type="password" inputmode="numeric" maxlength="6" placeholder="New manager PIN, 4 to 6 digits" autocomplete="new-password"><button class="btn">Change</button></form>
+      <p class="note">Managers use <b>#manager</b> with their PIN and can only edit the menu and staff. The PINs keep diners and staff out during the demo; real sign-in comes before launch.</p>` : ""}</section>`;
   }
 
   // ----- dashboard -----
@@ -736,6 +743,7 @@ function ownerScreen() {
     else if (d.f === "itag" && it) it.m = v;
     else if (d.f === "vl" && it) it.v[+d.vi][0] = v;
     else if (d.f === "vp" && it) { const p = Number(v.replace(/[^\d]/g, "")); if (!p) { toast("Enter a price in shillings"); return render(); } it.v[+d.vi][1] = p; }
+    else if (!owner && ["bname", "c1", "c2"].includes(d.f)) return;
     else if (d.f === "bname") { BRAND = { ...BRAND, name: v || RESTAURANT }; applyBrand(); }
     else if (d.f === "c1" || d.f === "c2") { BRAND = { ...BRAND, c1: $("#c1").value, c2: $("#c2").value }; applyBrand(); render(); }
     else if (d.f === "wname") { if (!v) return render(); WAITERS = WAITERS.map((w, i) => (i === +d.i ? { ...w, name: v } : w)); }
@@ -749,6 +757,7 @@ function ownerScreen() {
   document.addEventListener("change", async (e) => {
     const el = e.target; if (!unlocked || el.type !== "file" || !el.files || !el.files[0]) return;
     const file = el.files[0], isLogo = el.id === "logofile", k = el.dataset.photofor;
+    if (isLogo && !owner) return;
     S.busy = isLogo ? "logo" : "ph" + k; render();
     try {
       const data = await resizeImage(file, isLogo ? 360 : 640, isLogo);
@@ -760,17 +769,20 @@ function ownerScreen() {
   document.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (e.target.id === "pinform") {
-      if ($("#pinin").value.trim() === PIN) { unlocked = true; try { sessionStorage.setItem("dees-owner", "1"); } catch {}
+      const v = $("#pinin").value.trim();
+      if (v === PIN || (!owner && v === MPIN)) { unlocked = true; try { sessionStorage.setItem("dees-" + role, "1"); } catch {}
         if (!CFG_SAVED) save("Menu copied into the editor"); render(); }
       else { toast("Wrong PIN"); $("#pinin").value = ""; }
     }
     if (e.target.id === "addw") { const n = $("#addwin").value.trim(); if (!n) return; WAITERS = [...WAITERS, { id: uid("w"), name: n }]; save(`${n} added`); $("#addwin").value = ""; render(); }
-    if (e.target.id === "pinchange") { const p = $("#newpin").value.trim(); if (!/^\d{4,6}$/.test(p)) return toast("Use 4 to 6 digits"); PIN = p; save("PIN changed"); $("#newpin").value = ""; }
+    if (owner && e.target.id === "pinchange") { const p = $("#newpin").value.trim(); if (!/^\d{4,6}$/.test(p)) return toast("Use 4 to 6 digits"); PIN = p; save("Owner PIN changed"); $("#newpin").value = ""; }
+    if (owner && e.target.id === "mpinchange") { const p = $("#newmpin").value.trim(); if (!/^\d{4,6}$/.test(p)) return toast("Use 4 to 6 digits"); if (p === PIN) return toast("Use a different PIN from the owner's"); MPIN = p; save("Manager PIN changed"); $("#newmpin").value = ""; }
   });
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b || !unlocked) return; const d = b.dataset;
     const ix = (s) => s.split(".").map(Number);
-    if (d.otab) { S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; render(); }
+    if (!owner && (d.font || d.preset || d.period || ["resetcolors", "rmlogo", "sample", "unsample", "reload"].includes(d.act))) return;
+    if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; render(); }
     else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii]; it.out = !it.out; render(); save(it.out ? `${it.n} marked sold out` : `${it.n} back on the menu`); }
     else if (d.edit !== undefined) { S.edit = d.edit || null; render(); }
     else if (d.addv) { const [si, ii] = ix(d.addv); MENU[si].items[ii].v.push(["", MENU[si].items[ii].v.at(-1)[1]]); render(); save(); }
