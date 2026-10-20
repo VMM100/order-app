@@ -395,7 +395,7 @@ function dinerScreen() {
       // One continuous list: every section in order, with its heading. The category bar sticks under
       // the header and highlights whichever section is on screen (see spy() below).
       body = `<div class="cats" id="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${esc(m.c)}</button>`).join("")}</div>
-       ${MENU.map((cat, ci) => `<div class="msec" id="sec-${ci}" data-sec="${ci}"><h2 class="sech"><span>${esc(cat.c)}</span><small>${cat.items.length} item${cat.items.length === 1 ? "" : "s"}</small></h2>
+       ${MENU.map((cat, ci) => `<div class="msec" id="sec-${ci}" data-sec="${ci}"><h2 class="sech">${esc(cat.c)}</h2>
        ${cat.items.map((it, ii) => { const gp = !it.img && genericPhoto(it.n); return `<div class="item${it.out ? " out" : ""}${it.img || gp ? " withph" : ""}">${it.img ? `<div class="ph"><img data-photo="${esc(it.img)}" alt="${esc(it.n)}" loading="lazy"></div>` : gp ? `<div class="ph loaded"><img src="${gp}" alt="${esc(it.n)}" loading="lazy"></div>` : ""}<h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}
        ${it.out ? "" : `<div class="vars">${it.v.map(([l, p], vi) => `<button class="var" data-add="${ci}.${ii}.${vi}">${l ? esc(l) + " " : "Add "}<span class="num">TSh ${fmt(p)}</span></button>`).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
     } else if (S.tab === "orders") {
