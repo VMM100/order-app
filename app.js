@@ -247,9 +247,10 @@ else dinerScreen();
 
 // ================= DINER =================
 function dinerScreen() {
-  const S = { n: params.get("t"), t: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: "", code: "" };
+  const S = { n: params.get("t"), t: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "", code: "" };
   let unsub = [];
-  const meKey = () => `dees-me-${S.n}`;
+  // On the demo page several diners share one browser, so each gets its own slot (?as=1, ?as=2).
+  const meKey = () => `dees-me-${S.n}${params.get("as") ? "-" + params.get("as") : ""}`;
 
   async function start() {
     if (!S.n && params.get("c")) return findByCode(params.get("c"));
@@ -518,7 +519,7 @@ function setupScreen() {
   let armed = false;
   function render() {
     paint(`<section><div class="label" style="margin-top:0">Staff screens · open each on its own phone</div>
-      <div class="links">${link(BASE + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "#manager", "Manager (menu and staff)")}${link(BASE + "#waiter", "Waiter")}${Object.entries(STATIONS).map(([k, v]) => link(BASE + "#" + k, v)).join("")}</div>
+      <div class="links">${link(BASE + "demo.html", "Demo stage: several phones on one iPad or laptop")}${link(BASE + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "#manager", "Manager (menu and staff)")}${link(BASE + "#waiter", "Waiter")}${Object.entries(STATIONS).map(([k, v]) => link(BASE + "#" + k, v)).join("")}</div>
       <div class="label">Table QR codes · diners scan these</div>
       <div class="qrs">${Array.from({ length: TABLE_COUNT }, (_, i) => `<div class="qr"><div class="box" id="qr${i + 1}"></div><b>Table ${i + 1}</b><a class="note" href="${BASE}?t=${i + 1}">Open</a></div>`).join("")}</div>
       <p class="note">Screenshot a code, or open this page on a laptop and show it, for the demo table.</p>

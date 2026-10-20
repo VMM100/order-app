@@ -10,6 +10,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 
 | Screen | Link |
 | --- | --- |
+| Demo stage: 3–4 live screens side by side on an iPad or laptop, using table 8 | `demo.html` |
 | Setup (staff links, table QR codes, demo reset) | `#setup` |
 | Owner: dashboard, menu editor with photos, look (name, logo, colours, fonts), staff, owner and manager PINs (starting PIN 1234) | `#owner` |
 | Manager: menu editor and staff only (starting manager PIN 5678) | `#manager` |
@@ -21,6 +22,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 ## Files
 
 - `index.html`, `styles.css`, `app.js`: the app (no build step)
+- `demo.html`, `demo.js`: demo stage that frames several app screens on one device
 - `menu.js`: the starting menu, waiters and tables. After the owner first opens `#owner`, the menu and staff live in the database and are edited there.
 - `metrics.js`: dashboard calculations (prep, pickup and order-to-table times, waiter response times and sales, sales by hour and day, best sellers) and the sample-week generator
 - `firebase.js`: Firebase project connection (public by design; access is controlled by Firestore rules)
