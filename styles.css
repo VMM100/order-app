@@ -61,7 +61,9 @@ section{padding-top:16px}
 .cline{display:flex;justify-content:space-between;gap:8px;font-size:13px}
 .cline button{border:none;background:none;color:var(--crit);font-size:12px;padding:0 4px}
 .cart input{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:8px 10px;font:inherit;font-size:16px}
-.cartbtn{display:flex;justify-content:space-between;align-items:center;width:100%;border:none;border-radius:10px;padding:12px 14px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+/* Place order matches the table bar: same tint, with an outline in the second colour so it still reads as a button. */
+.cartbtn{display:flex;justify-content:space-between;align-items:center;width:100%;border:1.5px solid var(--hop);border-radius:10px;padding:12px 14px;background:var(--hop-soft);color:var(--fg);font-weight:600}
+.cartbtn .num{color:var(--hop);font-weight:700}
 .pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
 .s-new{background:var(--accent-soft);color:var(--warn)}
 .s-preparing{background:var(--hop-soft);color:var(--hop)}
