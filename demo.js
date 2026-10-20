@@ -30,8 +30,9 @@ function build() {
   const stage = $("#stage"); stage.style.setProperty("--n", count); stage.innerHTML = "";
   for (let i = 0; i < count; i++) {
     const key = pickFor(i), slot = document.createElement("div"); slot.className = "slot";
-    slot.innerHTML = `<select aria-label="Screen ${i + 1}">${Object.entries(SCREENS).map(([k, s]) => `<option value="${k}" ${k === key ? "selected" : ""}>${s.label}</option>`).join("")}</select>
+    slot.innerHTML = `<div class="slotbar"><select aria-label="Screen ${i + 1}">${Object.entries(SCREENS).map(([k, s]) => `<option value="${k}" ${k === key ? "selected" : ""}>${s.label}</option>`).join("")}</select><button class="btn reload" title="Reload this phone" aria-label="Reload this phone">↻</button></div>
       <div class="frameBox"><div class="phone"><iframe title="${SCREENS[key].label}" src="${BASE}${typeof SCREENS[key].url === "function" ? SCREENS[key].url() : SCREENS[key].url}" allow="autoplay; screen-wake-lock"></iframe></div></div>`;
+    slot.querySelector(".reload").addEventListener("click", () => { const f = slot.querySelector("iframe"); f.src = f.src; });
     slot.querySelector("select").addEventListener("change", (e) => {
       picks[count] = Array.from({ length: count }, (_, j) => pickFor(j)); picks[count][i] = e.target.value; store.set("demo-picks", picks); build();
     });

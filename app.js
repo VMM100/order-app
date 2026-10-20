@@ -263,6 +263,17 @@ async function togglePaid(sid, pid, now) { try { await updateDoc(groupRef(sid), 
 
 applyBrand();
 
+// If a screen is still on "Loading…" after 10 seconds, the connection probably stalled
+// (it can happen when several live screens start at once on one device). Offer a reload,
+// and reload by itself once if nobody taps.
+setTimeout(() => {
+  const v = $("#view"); if (!v || v.textContent.trim() !== "Loading…") return;
+  v.innerHTML = `<section><p class="empty">Still connecting…</p><button class="btn primary big" onclick="location.reload()">Reload</button></section>`;
+  let once = false; try { once = sessionStorage.getItem("dees-autoreload") === "1"; sessionStorage.setItem("dees-autoreload", "1"); } catch {}
+  if (!once) setTimeout(() => location.reload(), 5000);
+}, 10000);
+setTimeout(() => { try { sessionStorage.removeItem("dees-autoreload"); } catch {} }, 60000);
+
 // ---------- router ----------
 const view = location.hash.slice(1);
 window.addEventListener("hashchange", () => location.reload());

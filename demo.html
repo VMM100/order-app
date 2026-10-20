@@ -33,6 +33,8 @@ button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outlin
 .steps span::before{counter-increment:s;content:counter(s) "  ";color:var(--accent);font-weight:700}
 .stage{flex:1;min-height:0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:14px;align-items:start}
 .slot{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;min-height:0;height:100%}
+.slotbar{display:flex;gap:6px;align-items:center;max-width:100%}
+.slotbar .reload{padding:5px 10px;font-size:16px;line-height:1}
 .slot select{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;max-width:100%}
 .frameBox{flex:1;min-height:0;width:100%;display:flex;justify-content:center;align-items:flex-start;overflow:hidden}
 .phone{position:relative;background:var(--bezel);border-radius:34px;padding:10px;box-shadow:0 0 0 1px #2a2d24,0 20px 40px rgb(0 0 0 / .45);transform-origin:top center}
