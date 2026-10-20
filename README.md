@@ -4,6 +4,13 @@ Table-side ordering for restaurants in Dar es Salaam. Diners scan a QR code, joi
 
 Demo menu: Crafty Dee's Brewpub and Beer Garden (prices from public menu photos; confirm before use).
 
+## Versions
+
+- **v1** (20 Oct 2026): first complete demo version, saved as the `v1` branch. Never changed after saving; new work goes on `main` and becomes v2.
+- **v2** (in progress, on `main`).
+
+To go back to v1, ask for the code to be reset to the `v1` branch, or browse it at https://github.com/VMM100/order-app/tree/v1.
+
 ## Screens
 
 Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
