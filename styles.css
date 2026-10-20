@@ -101,6 +101,8 @@ section{padding-top:16px}
 .links{display:grid;gap:8px}
 .links a{color:var(--hop);font-weight:600;word-break:break-all}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:9;max-width:90vw;text-align:center}
+body.flash::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:20;border:8px solid var(--accent);animation:flash 1.6s ease-out forwards}
+@keyframes flash{0%,40%{opacity:1}100%{opacity:0}}
 .err{background:var(--crit);color:#fff;border-radius:10px;padding:12px 14px;margin-top:12px}
 @media (prefers-reduced-motion:no-preference){.ticket{animation:in .25s ease-out}@keyframes in{from{transform:translateY(-4px)}}
   .ontheway{animation:pop .4s ease-out}@keyframes pop{0%{transform:scale(.97)}60%{transform:scale(1.01)}}}

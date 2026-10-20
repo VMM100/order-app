@@ -37,26 +37,39 @@ function paint(html) {
 }
 
 // Sound + vibration for staff screens (browsers only allow sound after a tap).
+// The chime is a regular audio file (built here as a WAV), not Web Audio: iPhones mute Web Audio
+// when the silent switch is on, but they still play media files like this one.
 let audio = null, wakeLock = null;
+function chimeUrl() {
+  const sr = 22050, dur = 1.1, n = Math.floor(sr * dur), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const str = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, second = t >= 0.32, f = second ? 1319 : 988, tt = second ? t - 0.32 : t;
+    const env = Math.min(1, tt / 0.004) * Math.exp(-tt * 5);
+    const s = (Math.sin(2 * Math.PI * f * t) + 0.3 * Math.sin(4 * Math.PI * f * t)) / 1.3;
+    v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, s * env * 0.95)) * 32767, true);
+  }
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+async function keepAwake() { try { if (!wakeLock || wakeLock.released) wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
 async function enableSound() {
-  try { audio = new (window.AudioContext || window.webkitAudioContext)(); await audio.resume(); } catch {}
-  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
-  beep(); toast("Alerts on. Keep this screen open.");
+  const a = new Audio(chimeUrl()); a.preload = "auto"; a.volume = 1;
+  try { await a.play(); audio = a; } catch { toast("The browser blocked sound. Tap the button again."); return; }
+  keepAwake(); toast("Alerts on. Keep this screen open with the volume up.");
 }
 function beep() {
-  try { navigator.vibrate?.([200, 80, 200]); } catch {}
+  try { navigator.vibrate?.([300, 100, 300]); } catch {}
+  document.body.classList.remove("flash"); void document.body.offsetWidth; document.body.classList.add("flash");
   if (!audio) return;
-  [0, 0.25].forEach((d) => {
-    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + d;
-    o.frequency.value = 880; g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + 0.22);
-  });
+  try { audio.currentTime = 0; const p = audio.play(); p && p.catch(() => {}); } catch {}
 }
-document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState === "visible" && audio && (!wakeLock || wakeLock.released)) { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
-});
-const soundBar = () => audio ? "" :
-  `<div class="soundbar"><span>Tap to turn on sound alerts and keep the screen awake</span><button class="btn primary" data-act="sound">Turn on alerts</button></div>`;
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && audio) keepAwake(); });
+const soundBar = () => audio
+  ? `<div class="soundbar"><span>Alerts on</span><button class="btn" data-act="testsound">Test sound</button></div>`
+  : `<div class="soundbar"><span>Tap to turn on sound alerts and keep the screen awake</span><button class="btn primary" data-act="sound">Turn on alerts</button></div>`;
 
 // Tell staff screens when something new arrives (skips the first load).
 function watcher() {
@@ -282,6 +295,7 @@ function stationScreen(st) {
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.act === "sound") { await enableSound(); render(); }
+    if (d.act === "testsound") beep();
     if (d.adv) { b.disabled = true; const batch = writeBatch(db);
       S.lines.filter((l) => l.batch === d.adv && l.s !== "ready").forEach((l) => batch.update(doc(db, "lines", l.id), { s: d.to }));
       try { await batch.commit(); } catch (err) { fail(err); b.disabled = false; } }
@@ -349,6 +363,7 @@ function waiterScreen() {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     try {
       if (d.act === "sound") { await enableSound(); render(); }
+      else if (d.act === "testsound") beep();
       else if (d.me) { S.me = d.me; store.set("dees-waiter", d.me); update(); }
       else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(tableRef(d.accept)); if (s.data().waiter) throw new Error("taken"); tx.update(tableRef(d.accept), { waiter: S.me }); }); toast(`Table ${d.accept} is yours`); }
       else if (d.release) { await updateDoc(tableRef(d.release), { waiter: null }); toast(`Table ${d.release} is open for another waiter`); }
