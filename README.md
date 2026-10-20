@@ -11,6 +11,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 | Screen | Link |
 | --- | --- |
 | Setup (staff links, table QR codes, demo reset) | `#setup` |
+| Owner: dashboard, menu editor, staff, PIN (starting PIN 1234) | `#owner` |
 | Diner at table 4 (what a table QR opens) | `?t=4` |
 | Join by table code | `?c=1234` or the page with no table |
 | Waiter | `#waiter` |
@@ -19,13 +20,18 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 ## Files
 
 - `index.html`, `styles.css`, `app.js`: the app (no build step)
-- `menu.js`: restaurant name, tables, waiter names, menu, prices and which station each section goes to
+- `menu.js`: the starting menu, waiters and tables. After the owner first opens `#owner`, the menu and staff live in the database and are edited there.
+- `metrics.js`: dashboard calculations (prep, pickup and order-to-table times, waiter response times and sales, sales by hour and day, best sellers) and the sample-week generator
 - `firebase.js`: Firebase project connection (public by design; access is controlled by Firestore rules)
 
 ## Data (Cloud Firestore)
 
 - `tables/{n}`: current session, table code, waiter, guests, split mode, who has paid
 - `lines`: one document per ordered item, with station and status (new → preparing → ready → served)
-- `alerts`: call-waiter and bill requests, with on-my-way and done
+- `lines` also record `tPrep`, `tReady`, `tServed` and `servedBy` for the dashboard
+- `alerts`: call-waiter and bill requests, with on-my-way (`ack`, `ackBy`) and done (`doneAt`)
+- `sessions/{session}`: one record per closed table (opened, closed, waiter, guests, total)
+- `config/restaurant`: menu sections and items (with sold-out flags), waiters, owner PIN
+- Sample data from the dashboard is marked `sample: true` and can be removed from the dashboard
 
 The database currently runs in Firebase **test mode**, which allows anyone to read and write and expires after 30 days. Replace with proper rules and sign-in before real restaurant use.

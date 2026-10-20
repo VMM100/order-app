@@ -4,12 +4,14 @@
 //   index.html#waiter     waiter phone
 //   index.html#kitchen    kitchen screen (also #bar, #grill)
 //   index.html#setup      links, table QR codes and demo reset
+//   index.html#owner      owner: menu editor, staff, dashboard (PIN protected)
 import { db } from "./firebase.js";
 import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction,
-  updateDoc, addDoc, writeBatch, deleteField,
+  updateDoc, addDoc, writeBatch, deleteField, setDoc,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { MENU, STATIONS, WAITERS, TABLE_COUNT } from "./menu.js";
+import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT } from "./menu.js";
+import { computeMetrics, sampleData } from "./metrics.js";
 
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
@@ -23,8 +25,9 @@ const store = {
 };
 const BASE = location.origin + location.pathname;
 const ALERT = { call: "Call waiter", bill: "Bill please" };
-const wname = (id) => (WAITERS.find((w) => w.id === id) || {}).name;
 const label = (l) => esc(l.n) + (l.v ? ` · ${esc(l.v)}` : "");
+const soldOut = (name) => MENU.some((c) => c.items.some((it) => it.n === name && it.out));
+const wname = (id) => (WAITERS.find((w) => w.id === id) || {}).name || (id ? "Former staff" : "");
 
 function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 2200); }
 function fail(e) { console.error(e); toast("Could not save. Check your connection and try again."); }
@@ -80,6 +83,23 @@ function watcher() {
 // ---------- data ----------
 const tablesCol = collection(db, "tables"), linesCol = collection(db, "lines"), alertsCol = collection(db, "alerts");
 const tableRef = (n) => doc(db, "tables", String(n));
+const sessionsCol = collection(db, "sessions");
+
+// Menu, staff and owner PIN live in one database document the owner edits.
+// Until the owner saves for the first time, the starting menu from menu.js is used.
+// The database can't store a list inside a list, so prices are saved as {l, p} pairs.
+const cfgRef = doc(db, "config", "restaurant");
+let MENU = START_MENU, WAITERS = START_WAITERS, PIN = "1234", CFG_SAVED = false;
+const cfgListeners = new Set();
+const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
+const menuToDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: c.items.map((it) => {
+  const o = { n: it.n, v: it.v.map(([l, p]) => ({ l: l || "", p: Number(p) || 0 })) };
+  if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (it.out) o.out = true; return o; }) }));
+onSnapshot(cfgRef, (snap) => {
+  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; CFG_SAVED = true; }
+  cfgListeners.forEach((f) => f());
+}, () => {});
+const saveConfig = () => setDoc(cfgRef, { sections: menuToDb(MENU), waiters: WAITERS, pin: PIN, updated: Date.now() });
 
 async function newCode() {
   for (let i = 0; i < 6; i++) {
@@ -128,6 +148,7 @@ const params = new URLSearchParams(location.search);
 if (STATIONS[view]) stationScreen(view);
 else if (view === "waiter") waiterScreen();
 else if (view === "setup") setupScreen();
+else if (view === "owner") ownerScreen();
 else dinerScreen();
 
 // ================= DINER =================
@@ -196,10 +217,11 @@ function dinerScreen() {
     const tabs = [["menu", "Menu"], ["orders", `Table order${S.lines.length ? ` (${S.lines.length})` : ""}`], ["bill", "Bill"]];
     let body = "";
     if (S.tab === "menu") {
-      const cat = MENU[S.cat];
+      if (S.cat >= MENU.length) S.cat = 0;
+      const cat = MENU[S.cat] || { items: [] };
       body = `<div class="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${m.c}</button>`).join("")}</div>
-       ${cat.items.map((it, ii) => `<div class="item"><h3>${esc(it.n)}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}
-       <div class="vars">${it.v.map(([l, p], vi) => `<button class="var" data-add="${S.cat}.${ii}.${vi}">${l ? esc(l) + " " : "Add "}<span class="num">TSh ${fmt(p)}</span></button>`).join("")}</div></div>`).join("")}`;
+       ${cat.items.map((it, ii) => `<div class="item${it.out ? " out" : ""}"><h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}
+       ${it.out ? "" : `<div class="vars">${it.v.map(([l, p], vi) => `<button class="var" data-add="${S.cat}.${ii}.${vi}">${l ? esc(l) + " " : "Add "}<span class="num">TSh ${fmt(p)}</span></button>`).join("")}</div>`}</div>`).join("")}`;
     } else if (S.tab === "orders") {
       const ppl = Object.entries(t.people || {});
       body = ppl.map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
@@ -242,7 +264,7 @@ function dinerScreen() {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.tab) { S.tab = d.tab; render(); window.scrollTo(0, 0); }
     else if (d.cat) { S.cat = +d.cat; render(); }
-    else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c].items[i], [l, p] = it.v[v];
+    else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c]?.items[i]; if (!it || it.out || !it.v[v]) return render(); const [l, p] = it.v[v];
       S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}`); renderCart(); }
     else if (d.rm) { S.cart.splice(+d.rm, 1); renderCart(); }
     else if (d.split) setSplit(S.n, d.split);
@@ -267,6 +289,7 @@ function dinerScreen() {
     else if (d.act === "newsession") { try { await ensureSession(S.n); } catch (err) { fail(err); } }
   });
   setInterval(() => { if (S.alerts.some((a) => a.ack && !a.done)) render(); }, 30000);
+  cfgListeners.add(() => { S.cart = S.cart.filter((c) => !soldOut(c.n)); render(); });
   start();
 }
 
@@ -274,8 +297,8 @@ function dinerScreen() {
 function stationScreen(st) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st] + " screen"; document.title = STATIONS[st] + " · Crafty Dee's";
   const S = { lines: [], tables: {} }; const notify = watcher();
-  onSnapshot(query(linesCol, where("st", "==", st)), (s) => {
-    S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.s !== "served");
+  onSnapshot(query(linesCol, where("s", "in", ["new", "preparing", "ready"])), (s) => {
+    S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
     notify(S.lines.filter((l) => l.s === "new").map((l) => l.batch)); render();
   }, (e) => paint(errorBox(e)));
   onSnapshot(tablesCol, (s) => { S.tables = {}; s.docs.forEach((d) => (S.tables[d.id] = d.data())); render(); });
@@ -297,7 +320,7 @@ function stationScreen(st) {
     if (d.act === "sound") { await enableSound(); render(); }
     if (d.act === "testsound") beep();
     if (d.adv) { b.disabled = true; const batch = writeBatch(db);
-      S.lines.filter((l) => l.batch === d.adv && l.s !== "ready").forEach((l) => batch.update(doc(db, "lines", l.id), { s: d.to }));
+      S.lines.filter((l) => l.batch === d.adv && l.s !== "ready").forEach((l) => batch.update(doc(db, "lines", l.id), { s: d.to, [d.to === "preparing" ? "tPrep" : "tReady"]: Date.now() }));
       try { await batch.commit(); } catch (err) { fail(err); b.disabled = false; } }
   });
   setInterval(render, 30000);
@@ -365,11 +388,11 @@ function waiterScreen() {
       if (d.act === "sound") { await enableSound(); render(); }
       else if (d.act === "testsound") beep();
       else if (d.me) { S.me = d.me; store.set("dees-waiter", d.me); update(); }
-      else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(tableRef(d.accept)); if (s.data().waiter) throw new Error("taken"); tx.update(tableRef(d.accept), { waiter: S.me }); }); toast(`Table ${d.accept} is yours`); }
+      else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(tableRef(d.accept)); if (s.data().waiter) throw new Error("taken"); tx.update(tableRef(d.accept), { waiter: S.me, accepted: Date.now() }); }); toast(`Table ${d.accept} is yours`); }
       else if (d.release) { await updateDoc(tableRef(d.release), { waiter: null }); toast(`Table ${d.release} is open for another waiter`); }
       else if (d.ack) { await updateDoc(doc(db, "alerts", d.ack), { ack: Date.now(), ackBy: S.me }); toast("Diner told you're on the way"); }
-      else if (d.done) await updateDoc(doc(db, "alerts", d.done), { done: true });
-      else if (d.serve) await updateDoc(doc(db, "lines", d.serve), { s: "served" });
+      else if (d.done) await updateDoc(doc(db, "alerts", d.done), { done: true, doneAt: Date.now() });
+      else if (d.serve) await updateDoc(doc(db, "lines", d.serve), { s: "served", tServed: Date.now(), servedBy: S.me });
       else if (d.open) { const n = +d.open; S.open = S.open === n ? null : n; watchBill(S.open ? S.tables.find((t) => t.table === n)?.session : null); render(); }
       else if (d.split) await setSplit(d.t, d.split);
       else if (d.paid) { const t = S.tables.find((x) => x.table === +d.t); await togglePaid(d.t, d.paid, !!(t.paid || {})[d.paid]); }
@@ -379,13 +402,19 @@ function waiterScreen() {
   });
   async function closeTable(n) {
     const t = S.tables.find((x) => x.table === n); if (!t) return;
-    const batch = writeBatch(db);
-    S.lines.filter(live(t)).forEach((l) => batch.update(doc(db, "lines", l.id), { s: "served" }));
-    S.alerts.filter(live(t)).forEach((a) => batch.update(doc(db, "alerts", a.id), { done: true }));
+    const all = await getDocs(query(linesCol, where("session", "==", t.session)));
+    const batch = writeBatch(db), now = Date.now();
+    // Items never marked served are closed without a serve time, so they don't skew the averages.
+    S.lines.filter(live(t)).forEach((l) => batch.update(doc(db, "lines", l.id), { s: "served", closedUnserved: true }));
+    S.alerts.filter(live(t)).forEach((a) => batch.update(doc(db, "alerts", a.id), { done: true, doneAt: now }));
+    batch.set(doc(db, "sessions", t.session), { table: n, session: t.session, opened: t.opened, accepted: t.accepted || null, closed: now,
+      waiter: t.waiter || null, guests: Object.keys(t.people || {}).length, total: tableTotal(all.docs.map((x) => x.data())),
+      paid: Object.keys(t.paid || {}).length });
     batch.set(tableRef(n), { table: n, code: null, session: null, waiter: null, people: {}, split: "order", paid: {}, closed: Date.now() });
     await batch.commit();
   }
   setInterval(render, 30000);
+  cfgListeners.add(render);
 }
 
 // ================= SETUP =================
@@ -395,12 +424,12 @@ function setupScreen() {
   let armed = false;
   function render() {
     paint(`<section><div class="label" style="margin-top:0">Staff screens · open each on its own phone</div>
-      <div class="links">${link(BASE + "#waiter", "Waiter")}${Object.entries(STATIONS).map(([k, v]) => link(BASE + "#" + k, v)).join("")}</div>
+      <div class="links">${link(BASE + "#owner", "Owner (menu, staff, dashboard)")}${link(BASE + "#waiter", "Waiter")}${Object.entries(STATIONS).map(([k, v]) => link(BASE + "#" + k, v)).join("")}</div>
       <div class="label">Table QR codes · diners scan these</div>
       <div class="qrs">${Array.from({ length: TABLE_COUNT }, (_, i) => `<div class="qr"><div class="box" id="qr${i + 1}"></div><b>Table ${i + 1}</b><a class="note" href="${BASE}?t=${i + 1}">Open</a></div>`).join("")}</div>
       <p class="note">Screenshot a code, or open this page on a laptop and show it, for the demo table.</p>
       <div class="label">Demo</div>
-      <p>Clear all orders, alerts and tables so the next demo starts fresh.</p>
+      <p>Clear all orders, alerts, tables and dashboard history so the next demo starts fresh. The menu and staff list stay.</p>
       <button class="btn danger" data-act="reset">${armed ? "Tap again to erase everything" : "Reset demo"}</button></section>`);
     const draw = () => { for (let i = 1; i <= TABLE_COUNT; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length) new QRCode(el, { text: `${BASE}?t=${i}`, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); } };
     if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true });
@@ -410,7 +439,7 @@ function setupScreen() {
     if (!armed) { armed = true; render(); setTimeout(() => { armed = false; render(); }, 4000); return; }
     b.disabled = true; b.textContent = "Erasing…";
     try {
-      for (const col of [linesCol, alertsCol, tablesCol]) {
+      for (const col of [linesCol, alertsCol, tablesCol, sessionsCol]) {
         const s = await getDocs(col); let batch = writeBatch(db), n = 0;
         for (const d of s.docs) { batch.delete(d.ref); if (++n % 400 === 0) { await batch.commit(); batch = writeBatch(db); } }
         await batch.commit();
@@ -419,6 +448,205 @@ function setupScreen() {
       toast("Demo reset");
     } catch (err) { fail(err); }
     armed = false; render();
+  });
+  render();
+}
+
+// ================= OWNER =================
+function ownerScreen() {
+  $("#wrap").classList.add("wide"); $("#sub").textContent = "Owner"; document.title = "Owner · Crafty Dee's";
+  let unlocked = false; try { unlocked = sessionStorage.getItem("dees-owner") === "1"; } catch {}
+  const S = { tab: "dash", edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "" };
+  const STN = Object.entries(STATIONS);
+
+  const dur = (ms) => { if (ms == null) return "–"; const s = ms / 1000; if (s < 60) return Math.round(s) + " s";
+    const m = s / 60; if (m < 60) return (m < 10 ? m.toFixed(1) : Math.round(m)) + " min"; return Math.floor(m / 60) + " h " + Math.round(m % 60) + " min"; };
+  const editing = () => { const a = document.activeElement; return a && /^(INPUT|SELECT)$/.test(a.tagName) && $("#view").contains(a); };
+  cfgListeners.add(() => { if (!unlocked) return; if (editing()) S.pending = true; else render(); });
+  document.addEventListener("focusout", () => setTimeout(() => { if (S.pending && !editing()) { S.pending = false; render(); } }, 0));
+  async function save(msg) { try { await saveConfig(); toast(msg || "Saved"); } catch (e) { fail(e); } }
+  const arm = (key) => { S.armed = key; render(); setTimeout(() => { if (S.armed === key) { S.armed = null; render(); } }, 4000); };
+
+  function render() {
+    if (!unlocked) return paint(`<section><div class="label" style="margin-top:0">Owner PIN</div>
+      <form id="pinform" class="grid" style="max-width:320px"><input class="field num" id="pinin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off">
+      <button class="btn primary big">Open owner page</button></form>
+      <p class="note">${CFG_SAVED ? "Ask the owner for the PIN." : "First time? The starting PIN is 1234. Change it under Staff."}</p></section>`);
+    const tabs = [["dash", "Dashboard"], ["menu", "Menu"], ["staff", "Staff"]];
+    paint(`<div class="seg" role="tablist" style="max-width:520px">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-otab="${k}">${l}</button>`).join("")}</div>
+      ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : dashTab()}`);
+  }
+
+  // ----- menu editor -----
+  function menuTab() {
+    const stationSel = (si, cur) => `<select class="field sel" id="ss-${si}" data-f="sst" data-si="${si}" aria-label="Station">${STN.map(([k, v]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${v}</option>`).join("")}</select>`;
+    return `<section><p class="note" style="margin-top:0">Changes save as you go and reach diners' phones straight away. Use <b>Sold out</b> for anything that runs out tonight.</p>
+      ${MENU.map((sec, si) => `<article class="ticket preparing ed">
+        <div class="edhead"><input class="field" id="sn-${si}" data-f="sname" data-si="${si}" value="${esc(sec.c)}" aria-label="Section name">
+          <label class="note" style="margin:0" for="ss-${si}">Goes to</label>${stationSel(si, sec.st)}</div>
+        ${sec.items.map((it, ii) => { const k = `${si}.${ii}`, open = S.edit === k;
+          return `<div class="edrow${it.out ? " out" : ""}">
+            <div class="edsum"><div style="min-width:0"><b>${esc(it.n)}</b><div class="note" style="margin:0">${it.v.map(([l, p]) => (l ? esc(l) + " " : "") + fmt(p)).join(" · ")}</div></div>
+              <div class="row" style="flex-wrap:nowrap"><button class="btn ${it.out ? "danger" : ""}" data-out="${k}" aria-pressed="${!!it.out}">${it.out ? "Sold out" : "Available"}</button>
+              <button class="btn ghost" data-edit="${open ? "" : k}">${open ? "Close" : "Edit"}</button></div></div>
+            ${open ? `<div class="edform">
+              <label class="note" for="in-${si}-${ii}">Name</label><input class="field" id="in-${si}-${ii}" data-f="iname" data-si="${si}" data-ii="${ii}" value="${esc(it.n)}">
+              <label class="note" for="id-${si}-${ii}">Description (optional)</label><input class="field" id="id-${si}-${ii}" data-f="idesc" data-si="${si}" data-ii="${ii}" value="${esc(it.d || "")}">
+              <label class="note" for="im-${si}-${ii}">Tag, e.g. Vegetarian or ABV 4.5% (optional)</label><input class="field" id="im-${si}-${ii}" data-f="itag" data-si="${si}" data-ii="${ii}" value="${esc(it.m || "")}">
+              <div class="note">Prices · add a size or option name only if there's more than one</div>
+              ${it.v.map(([l, p], vi) => `<div class="vrow"><input class="field" id="vl-${si}-${ii}-${vi}" data-f="vl" data-si="${si}" data-ii="${ii}" data-vi="${vi}" value="${esc(l)}" placeholder="Size or option" aria-label="Size or option">
+                <input class="field num" id="vp-${si}-${ii}-${vi}" data-f="vp" data-si="${si}" data-ii="${ii}" data-vi="${vi}" value="${p}" inputmode="numeric" aria-label="Price in TSh">
+                ${it.v.length > 1 ? `<button class="btn ghost" data-rmv="${k}.${vi}" aria-label="Remove price">Remove</button>` : ""}</div>`).join("")}
+              <div class="row"><button class="btn" data-addv="${k}">Add price option</button>
+                <button class="btn danger" data-delitem="${k}">${S.armed === "i" + k ? "Tap again to delete" : "Delete item"}</button></div></div>` : ""}
+          </div>`; }).join("")}
+        <div class="row" style="margin-top:10px"><button class="btn primary" data-additem="${si}">Add item</button>
+          <button class="btn ghost" data-delsec="${si}">${S.armed === "s" + si ? `Tap again to delete section and its ${sec.items.length} items` : "Delete section"}</button></div>
+      </article>`).join("")}
+      <button class="btn" data-act="addsec" style="margin-top:12px">Add section</button></section>`;
+  }
+
+  // ----- staff -----
+  function staffTab() {
+    return `<section><div class="label" style="margin-top:0">Waiters</div>
+      <p class="note" style="margin-top:0">These names appear on the waiter phones and the dashboard.</p>
+      <div class="grid" style="max-width:520px">${WAITERS.map((w, i) => `<div class="vrow"><input class="field" id="wn-${i}" data-f="wname" data-i="${i}" value="${esc(w.name)}" aria-label="Waiter name">
+        <button class="btn danger" data-delw="${i}">${S.armed === "w" + i ? "Tap again" : "Remove"}</button></div>`).join("")}</div>
+      <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name"><button class="btn primary">Add</button></form>
+      <div class="label">Owner PIN</div>
+      <form id="pinchange" class="vrow" style="max-width:520px"><input class="field num" id="newpin" type="password" inputmode="numeric" maxlength="6" placeholder="New PIN, 4 to 6 digits" autocomplete="new-password"><button class="btn">Change PIN</button></form>
+      <p class="note">The PIN keeps diners and staff out of this page during the demo. Real sign-in comes before launch.</p></section>`;
+  }
+
+  // ----- dashboard -----
+  async function load() {
+    S.loading = true; render();
+    const since = S.period === "all" ? 0 : S.period === "today" ? new Date().setHours(0, 0, 0, 0) : Date.now() - Number(S.period) * 864e5;
+    try {
+      const [ls, as, ss, ts] = await Promise.all([
+        getDocs(since ? query(linesCol, where("t", ">=", since)) : linesCol),
+        getDocs(since ? query(alertsCol, where("t", ">=", since)) : alertsCol),
+        getDocs(since ? query(sessionsCol, where("closed", ">=", since)) : sessionsCol),
+        getDocs(tablesCol)]);
+      const open = ts.docs.map((d) => d.data()).filter((t) => t.session && Object.keys(t.people || {}).length);
+      S.m = computeMetrics({ lines: ls.docs.map((d) => d.data()), alerts: as.docs.map((d) => d.data()), sessions: ss.docs.map((d) => d.data()),
+        openTables: open, waiters: WAITERS, stations: STATIONS });
+      S.loaded = Date.now();
+    } catch (e) { S.m = null; S.err = e; }
+    S.loading = false; render();
+  }
+  function bars(rows, key, lab) {
+    const max = Math.max(...rows.map((r) => r[key]), 1);
+    return `<div class="bars" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar" title="${esc(lab(r))}: TSh ${fmt(r[key])}">
+      <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${esc(lab(r))}</span></div>`).join("")}</div>`;
+  }
+  function dashTab() {
+    const periods = [["today", "Today"], ["7", "7 days"], ["30", "30 days"], ["all", "All time"]];
+    const head = `<div class="row" style="margin-top:14px;justify-content:space-between"><div class="row">${periods.map(([k, l]) => `<button class="chip" aria-pressed="${S.period === k}" data-period="${k}">${l}</button>`).join("")}</div>
+      <button class="btn ghost" data-act="reload">${S.loading ? "Loading…" : "Refresh"}</button></div>`;
+    if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : `<p class="empty">Loading numbers…</p>`); }
+    const m = S.m;
+    const sampleNote = m.sample ? `<div class="soundbar" style="margin-top:12px"><span>Includes <b>sample data</b> for demonstration, not real sales.</span><button class="btn" data-act="unsample">${S.busy === "unsample" ? "Removing…" : "Remove sample data"}</button></div>` : "";
+    if (!m.items) return head + `<section><p class="empty">No orders in this period yet.<br>Numbers appear here as soon as diners order.</p>
+      <div style="text-align:center"><button class="btn" data-act="sample">${S.busy === "sample" ? "Adding…" : "Fill with a sample week for a demo"}</button>
+      <p class="note">Sample orders are clearly marked and can be removed in one tap.</p></div></section>`;
+    const kpi = (v, l, sub) => `<div class="kpi"><div class="kv num">${v}</div><div class="kl">${l}</div>${sub ? `<div class="note" style="margin:2px 0 0">${sub}</div>` : ""}</div>`;
+    const hours = m.byHour.filter((h) => h.items); const h0 = hours.length ? hours[0].h : 12, h1 = hours.length ? hours.at(-1).h : 22;
+    const hourRows = m.byHour.filter((h) => h.h >= h0 && h.h <= h1);
+    const peak = hours.length ? hours.reduce((a, b) => (b.revenue > a.revenue ? b : a)) : null;
+    return head + sampleNote + `<section>
+      <div class="kpis">${kpi("TSh " + fmt(m.revenue), "Sales", `${fmt(m.items)} items · ${fmt(m.orders)} orders`)}${kpi(fmt(m.tables), "Tables", `${fmt(m.guests)} guests`)}
+        ${kpi(m.avgBill ? fmt(Math.round(m.avgBill / 100) * 100) : "–", "Average bill", "per closed table")}${kpi(m.avgPerGuest ? fmt(Math.round(m.avgPerGuest / 100) * 100) : "–", "Spend per guest", "")}
+        ${kpi(dur(m.toTable), "Order to table", "typical item")}${kpi(dur(m.tableTime), "Table stay", "typical visit")}</div>
+
+      <div class="label">Speed</div>
+      <div class="tablewrap"><table><thead><tr><th>Step</th><th>Typical</th><th>Slowest 10%</th><th>Count</th></tr></thead><tbody>
+        ${STN.map(([k, v]) => `<tr><td>${v} prep (order → ready)</td><td class="num">${dur(m.prep[k].median)}</td><td class="num">${dur(m.prep[k].p90)}</td><td class="num">${fmt(m.prep[k].items)}</td></tr>`).join("")}
+        <tr><td>Waiter pickup (ready → served)</td><td class="num">${dur(m.serve)}</td><td></td><td></td></tr>
+        <tr><td>Order to table, all items</td><td class="num">${dur(m.toTable)}</td><td class="num">${dur(m.toTableP90)}</td><td></td></tr>
+        <tr><td>Response to "Call waiter"</td><td class="num">${dur(m.callResp)}</td><td></td><td></td></tr>
+        <tr><td>Response to "Bill please"</td><td class="num">${dur(m.billResp)}</td><td></td><td></td></tr>
+      </tbody></table></div>
+      ${m.unanswered ? `<p class="note">${m.unanswered} alert${m.unanswered > 1 ? "s" : ""} never got an "On my way".</p>` : ""}
+
+      <div class="label">Waiters</div>
+      ${m.waiters.length ? `<div class="tablewrap"><table><thead><tr><th>Waiter</th><th>Tables</th><th>Sales (TSh)</th><th>Call response</th><th>Bill response</th><th>Pickup</th></tr></thead><tbody>
+        ${m.waiters.map((w) => `<tr><td>${esc(w.name)}</td><td class="num">${fmt(w.tables)}</td><td class="num">${fmt(w.sales)}</td><td class="num">${dur(w.callResp)}</td><td class="num">${dur(w.billResp)}</td><td class="num">${dur(w.serve)}</td></tr>`).join("")}
+      </tbody></table></div><p class="note">Times are typical (median). Pickup is how long finished items wait before the waiter serves them.</p>` : `<p class="note">No waiter activity yet.</p>`}
+
+      <div class="label">Sales by hour${peak ? ` · busiest ${String(peak.h).padStart(2, "0")}:00` : ""}</div>
+      ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"))}
+      ${m.byDay.length > 1 ? `<div class="label">Sales by day</div>${bars(m.byDay, "revenue", (r) => { const d = new Date(r.day + "T12:00"); return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + d.getDate(); })}` : ""}
+
+      <div class="label">Best sellers</div>
+      <div class="tablewrap"><table><thead><tr><th>Item</th><th style="text-align:left">Station</th><th>Sold</th><th>Sales (TSh)</th></tr></thead><tbody>
+        ${m.best.slice(0, 10).map((b) => `<tr><td>${esc(b.n)}</td><td>${esc(STATIONS[b.st] || "")}</td><td class="num">${fmt(b.qty)}</td><td class="num">${fmt(b.revenue)}</td></tr>`).join("")}
+      </tbody></table></div>
+      <p class="note">Updated ${S.loaded ? ago(S.loaded) : ""}. Tap Refresh for the latest.</p></section>`;
+  }
+  async function writeAll(col, rows, idOf) {
+    let batch = writeBatch(db), n = 0;
+    for (const r of rows) { batch.set(idOf ? doc(db, col, idOf(r)) : doc(collection(db, col)), r); if (++n % 400 === 0) { await batch.commit(); batch = writeBatch(db); } }
+    await batch.commit();
+  }
+
+  // ----- events -----
+  function at(d) { const sec = MENU[+d.si], it = sec && d.ii != null ? sec.items[+d.ii] : null; return { sec, it }; }
+  document.addEventListener("change", (e) => {
+    const el = e.target, d = el.dataset; if (!d.f || !unlocked) return;
+    const v = el.value.trim(), { sec, it } = at(d);
+    if (d.f === "sname" && sec) { if (!v) return render(); sec.c = v; }
+    else if (d.f === "sst" && sec) sec.st = v;
+    else if (d.f === "iname" && it) { if (!v) return render(); it.n = v; }
+    else if (d.f === "idesc" && it) it.d = v;
+    else if (d.f === "itag" && it) it.m = v;
+    else if (d.f === "vl" && it) it.v[+d.vi][0] = v;
+    else if (d.f === "vp" && it) { const p = Number(v.replace(/[^\d]/g, "")); if (!p) { toast("Enter a price in shillings"); return render(); } it.v[+d.vi][1] = p; }
+    else if (d.f === "wname") { if (!v) return render(); WAITERS = WAITERS.map((w, i) => (i === +d.i ? { ...w, name: v } : w)); }
+    else return;
+    save();
+  });
+  document.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (e.target.id === "pinform") {
+      if ($("#pinin").value.trim() === PIN) { unlocked = true; try { sessionStorage.setItem("dees-owner", "1"); } catch {}
+        if (!CFG_SAVED) save("Menu copied into the editor"); render(); }
+      else { toast("Wrong PIN"); $("#pinin").value = ""; }
+    }
+    if (e.target.id === "addw") { const n = $("#addwin").value.trim(); if (!n) return; WAITERS = [...WAITERS, { id: uid("w"), name: n }]; save(`${n} added`); $("#addwin").value = ""; render(); }
+    if (e.target.id === "pinchange") { const p = $("#newpin").value.trim(); if (!/^\d{4,6}$/.test(p)) return toast("Use 4 to 6 digits"); PIN = p; save("PIN changed"); $("#newpin").value = ""; }
+  });
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b || !unlocked) return; const d = b.dataset;
+    const ix = (s) => s.split(".").map(Number);
+    if (d.otab) { S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; render(); }
+    else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii]; it.out = !it.out; render(); save(it.out ? `${it.n} marked sold out` : `${it.n} back on the menu`); }
+    else if (d.edit !== undefined) { S.edit = d.edit || null; render(); }
+    else if (d.addv) { const [si, ii] = ix(d.addv); MENU[si].items[ii].v.push(["", MENU[si].items[ii].v.at(-1)[1]]); render(); save(); }
+    else if (d.rmv) { const [si, ii, vi] = ix(d.rmv); MENU[si].items[ii].v.splice(vi, 1); render(); save(); }
+    else if (d.additem) { const si = +d.additem; MENU[si].items.push({ n: "New item", v: [["", 10000]] }); S.edit = `${si}.${MENU[si].items.length - 1}`; render(); save("Item added. Set its name and price."); }
+    else if (d.delitem) { if (S.armed !== "i" + d.delitem) return arm("i" + d.delitem); const [si, ii] = ix(d.delitem); const n = MENU[si].items[ii].n; MENU[si].items.splice(ii, 1); S.edit = null; S.armed = null; render(); save(`${n} deleted`); }
+    else if (d.delsec) { if (S.armed !== "s" + d.delsec) return arm("s" + d.delsec); MENU.splice(+d.delsec, 1); S.armed = null; render(); save("Section deleted"); }
+    else if (d.act === "addsec") { MENU.push({ c: "New section", st: "kitchen", items: [] }); render(); save("Section added. Rename it and choose its station."); }
+    else if (d.delw) { if (S.armed !== "w" + d.delw) return arm("w" + d.delw); const w = WAITERS[+d.delw]; WAITERS = WAITERS.filter((_, i) => i !== +d.delw); S.armed = null; render(); save(`${w.name} removed`); }
+    else if (d.period) { S.period = d.period; S.m = null; S.err = null; render(); }
+    else if (d.act === "reload") { S.m = null; S.err = null; render(); }
+    else if (d.act === "sample" && !S.busy) {
+      S.busy = "sample"; render();
+      try { const x = sampleData(MENU, WAITERS, 7);
+        await writeAll("lines", x.lines); await writeAll("alerts", x.alerts); await writeAll("sessions", x.sessions, (r) => r.session);
+        toast("Sample week added"); } catch (err) { fail(err); }
+      S.busy = ""; S.m = null; render();
+    }
+    else if (d.act === "unsample" && !S.busy) {
+      S.busy = "unsample"; render();
+      try { for (const col of [linesCol, alertsCol, sessionsCol]) {
+          const s = await getDocs(query(col, where("sample", "==", true))); let batch = writeBatch(db), n = 0;
+          for (const x of s.docs) { batch.delete(x.ref); if (++n % 400 === 0) { await batch.commit(); batch = writeBatch(db); } }
+          await batch.commit(); }
+        toast("Sample data removed"); } catch (err) { fail(err); }
+      S.busy = ""; S.m = null; render();
+    }
   });
   render();
 }
