@@ -8,9 +8,9 @@
 import { db } from "./firebase.js";
 import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction,
-  updateDoc, addDoc, writeBatch, deleteField, setDoc,
+  updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT } from "./menu.js";
+import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT } from "./menu.js";
 import { computeMetrics, sampleData } from "./metrics.js";
 
 // ---------- helpers ----------
@@ -36,6 +36,7 @@ function fail(e) { console.error(e); toast("Could not save. Check your connectio
 function paint(html) {
   const a = document.activeElement, id = a && a.id, pos = a && a.selectionStart;
   $("#view").innerHTML = html;
+  hydratePhotos();
   if (id) { const el = document.getElementById(id); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} } }
 }
 
@@ -90,16 +91,78 @@ const sessionsCol = collection(db, "sessions");
 // The database can't store a list inside a list, so prices are saved as {l, p} pairs.
 const cfgRef = doc(db, "config", "restaurant");
 let MENU = START_MENU, WAITERS = START_WAITERS, PIN = "1234", CFG_SAVED = false;
+let BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, ...(store.get("dees-brand") || {}) };
 const cfgListeners = new Set();
 const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
 const menuToDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: c.items.map((it) => {
   const o = { n: it.n, v: it.v.map(([l, p]) => ({ l: l || "", p: Number(p) || 0 })) };
-  if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (it.out) o.out = true; return o; }) }));
+  if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (it.out) o.out = true; if (it.img) o.img = it.img; return o; }) }));
 onSnapshot(cfgRef, (snap) => {
-  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; CFG_SAVED = true; }
+  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; if (d.brand) { BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, ...d.brand }; store.set("dees-brand", BRAND); } CFG_SAVED = true; }
+  applyBrand();
   cfgListeners.forEach((f) => f());
 }, () => {});
-const saveConfig = () => setDoc(cfgRef, { sections: menuToDb(MENU), waiters: WAITERS, pin: PIN, updated: Date.now() });
+const saveConfig = () => setDoc(cfgRef, { sections: menuToDb(MENU), waiters: WAITERS, pin: PIN, brand: BRAND, updated: Date.now() });
+
+// ---------- branding: name, logo and two colours chosen by the owner ----------
+const hex2rgb = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgb2hex = (c) => "#" + c.map((x) => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, "0")).join("");
+const mix = (a, b, t) => rgb2hex(hex2rgb(a).map((x, i) => x + (hex2rgb(b)[i] - x) * t));
+const lum = (h) => { const c = hex2rgb(h).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+// Nudge a colour toward black or white until it reads as text on the given background.
+const readable = (c, bg, toward) => { let out = c; for (let t = 0.1; contrast(out, bg) < 4.5 && t <= 1; t += 0.1) out = mix(c, toward, t); return out; };
+const inkOn = (c) => (contrast(c, "#ffffff") >= contrast(c, "#1b1408") ? "#ffffff" : "#1b1408");
+function brandCss(c1, c2) {
+  if (!c1 || !c2) return "";
+  const L = { bg: "#f6f4ee", surface: "#ffffff" }, D = { bg: "#161812", surface: "#20231b" };
+  const a1 = mix(c1, "#ffffff", lum(c1) < 0.04 ? 0.35 : 0.15), a2 = readable(c2, D.surface, "#ffffff");
+  const light = `--accent:${c1};--accent-ink:${inkOn(c1)};--accent-soft:${mix(c1, L.surface, 0.84)};--hop:${readable(c2, L.surface, "#000000")};--hop-soft:${mix(c2, L.surface, 0.86)}`;
+  const dark = `--accent:${a1};--accent-ink:${inkOn(a1)};--accent-soft:${mix(c1, D.bg, 0.72)};--hop:${a2};--hop-soft:${mix(c2, D.bg, 0.75)}`;
+  return `:root{${light}}@media (prefers-color-scheme:dark){:root{${dark}}}`;
+}
+function applyBrand() {
+  let el = document.getElementById("brandvars");
+  if (!el) { el = document.createElement("style"); el.id = "brandvars"; document.head.appendChild(el); }
+  el.textContent = brandCss(BRAND.c1, BRAND.c2);
+  const h = $("#brandname"); if (h) h.textContent = BRAND.name || RESTAURANT;
+  const lg = $("#brandlogo"); if (lg) { if (BRAND.logo) { lg.dataset.photo = BRAND.logo; lg.hidden = false; delete lg.dataset.done; hydratePhotos(); } else { lg.hidden = true; lg.removeAttribute("src"); } }
+  document.title = (document.title.includes("·") ? document.title.split("·")[0] + "· " : "") + (BRAND.name || RESTAURANT);
+}
+const rname = () => BRAND.name || RESTAURANT;
+
+// ---------- photos (menu items and logo) ----------
+// Stored as small compressed images in their own database documents, loaded once per phone.
+const photoCache = new Map();
+function hydratePhotos() {
+  document.querySelectorAll("img[data-photo]").forEach(async (img) => {
+    const id = img.dataset.photo; if (!id || img.dataset.done === id) return;
+    img.dataset.done = id;
+    if (!photoCache.has(id)) photoCache.set(id, getDoc(doc(db, "photos", id)).then((s) => (s.exists() ? s.data().data : null)).catch(() => null));
+    const src = await photoCache.get(id);
+    if (src && img.dataset.photo === id) { img.src = src; img.closest(".ph")?.classList.add("loaded"); } else if (!src) img.closest(".ph")?.classList.add("none");
+  });
+}
+async function resizeImage(file, max, keepAlpha) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("unreadable")); i.src = url; });
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const g = c.getContext("2d"); if (!keepAlpha) { g.fillStyle = "#ffffff"; g.fillRect(0, 0, c.width, c.height); }
+    g.drawImage(img, 0, 0, c.width, c.height);
+    let out = keepAlpha ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.74);
+    if (out.length > 700000) out = c.toDataURL("image/jpeg", 0.6);
+    if (out.length > 900000) throw new Error("too big");
+    return out;
+  } finally { URL.revokeObjectURL(url); }
+}
+async function savePhoto(dataUrl, old) {
+  const id = uid("ph"); await setDoc(doc(db, "photos", id), { data: dataUrl, t: Date.now() });
+  photoCache.set(id, Promise.resolve(dataUrl));
+  if (old) deleteDoc(doc(db, "photos", old)).catch(() => {});
+  return id;
+}
 
 async function newCode() {
   for (let i = 0; i < 6; i++) {
@@ -140,6 +203,8 @@ function billHtml(t, lines, staff) {
 }
 async function setSplit(n, mode) { try { await updateDoc(tableRef(n), { split: mode }); } catch (e) { fail(e); } }
 async function togglePaid(n, pid, now) { try { await updateDoc(tableRef(n), { [`paid.${pid}`]: now ? deleteField() : true }); } catch (e) { fail(e); } }
+
+applyBrand();
 
 // ---------- router ----------
 const view = location.hash.slice(1);
@@ -220,7 +285,7 @@ function dinerScreen() {
       if (S.cat >= MENU.length) S.cat = 0;
       const cat = MENU[S.cat] || { items: [] };
       body = `<div class="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${m.c}</button>`).join("")}</div>
-       ${cat.items.map((it, ii) => `<div class="item${it.out ? " out" : ""}"><h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}
+       ${cat.items.map((it, ii) => `<div class="item${it.out ? " out" : ""}${it.img ? " withph" : ""}">${it.img ? `<div class="ph"><img data-photo="${esc(it.img)}" alt="${esc(it.n)}" loading="lazy"></div>` : ""}<h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}
        ${it.out ? "" : `<div class="vars">${it.v.map(([l, p], vi) => `<button class="var" data-add="${S.cat}.${ii}.${vi}">${l ? esc(l) + " " : "Add "}<span class="num">TSh ${fmt(p)}</span></button>`).join("")}</div>`}</div>`).join("")}`;
     } else if (S.tab === "orders") {
       const ppl = Object.entries(t.people || {});
@@ -282,7 +347,7 @@ function dinerScreen() {
       S.placing = false; render();
     }
     else if (d.act === "share") {
-      const link = `${BASE}?t=${S.n}`, txt = `Join our table at Crafty Dee's: ${link} (table code ${S.t.code})`;
+      const link = `${BASE}?t=${S.n}`, txt = `Join our table at ${rname()}: ${link} (table code ${S.t.code})`;
       try { if (navigator.share) { await navigator.share({ text: txt }); return; } } catch { return; }
       try { await navigator.clipboard.writeText(txt); toast("Invite copied. Paste it in WhatsApp."); } catch { toast(`Table code: ${S.t.code}`); }
     }
@@ -295,7 +360,7 @@ function dinerScreen() {
 
 // ================= STATION (kitchen / bar / grill) =================
 function stationScreen(st) {
-  $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st] + " screen"; document.title = STATIONS[st] + " · Crafty Dee's";
+  $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st] + " screen"; document.title = STATIONS[st] + " · " + rname();
   const S = { lines: [], tables: {} }; const notify = watcher();
   onSnapshot(query(linesCol, where("s", "in", ["new", "preparing", "ready"])), (s) => {
     S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
@@ -328,7 +393,7 @@ function stationScreen(st) {
 
 // ================= WAITER =================
 function waiterScreen() {
-  $("#wrap").classList.add("wide"); $("#sub").textContent = "Waiter"; document.title = "Waiter · Crafty Dee's";
+  $("#wrap").classList.add("wide"); $("#sub").textContent = "Waiter"; document.title = "Waiter · " + rname();
   const S = { me: store.get("dees-waiter"), tables: [], lines: [], alerts: [], open: null, confirm: null };
   const notify = watcher();
   onSnapshot(tablesCol, (s) => { S.tables = s.docs.map((d) => d.data()).filter((t) => t.session).sort((a, b) => a.table - b.table); update(); }, (e) => paint(errorBox(e)));
@@ -419,7 +484,7 @@ function waiterScreen() {
 
 // ================= SETUP =================
 function setupScreen() {
-  $("#wrap").classList.add("wide"); $("#sub").textContent = "Setup"; document.title = "Setup · Crafty Dee's";
+  $("#wrap").classList.add("wide"); $("#sub").textContent = "Setup"; document.title = "Setup · " + rname();
   const link = (h, l) => `<div><div class="note" style="margin:0">${l}</div><a href="${h}">${esc(h)}</a></div>`;
   let armed = false;
   function render() {
@@ -454,7 +519,7 @@ function setupScreen() {
 
 // ================= OWNER =================
 function ownerScreen() {
-  $("#wrap").classList.add("wide"); $("#sub").textContent = "Owner"; document.title = "Owner · Crafty Dee's";
+  $("#wrap").classList.add("wide"); $("#sub").textContent = "Owner"; document.title = "Owner · " + rname();
   let unlocked = false; try { unlocked = sessionStorage.getItem("dees-owner") === "1"; } catch {}
   const S = { tab: "dash", edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "" };
   const STN = Object.entries(STATIONS);
@@ -472,9 +537,9 @@ function ownerScreen() {
       <form id="pinform" class="grid" style="max-width:320px"><input class="field num" id="pinin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off">
       <button class="btn primary big">Open owner page</button></form>
       <p class="note">${CFG_SAVED ? "Ask the owner for the PIN." : "First time? The starting PIN is 1234. Change it under Staff."}</p></section>`);
-    const tabs = [["dash", "Dashboard"], ["menu", "Menu"], ["staff", "Staff"]];
+    const tabs = [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]];
     paint(`<div class="seg" role="tablist" style="max-width:520px">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-otab="${k}">${l}</button>`).join("")}</div>
-      ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : dashTab()}`);
+      ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : S.tab === "brand" ? brandTab() : dashTab()}`);
   }
 
   // ----- menu editor -----
@@ -492,6 +557,11 @@ function ownerScreen() {
             ${open ? `<div class="edform">
               <label class="note" for="in-${si}-${ii}">Name</label><input class="field" id="in-${si}-${ii}" data-f="iname" data-si="${si}" data-ii="${ii}" value="${esc(it.n)}">
               <label class="note" for="id-${si}-${ii}">Description (optional)</label><input class="field" id="id-${si}-${ii}" data-f="idesc" data-si="${si}" data-ii="${ii}" value="${esc(it.d || "")}">
+              <div class="note">Photo (optional)</div>
+              <div class="row">${it.img ? `<div class="ph sm"><img data-photo="${esc(it.img)}" alt=""></div>` : ""}
+                <label class="btn" for="pf-${si}-${ii}">${S.busy === "ph" + k ? "Uploading…" : it.img ? "Change photo" : "Add photo"}</label>
+                <input type="file" accept="image/*" id="pf-${si}-${ii}" data-photofor="${k}" hidden>
+                ${it.img ? `<button class="btn ghost" data-rmphoto="${k}">Remove photo</button>` : ""}</div>
               <label class="note" for="im-${si}-${ii}">Tag, e.g. Vegetarian or ABV 4.5% (optional)</label><input class="field" id="im-${si}-${ii}" data-f="itag" data-si="${si}" data-ii="${ii}" value="${esc(it.m || "")}">
               <div class="note">Prices · add a size or option name only if there's more than one</div>
               ${it.v.map(([l, p], vi) => `<div class="vrow"><input class="field" id="vl-${si}-${ii}-${vi}" data-f="vl" data-si="${si}" data-ii="${ii}" data-vi="${vi}" value="${esc(l)}" placeholder="Size or option" aria-label="Size or option">
@@ -504,6 +574,36 @@ function ownerScreen() {
           <button class="btn ghost" data-delsec="${si}">${S.armed === "s" + si ? `Tap again to delete section and its ${sec.items.length} items` : "Delete section"}</button></div>
       </article>`).join("")}
       <button class="btn" data-act="addsec" style="margin-top:12px">Add section</button></section>`;
+  }
+
+  // ----- look: name, logo, colours -----
+  const PRESETS = [["Brewhouse", "#b9741a", "#3f5a2c"], ["Coastal", "#0f7c8c", "#e0603c"], ["Classic red", "#b3262e", "#3b3230"],
+    ["Navy & gold", "#1f3a68", "#b58a2a"], ["Garden", "#3f7d3a", "#8a5a2b"], ["Sunset", "#e2572b", "#4a3f6b"]];
+  function brandTab() {
+    const c1 = BRAND.c1 || "#b9741a", c2 = BRAND.c2 || "#3f5a2c";
+    return `<section style="max-width:640px">
+      <div class="label" style="margin-top:0"><label for="bname">Restaurant name</label></div>
+      <input class="field" id="bname" data-f="bname" maxlength="40" value="${esc(BRAND.name || RESTAURANT)}">
+      <div class="label">Logo</div>
+      <div class="row">${BRAND.logo ? `<div class="ph logo"><img data-photo="${esc(BRAND.logo)}" alt="Current logo"></div>` : `<span class="note" style="margin:0">No logo yet</span>`}
+        <label class="btn primary" for="logofile">${S.busy === "logo" ? "Uploading…" : BRAND.logo ? "Change logo" : "Upload logo"}</label>
+        <input type="file" accept="image/*" id="logofile" hidden>
+        ${BRAND.logo ? `<button class="btn ghost" data-act="rmlogo">Remove</button>` : ""}</div>
+      <p class="note">Shows at the top of every screen. A logo on a transparent or white background works best.</p>
+      <div class="label">Colours</div>
+      <div class="row">${PRESETS.map(([n, a, b], i) => `<button class="chip preset" data-preset="${i}" aria-pressed="${BRAND.c1 === a && BRAND.c2 === b}"><span class="sw" style="background:${a}"></span><span class="sw" style="background:${b}"></span>${n}</button>`).join("")}</div>
+      <div class="colors">
+        <label class="colorpick" for="c1"><input type="color" id="c1" data-f="c1" value="${c1}"><span><b>Main colour</b><span class="note" style="display:block;margin:0">Buttons and highlights</span></span></label>
+        <label class="colorpick" for="c2"><input type="color" id="c2" data-f="c2" value="${c2}"><span><b>Second colour</b><span class="note" style="display:block;margin:0">Table banner, labels, tags</span></span></label>
+      </div>
+      <p class="note">Pick colours from the restaurant's sign or menu. If a colour is too light or dark to read, the app adjusts the text shade automatically.</p>
+      ${BRAND.c1 ? `<button class="btn ghost" data-act="resetcolors">Back to the original colours</button>` : ""}
+      <div class="label">Preview</div>
+      <div class="preview"><div class="tablebar"><div><b>Table 4</b><div class="note" style="margin:2px 0 0">Hi Amani · friends join with code</div></div><span class="code num">4821</span></div>
+        <div class="row" style="margin-top:10px"><button class="chip" aria-pressed="true" tabindex="-1">On tap</button><button class="chip" tabindex="-1">Cocktails</button></div>
+        <div class="item"><h3>Pilsner</h3><div class="meta">ABV 4.6%</div><div class="vars"><span class="var">Full 400ml <span class="num">TSh 10,000</span></span></div></div>
+        <span class="cartbtn" style="margin-top:10px"><span>Place order</span><span class="num">TSh 10,000</span></span></div>
+    </section>`;
   }
 
   // ----- staff -----
@@ -602,9 +702,26 @@ function ownerScreen() {
     else if (d.f === "itag" && it) it.m = v;
     else if (d.f === "vl" && it) it.v[+d.vi][0] = v;
     else if (d.f === "vp" && it) { const p = Number(v.replace(/[^\d]/g, "")); if (!p) { toast("Enter a price in shillings"); return render(); } it.v[+d.vi][1] = p; }
+    else if (d.f === "bname") { BRAND = { ...BRAND, name: v || RESTAURANT }; applyBrand(); }
+    else if (d.f === "c1" || d.f === "c2") { BRAND = { ...BRAND, c1: $("#c1").value, c2: $("#c2").value }; applyBrand(); render(); }
     else if (d.f === "wname") { if (!v) return render(); WAITERS = WAITERS.map((w, i) => (i === +d.i ? { ...w, name: v } : w)); }
     else return;
     save();
+  });
+  document.addEventListener("input", (e) => {
+    if (!unlocked || (e.target.id !== "c1" && e.target.id !== "c2")) return;
+    $("#brandvars").textContent = brandCss($("#c1").value, $("#c2").value);
+  });
+  document.addEventListener("change", async (e) => {
+    const el = e.target; if (!unlocked || el.type !== "file" || !el.files || !el.files[0]) return;
+    const file = el.files[0], isLogo = el.id === "logofile", k = el.dataset.photofor;
+    S.busy = isLogo ? "logo" : "ph" + k; render();
+    try {
+      const data = await resizeImage(file, isLogo ? 360 : 640, isLogo);
+      if (isLogo) { BRAND = { ...BRAND, logo: await savePhoto(data, BRAND.logo) }; await saveConfig(); applyBrand(); toast("Logo updated"); }
+      else { const [si, ii] = k.split(".").map(Number), it = MENU[si].items[ii]; it.img = await savePhoto(data, it.img); await saveConfig(); toast("Photo added"); }
+    } catch (err) { if (err.message === "unreadable") toast("That file isn't a photo this phone can read. Try a JPG or PNG."); else if (err.message === "too big") toast("That image is too large. Try a smaller one."); else fail(err); }
+    S.busy = ""; render();
   });
   document.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -629,6 +746,10 @@ function ownerScreen() {
     else if (d.delsec) { if (S.armed !== "s" + d.delsec) return arm("s" + d.delsec); MENU.splice(+d.delsec, 1); S.armed = null; render(); save("Section deleted"); }
     else if (d.act === "addsec") { MENU.push({ c: "New section", st: "kitchen", items: [] }); render(); save("Section added. Rename it and choose its station."); }
     else if (d.delw) { if (S.armed !== "w" + d.delw) return arm("w" + d.delw); const w = WAITERS[+d.delw]; WAITERS = WAITERS.filter((_, i) => i !== +d.delw); S.armed = null; render(); save(`${w.name} removed`); }
+    else if (d.preset) { const [, a, c] = PRESETS[+d.preset]; BRAND = { ...BRAND, c1: a, c2: c }; applyBrand(); render(); save("Colours updated"); }
+    else if (d.act === "resetcolors") { BRAND = { ...BRAND, c1: null, c2: null }; applyBrand(); render(); save("Original colours back"); }
+    else if (d.act === "rmlogo") { const old = BRAND.logo; BRAND = { ...BRAND, logo: null }; applyBrand(); render(); await save("Logo removed"); deleteDoc(doc(db, "photos", old)).catch(() => {}); }
+    else if (d.rmphoto) { const [si, ii] = ix(d.rmphoto), it = MENU[si].items[ii], old = it.img; delete it.img; render(); await save("Photo removed"); deleteDoc(doc(db, "photos", old)).catch(() => {}); }
     else if (d.period) { S.period = d.period; S.m = null; S.err = null; render(); }
     else if (d.act === "reload") { S.m = null; S.err = null; render(); }
     else if (d.act === "sample" && !S.busy) {

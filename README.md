@@ -11,7 +11,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 | Screen | Link |
 | --- | --- |
 | Setup (staff links, table QR codes, demo reset) | `#setup` |
-| Owner: dashboard, menu editor, staff, PIN (starting PIN 1234) | `#owner` |
+| Owner: dashboard, menu editor with photos, look (name, logo, colours), staff, PIN (starting PIN 1234) | `#owner` |
 | Diner at table 4 (what a table QR opens) | `?t=4` |
 | Join by table code | `?c=1234` or the page with no table |
 | Waiter | `#waiter` |
@@ -31,7 +31,8 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 - `lines` also record `tPrep`, `tReady`, `tServed` and `servedBy` for the dashboard
 - `alerts`: call-waiter and bill requests, with on-my-way (`ack`, `ackBy`) and done (`doneAt`)
 - `sessions/{session}`: one record per closed table (opened, closed, waiter, guests, total)
-- `config/restaurant`: menu sections and items (with sold-out flags), waiters, owner PIN
+- `config/restaurant`: menu sections and items (with sold-out flags and photo ids), waiters, owner PIN, brand (name, logo id, two colours)
+- `photos/{id}`: logo and menu photos, resized on the owner's phone (JPEG about 640px, logo PNG 360px) and stored as data URLs so no paid Storage plan is needed. Move to Firebase Storage or a CDN before scaling up.
 - Sample data from the dashboard is marked `sample: true` and can be removed from the dashboard
 
 The database currently runs in Firebase **test mode**, which allows anyone to read and write and expires after 30 days. Replace with proper rules and sign-in before real restaurant use.
