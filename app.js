@@ -392,10 +392,12 @@ function dinerScreen() {
     let body = "";
     if (S.tab === "menu") {
       if (S.cat >= MENU.length) S.cat = 0;
-      const cat = MENU[S.cat] || { items: [] };
-      body = `<div class="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${m.c}</button>`).join("")}</div>
+      // One continuous list: every section in order, with its heading. The category bar sticks under
+      // the header and highlights whichever section is on screen (see spy() below).
+      body = `<div class="cats" id="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${esc(m.c)}</button>`).join("")}</div>
+       ${MENU.map((cat, ci) => `<div class="msec" id="sec-${ci}" data-sec="${ci}"><h2 class="sech">${esc(cat.c)}</h2>
        ${cat.items.map((it, ii) => { const gp = !it.img && genericPhoto(it.n); return `<div class="item${it.out ? " out" : ""}${it.img || gp ? " withph" : ""}">${it.img ? `<div class="ph"><img data-photo="${esc(it.img)}" alt="${esc(it.n)}" loading="lazy"></div>` : gp ? `<div class="ph loaded"><img src="${gp}" alt="${esc(it.n)}" loading="lazy"></div>` : ""}<h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}
-       ${it.out ? "" : `<div class="vars">${it.v.map(([l, p], vi) => `<button class="var" data-add="${S.cat}.${ii}.${vi}">${l ? esc(l) + " " : "Add "}<span class="num">TSh ${fmt(p)}</span></button>`).join("")}</div>`}</div>`; }).join("")}`;
+       ${it.out ? "" : `<div class="vars">${it.v.map(([l, p], vi) => `<button class="var" data-add="${ci}.${ii}.${vi}">${l ? esc(l) + " " : "Add "}<span class="num">TSh ${fmt(p)}</span></button>`).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
     } else if (S.tab === "orders") {
       body = Object.entries(g.people || {}).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
         return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
@@ -411,7 +413,41 @@ function dinerScreen() {
       ${body}</section>`);
     renderCart();
   }
+  // Sticky category bar: sits right under the sticky header, whatever its height.
+  const stickTop = () => { const h = $("header.top"); return h ? h.getBoundingClientRect().bottom : 0; };
+  function markCat() {
+    document.querySelectorAll("#cats .chip").forEach((c) => c.setAttribute("aria-pressed", String(+c.dataset.cat === S.cat)));
+    const on = document.querySelector(`#cats .chip[data-cat="${S.cat}"]`), bar = $("#cats");
+    if (!on || !bar) return; const x = on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2;
+    if (bar.scrollTo) bar.scrollTo({ left: x, behavior: "smooth" }); else bar.scrollLeft = x;
+  }
+  let jumping = 0;
+  function jumpTo(ci) {
+    const sec = document.getElementById("sec-" + ci), bar = $("#cats"); if (!sec) return;
+    const y = window.scrollY + sec.getBoundingClientRect().top - stickTop() - (bar ? bar.offsetHeight : 0) - 4;
+    jumping = Date.now(); window.scrollTo({ top: y, behavior: "smooth" });
+  }
+  // Highlight the section whose heading has passed under the bar.
+  function spy() {
+    if (S.tab !== "menu" || Date.now() - jumping < 700) return;
+    const bar = $("#cats"); if (!bar) return;
+    const line = stickTop() + bar.offsetHeight + 12; let cur = 0;
+    document.querySelectorAll(".msec").forEach((sec) => { if (sec.getBoundingClientRect().top <= line) cur = +sec.dataset.sec; });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) cur = MENU.length - 1;
+    if (cur !== S.cat) { S.cat = cur; markCat(); }
+  }
+  let spyQueued = false;
+  window.addEventListener("scroll", () => { if (spyQueued) return; spyQueued = true; requestAnimationFrame(() => { spyQueued = false; spy(); }); }, { passive: true });
+  const setBarTop = () => document.documentElement.style.setProperty("--bar-top", stickTop() + "px");
+  window.addEventListener("resize", setBarTop);
+
+  // After a redraw the bar starts scrolled to the left again: put the highlighted chip back in view.
+  function keepBar() {
+    const bar = $("#cats"), on = document.querySelector(`#cats .chip[data-cat="${S.cat}"]`);
+    if (bar && on) bar.scrollLeft = on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2;
+  }
   function renderCart() {
+    setBarTop(); keepBar();
     const c = $("#cart"); if (!S.me || S.tab !== "menu" || !S.cart.length) { c.hidden = true; c.innerHTML = ""; return; }
     const tot = S.cart.reduce((a, l) => a + l.pr, 0); c.hidden = false;
     const a = document.activeElement, focused = a && a.id === "note";
@@ -445,7 +481,7 @@ function dinerScreen() {
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.tab) { S.tab = d.tab; render(); window.scrollTo(0, 0); }
-    else if (d.cat) { S.cat = +d.cat; render(); }
+    else if (d.cat) { S.cat = +d.cat; markCat(); jumpTo(S.cat); }
     else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c]?.items[i]; if (!it || it.out || !it.v[v]) return render(); const [l, p] = it.v[v];
       S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}`); renderCart(); }
     else if (d.rm) { S.cart.splice(+d.rm, 1); renderCart(); }
