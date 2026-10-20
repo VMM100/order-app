@@ -191,3 +191,9 @@ header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .welcome .usual{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:14px}
 .acct{display:flex;gap:14px;align-items:center}
 .avatar{width:52px;height:52px;border-radius:50%;background:var(--hop-soft);color:var(--fg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;flex:none}
+/* station tickets: one Ready button per dish */
+.slines{gap:6px!important}
+.sline{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.sline:last-child{border-bottom:none}
+.sline .btn{padding:6px 12px;min-height:36px}
+.sline.done>span:first-child{color:var(--muted);text-decoration:line-through}

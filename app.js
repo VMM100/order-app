@@ -621,16 +621,17 @@ function stationScreen(st) {
     notify(S.lines.filter((l) => l.s === "new").map((l) => l.batch)); render();
   }, (e) => paint(errorBox(e)));
   onSnapshot(query(groupsCol, where("open", "==", true)), (s) => { S.all = s.docs.map((d) => d.data()); S.groups = {}; S.all.forEach((g) => (S.groups[g.session] = g)); render(); });
-  const NEXT = { new: ["preparing", "Start"], preparing: ["ready", "Ready"] };
   function render() {
     const batches = [...new Set(S.lines.sort((a, b) => a.t - b.t).map((l) => l.batch))];
     const tix = batches.map((b) => {
       const bl = S.lines.filter((l) => l.batch === b), s = bl.some((l) => l.s === "new") ? "new" : bl.some((l) => l.s === "preparing") ? "preparing" : "ready";
-      const nx = NEXT[s], note = bl.find((l) => l.note), g = S.groups[bl[0].session], w = g && g.waiter;
+      const note = bl.find((l) => l.note), g = S.groups[bl[0].session], w = g && g.waiter;
       return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="note" style="margin:0">${esc(bl[0].pname)} · ${ago(bl[0].t)}</span></header>
         <div class="note" style="margin:2px 0 0">Waiter: ${w ? esc(wname(w)) : "not assigned yet"}</div>
-        <ul>${bl.map((l) => `<li><span class="q">1×</span>${label(l)}</li>`).join("")}</ul>${note ? `<div class="nt">${esc(note.note)}</div>` : ""}
-        <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${nx ? `<button class="btn primary" data-adv="${b}" data-to="${nx[0]}">${nx[1]}</button>` : ""}</div></article>`;
+        <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}</span>${l.s === "ready"
+          ? `<span class="pill s-ready">Ready</span>` : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">Ready</button>`}</li>`).join("")}</ul>${note ? `<div class="nt">${esc(note.note)}</div>` : ""}
+        <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
+          ${bl.filter((l) => l.s !== "ready").length > 1 ? `<button class="btn primary" data-adv="${b}" data-to="ready">All ready</button>` : ""}</div></article>`;
     });
     paint(soundBar() + (tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
   }
@@ -639,8 +640,13 @@ function stationScreen(st) {
     if (d.act === "sound") { await enableSound(); render(); }
     if (d.act === "testsound") beep();
     if (d.adv) { b.disabled = true; const batch = writeBatch(db);
-      S.lines.filter((l) => l.batch === d.adv && l.s !== "ready").forEach((l) => batch.update(doc(db, "lines", l.id), { s: d.to, [d.to === "preparing" ? "tPrep" : "tReady"]: Date.now() }));
+      const now = Date.now();
+      S.lines.filter((l) => l.batch === d.adv && (d.to === "preparing" ? l.s === "new" : l.s !== "ready")).forEach((l) =>
+        batch.update(doc(db, "lines", l.id), d.to === "preparing" ? { s: "preparing", tPrep: now } : { s: "ready", tReady: now, tPrep: l.tPrep || now }));
       try { await batch.commit(); } catch (err) { fail(err); b.disabled = false; } }
+    // One dish ready on its own: the waiter is alerted for just that dish.
+    if (d.ready) { const l = S.lines.find((x) => x.id === d.ready); if (!l) return; b.disabled = true; const now = Date.now();
+      try { await updateDoc(doc(db, "lines", l.id), { s: "ready", tReady: now, tPrep: l.tPrep || now }); } catch (err) { fail(err); b.disabled = false; } }
   });
   setInterval(render, 30000);
   cfgListeners.add(render);
