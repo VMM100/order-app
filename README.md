@@ -25,6 +25,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 - `index.html`, `styles.css`, `app.js`: the app (no build step)
 - `demo.html`, `demo.js`: demo stage that frames several app screens on one device
 - `menu.js`: the starting menu, waiters and tables. After the owner first opens `#owner`, the menu and staff live in the database and are edited there.
+- `photos.js`, `img/`: generic menu photos matched to items by name (free-licence photos from [Pexels](https://www.pexels.com/license/), 320px). An owner-uploaded photo always takes priority.
 - `metrics.js`: dashboard calculations (prep, pickup and order-to-table times, waiter response times and sales, sales by hour and day, best sellers) and the sample-week generator
 - `firebase.js`: Firebase project connection (public by design; access is controlled by Firestore rules)
 
