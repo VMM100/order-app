@@ -87,6 +87,17 @@ const tablesCol = collection(db, "tables"), linesCol = collection(db, "lines"), 
 const tableRef = (n) => doc(db, "tables", String(n));
 const sessionsCol = collection(db, "sessions");
 
+// Each table has a secret key printed in its QR code, so a table can't be joined by guessing its number.
+const keyRef = (n) => doc(db, "tablekeys", String(n));
+const newKey = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
+async function tableKey(n, rotate) {
+  let k = null;
+  await runTransaction(db, async (tx) => { const s = await tx.get(keyRef(n)); k = !rotate && s.exists() && s.data().k;
+    if (!k) { k = newKey(); tx.set(keyRef(n), { k, t: Date.now() }); } });
+  return k;
+}
+const tableLink = (n, k) => `${BASE}?t=${n}&k=${k}`;
+
 // Menu, staff and owner PIN live in one database document the owner edits.
 // Until the owner saves for the first time, the starting menu from menu.js is used.
 // The database can't store a list inside a list, so prices are saved as {l, p} pairs.
@@ -252,11 +263,27 @@ function dinerScreen() {
   // On the demo page several diners share one browser, so each gets its own slot (?as=1, ?as=2).
   const meKey = () => `dees-me-${S.n}${params.get("as") ? "-" + params.get("as") : ""}`;
 
+  // Who may sit at this table: someone who scanned its QR (secret key), someone with the current
+  // table code (a friend's invite), or a guest returning to the table they already joined.
   async function start() {
-    if (!S.n && params.get("c")) return findByCode(params.get("c"));
+    const c = params.get("c"), k = params.get("k");
+    if (!S.n && c) return findByCode(c);
     if (!S.n) return codeEntry();
     $("#sub").textContent = `Table ${S.n}`;
-    try { await ensureSession(S.n); } catch (e) { return paint(errorBox(e)); }
+    let ok = false;
+    try {
+      if (k) {
+        const ks = await getDoc(keyRef(S.n)); ok = ks.exists() && ks.data().k === k; S.viaKey = ok;
+        if (!ok) S.err = "This QR code is out of date. Ask a waiter, or enter the table code from a friend at your table.";
+      } else {
+        const t = (await getDoc(tableRef(S.n))).data(), saved = store.get(meKey());
+        ok = !!(t && t.session && ((c && t.code === c) || (saved && saved.session === t.session)));
+        if (!ok && c) S.err = "This invite has expired. Ask your friend for the new table code.";
+      }
+    } catch (e) { return paint(errorBox(e)); }
+    if (!ok) return codeEntry(S.n);
+    S.access = true;
+    if (S.viaKey) { try { await ensureSession(S.n); } catch (e) { return paint(errorBox(e)); } }
     unsub.push(onSnapshot(tableRef(S.n), (snap) => {
       const prev = S.t && S.t.session; S.t = snap.data() || null;
       if (S.t && S.t.session && S.t.session !== prev) listen(S.t.session);
@@ -282,21 +309,25 @@ function dinerScreen() {
       const s = await getDocs(query(tablesCol, where("code", "==", String(c).trim())));
       const hit = s.docs.map((d) => d.data()).find((t) => t.session);
       if (!hit) { S.err = "No open table with that code. Check the number with your friend."; return codeEntry(); }
-      history.replaceState(null, "", `${BASE}?t=${hit.table}`); S.n = String(hit.table); start();
+      const as = params.get("as");
+      history.replaceState(null, "", `${BASE}?t=${hit.table}&c=${hit.code}${as ? "&as=" + as : ""}`);
+      params.set("t", hit.table); params.set("c", hit.code); params.delete("k"); S.n = String(hit.table); S.err = ""; start();
     } catch (e) { paint(errorBox(e)); }
   }
-  function codeEntry() {
-    $("#sub").textContent = "Join a table";
-    paint(`<section><div class="label">Join your friends</div>
-      <p>Enter the 4-digit table code they shared, or scan the QR code on your table.</p>
+  function codeEntry(n) {
+    $("#sub").textContent = n ? `Table ${n}` : "Join a table";
+    paint(`<section><div class="label">${n ? `Join table ${esc(n)}` : "Join your friends"}</div>
+      <p>Scan the QR code on your table, or enter the 4-digit table code shown on a friend's phone.</p>
       <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="Table code" autocomplete="off">
       <button class="btn primary big">Join table</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}</section>`);
   }
   function render() {
-    if (!S.n) return;
+    if (!S.n || !S.access) return;
     if (!S.t || !S.t.session) {
       $("#cart").hidden = true;
-      return paint(`<section><p class="empty">This table has been closed. Thanks for visiting!</p><button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button></section>`);
+      return paint(`<section><p class="empty">This table has been closed. Thanks for visiting!</p>${S.viaKey
+        ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
+        : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
     if (!S.me) {
       $("#cart").hidden = true;
@@ -377,11 +408,11 @@ function dinerScreen() {
       S.placing = false; render();
     }
     else if (d.act === "share") {
-      const link = `${BASE}?t=${S.n}`, txt = `Join our table at ${rname()}: ${link} (table code ${S.t.code})`;
+      const link = `${BASE}?c=${S.t.code}`, txt = `Join our table at ${rname()}: ${link} (table code ${S.t.code}, works until the table closes)`;
       try { if (navigator.share) { await navigator.share({ text: txt }); return; } } catch { return; }
       try { await navigator.clipboard.writeText(txt); toast("Invite copied. Paste it in WhatsApp."); } catch { toast(`Table code: ${S.t.code}`); }
     }
-    else if (d.act === "newsession") { try { await ensureSession(S.n); } catch (err) { fail(err); } }
+    else if (d.act === "newsession" && S.viaKey) { try { await ensureSession(S.n); } catch (err) { fail(err); } }
   });
   setInterval(() => { if (S.alerts.some((a) => a.ack && !a.done)) render(); }, 30000);
   cfgListeners.add(() => { S.cart = S.cart.filter((c) => !soldOut(c.n)); render(); });
@@ -516,21 +547,40 @@ function waiterScreen() {
 function setupScreen() {
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Setup"; document.title = "Setup · " + rname();
   const link = (h, l) => `<div><div class="note" style="margin:0">${l}</div><a href="${h}">${esc(h)}</a></div>`;
-  let armed = false;
+  let armed = false, rot = false, keys = {}, unlocked = false;
+  try { unlocked = sessionStorage.getItem("dees-setup") === "1"; } catch {}
+  async function loadKeys(rotate) {
+    try { const ks = await Promise.all(Array.from({ length: TABLE_COUNT }, (_, i) => tableKey(i + 1, rotate))); ks.forEach((k, i) => (keys[i + 1] = k)); }
+    catch (e) { fail(e); }
+    document.querySelectorAll(".qr .box").forEach((b) => (b.innerHTML = "")); render();
+  }
   function render() {
+    if (!unlocked) return paint(`<section><div class="label" style="margin-top:0">Setup is for restaurant staff</div>
+      <form id="setupform" class="grid" style="max-width:320px"><input class="field num" id="setuppin" type="password" inputmode="numeric" maxlength="6" placeholder="Owner or manager PIN" autocomplete="off">
+      <button class="btn primary big">Open setup</button></form></section>`);
     paint(`<section><div class="label" style="margin-top:0">Staff screens · open each on its own phone</div>
       <div class="links">${link(BASE + "demo.html", "Demo stage: several phones on one iPad or laptop")}${link(BASE + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "#manager", "Manager (menu and staff)")}${link(BASE + "#waiter", "Waiter")}${Object.entries(STATIONS).map(([k, v]) => link(BASE + "#" + k, v)).join("")}</div>
       <div class="label">Table QR codes · diners scan these</div>
-      <div class="qrs">${Array.from({ length: TABLE_COUNT }, (_, i) => `<div class="qr"><div class="box" id="qr${i + 1}"></div><b>Table ${i + 1}</b><a class="note" href="${BASE}?t=${i + 1}">Open</a></div>`).join("")}</div>
-      <p class="note">Screenshot a code, or open this page on a laptop and show it, for the demo table.</p>
+      <div class="qrs">${Array.from({ length: TABLE_COUNT }, (_, i) => `<div class="qr"><div class="box" id="qr${i + 1}"></div><b>Table ${i + 1}</b>${keys[i + 1] ? `<a class="note" href="${tableLink(i + 1, keys[i + 1])}">Open</a>` : `<span class="note">Loading…</span>`}</div>`).join("")}</div>
+      <p class="note">Each code carries a secret key, so nobody can join a table by guessing its number. Print these for the tables, or screenshot one for a demo.</p>
+      <button class="btn" data-act="rotate">${rot ? "Tap again: old printed codes will stop working" : "Make new QR codes"}</button>
       <div class="label">Demo</div>
       <p>Clear all orders, alerts, tables and dashboard history so the next demo starts fresh. The menu and staff list stay.</p>
       <button class="btn danger" data-act="reset">${armed ? "Tap again to erase everything" : "Reset demo"}</button></section>`);
-    const draw = () => { for (let i = 1; i <= TABLE_COUNT; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length) new QRCode(el, { text: `${BASE}?t=${i}`, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); } };
+    const draw = () => { for (let i = 1; i <= TABLE_COUNT; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length && keys[i]) new QRCode(el, { text: tableLink(i, keys[i]), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); } };
     if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true });
   }
+  document.addEventListener("submit", (e) => {
+    if (e.target.id !== "setupform") return; e.preventDefault();
+    const v = $("#setuppin").value.trim();
+    if (v === PIN || v === MPIN) { unlocked = true; try { sessionStorage.setItem("dees-setup", "1"); } catch {} render(); loadKeys(false); }
+    else { toast("Wrong PIN"); $("#setuppin").value = ""; }
+  });
   document.addEventListener("click", async (e) => {
-    const b = e.target.closest("button"); if (!b || b.dataset.act !== "reset") return;
+    const r = e.target.closest("button[data-act=rotate]");
+    if (r && unlocked) { if (!rot) { rot = true; render(); setTimeout(() => { rot = false; render(); }, 4000); return; }
+      rot = false; keys = {}; render(); await loadKeys(true); toast("New QR codes made. Reprint them for the tables."); return; }
+    const b = e.target.closest("button"); if (!b || b.dataset.act !== "reset" || !unlocked) return;
     if (!armed) { armed = true; render(); setTimeout(() => { armed = false; render(); }, 4000); return; }
     b.disabled = true; b.textContent = "Erasing…";
     try {
@@ -545,6 +595,7 @@ function setupScreen() {
     armed = false; render();
   });
   render();
+  if (unlocked) loadKeys(false);
 }
 
 // ================= OWNER =================

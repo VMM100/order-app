@@ -11,11 +11,12 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 | Screen | Link |
 | --- | --- |
 | Demo stage: 3–4 live screens side by side on an iPad or laptop, using table 8 | `demo.html` |
-| Setup (staff links, table QR codes, demo reset) | `#setup` |
+| Setup (staff links, keyed table QR codes, new codes, demo reset); needs owner or manager PIN | `#setup` |
 | Owner: dashboard, menu editor with photos, look (name, logo, colours, fonts), staff, owner and manager PINs (starting PIN 1234) | `#owner` |
 | Manager: menu editor and staff only (starting manager PIN 5678) | `#manager` |
-| Diner at table 4 (what a table QR opens) | `?t=4` |
-| Join by table code | `?c=1234` or the page with no table |
+| Diner at table 4 (what a table QR opens; `k` is the table's secret key) | `?t=4&k=…` |
+| Join a friend's table with its current code (the Share invite; stops working when the table closes) | `?c=1234` |
+| A bare table number (`?t=4`) asks for the table code instead of joining | |
 | Waiter | `#waiter` |
 | Kitchen / Bar / Grill | `#kitchen`, `#bar`, `#grill` |
 
@@ -29,6 +30,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 
 ## Data (Cloud Firestore)
 
+- `tablekeys/{n}`: secret key printed in each table's QR code (replaced by "Make new QR codes")
 - `tables/{n}`: current session, table code, waiter, guests, split mode, who has paid
 - `lines`: one document per ordered item, with station and status (new → preparing → ready → served)
 - `lines` also record `tPrep`, `tReady`, `tServed` and `servedBy` for the dashboard

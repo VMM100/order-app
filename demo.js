@@ -1,13 +1,14 @@
 // Demo stage: shows several live app screens side by side on one iPad or laptop.
 // Each frame is the real app, so everything syncs through the database exactly as on separate phones.
 import { db } from "./firebase.js";
-import { collection, doc, getDocs, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import { collection, doc, getDocs, query, where, writeBatch, runTransaction } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
 const TABLE = 8; // demo table, kept apart from tables used for manual testing
 const BASE = location.origin + location.pathname.replace(/demo\.html$/, "");
+let KEY = "";
 const SCREENS = {
-  d1: { label: "Diner: Amani", url: `?t=${TABLE}&as=1&name=Amani` },
-  d2: { label: "Diner: Neha", url: `?t=${TABLE}&as=2&name=Neha` },
+  d1: { label: "Diner: Amani", url: () => `?t=${TABLE}&k=${KEY}&as=1&name=Amani` },
+  d2: { label: "Diner: Neha", url: () => `?t=${TABLE}&k=${KEY}&as=2&name=Neha` },
   waiter: { label: "Waiter", url: "#waiter" },
   bar: { label: "Bar screen", url: "#bar" },
   kitchen: { label: "Kitchen screen", url: "#kitchen" },
@@ -30,7 +31,7 @@ function build() {
   for (let i = 0; i < count; i++) {
     const key = pickFor(i), slot = document.createElement("div"); slot.className = "slot";
     slot.innerHTML = `<select aria-label="Screen ${i + 1}">${Object.entries(SCREENS).map(([k, s]) => `<option value="${k}" ${k === key ? "selected" : ""}>${s.label}</option>`).join("")}</select>
-      <div class="frameBox"><div class="phone"><iframe title="${SCREENS[key].label}" src="${BASE}${SCREENS[key].url}" allow="autoplay; screen-wake-lock"></iframe></div></div>`;
+      <div class="frameBox"><div class="phone"><iframe title="${SCREENS[key].label}" src="${BASE}${typeof SCREENS[key].url === "function" ? SCREENS[key].url() : SCREENS[key].url}" allow="autoplay; screen-wake-lock"></iframe></div></div>`;
     slot.querySelector("select").addEventListener("change", (e) => {
       picks[count] = Array.from({ length: count }, (_, j) => pickFor(j)); picks[count][i] = e.target.value; store.set("demo-picks", picks); build();
     });
@@ -73,7 +74,19 @@ $("#reset").addEventListener("click", async (e) => {
   b.disabled = false; b.dataset.armed = ""; b.textContent = "Reset demo table";
 });
 
+// The demo table's secret key (made on first use), so the simulated diners and the QR can join it.
+const keyChars = "abcdefghjkmnpqrstuvwxyz23456789";
+async function demoKey() {
+  const ref = doc(db, "tablekeys", String(TABLE)); let k = "";
+  await runTransaction(db, async (tx) => { const s = await tx.get(ref); k = s.exists() && s.data().k;
+    if (!k) { k = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => keyChars[b % 31]).join(""); tx.set(ref, { k, t: Date.now() }); } });
+  return k;
+}
 $("#tno").textContent = TABLE;
-try { new QRCode($("#qr"), { text: `${BASE}?t=${TABLE}`, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M }); } catch {}
 try { const b = store.get("dees-brand"); if (b && b.name) $("#title").textContent = `${b.name} · live demo`; } catch {}
-build();
+$("#stage").innerHTML = `<p style="color:var(--muted)">Connecting…</p>`;
+demoKey().then((k) => {
+  KEY = k;
+  try { new QRCode($("#qr"), { text: `${BASE}?t=${TABLE}&k=${KEY}`, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M }); } catch {}
+  build();
+}).catch((e) => { console.error(e); $("#stage").innerHTML = `<p style="color:var(--muted)">Can't reach the database. Check the internet connection, then reload.</p>`; });
