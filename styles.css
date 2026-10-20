@@ -48,7 +48,13 @@ section{padding-top:16px}
   padding:10px max(16px, env(safe-area-inset-right,0px)) 10px max(16px, env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
 .cats::-webkit-scrollbar{display:none}
 .cats .chip[aria-pressed="true"]{background:var(--hop-soft);border-color:var(--hop);color:var(--fg);font-weight:600}
-.sech{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:.04em;text-transform:var(--dcase,uppercase);margin:22px 0 0;color:var(--hop)}
+/* Section divider: a full-width tinted band with the section name and its item count. */
+.sech{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:28px 0 4px;padding:14px 16px;
+  background:var(--hop-soft);border-left:5px solid var(--hop);border-radius:10px;
+  font-family:var(--display);font-weight:700;font-size:28px;line-height:1.1;letter-spacing:.04em;text-transform:var(--dcase,uppercase);color:var(--fg)}
+.sech small{font-family:var(--body);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--hop);white-space:nowrap}
+.msec:first-of-type .sech{margin-top:16px}
+.msec .item:last-child{border-bottom:none}
 .msec{scroll-margin-top:120px}
 .cats .chip{white-space:nowrap}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:14px}
