@@ -91,14 +91,14 @@ const sessionsCol = collection(db, "sessions");
 // The database can't store a list inside a list, so prices are saved as {l, p} pairs.
 const cfgRef = doc(db, "config", "restaurant");
 let MENU = START_MENU, WAITERS = START_WAITERS, PIN = "1234", CFG_SAVED = false;
-let BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, ...(store.get("dees-brand") || {}) };
+let BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...(store.get("dees-brand") || {}) };
 const cfgListeners = new Set();
 const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
 const menuToDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: c.items.map((it) => {
   const o = { n: it.n, v: it.v.map(([l, p]) => ({ l: l || "", p: Number(p) || 0 })) };
   if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (it.out) o.out = true; if (it.img) o.img = it.img; return o; }) }));
 onSnapshot(cfgRef, (snap) => {
-  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; if (d.brand) { BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, ...d.brand }; store.set("dees-brand", BRAND); } CFG_SAVED = true; }
+  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; if (d.brand) { BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }; store.set("dees-brand", BRAND); } CFG_SAVED = true; }
   applyBrand();
   cfgListeners.forEach((f) => f());
 }, () => {});
@@ -124,12 +124,39 @@ function brandCss(c1, c2) {
 function applyBrand() {
   let el = document.getElementById("brandvars");
   if (!el) { el = document.createElement("style"); el.id = "brandvars"; document.head.appendChild(el); }
-  el.textContent = brandCss(BRAND.c1, BRAND.c2);
+  el.textContent = brandCss(BRAND.c1, BRAND.c2) + fontCss(BRAND.font);
+  if (BRAND.font && BRAND.font !== "brew" && FONTS[BRAND.font]) loadFonts("brandfont", [BRAND.font]);
   const h = $("#brandname"); if (h) h.textContent = BRAND.name || RESTAURANT;
   const lg = $("#brandlogo"); if (lg) { if (BRAND.logo) { lg.dataset.photo = BRAND.logo; lg.hidden = false; delete lg.dataset.done; hydratePhotos(); } else { lg.hidden = true; lg.removeAttribute("src"); } }
   document.title = (document.title.includes("·") ? document.title.split("·")[0] + "· " : "") + (BRAND.name || RESTAURANT);
 }
 const rname = () => BRAND.name || RESTAURANT;
+
+// Font pairs: a heading face and a text face. "upper" sets headings in capitals (suits condensed and geometric faces).
+const FONTS = {
+  brew:    { name: "Brewhouse",    d: "Barlow Condensed",   b: "Work Sans",     upper: true,  dt: "sans-serif", bt: "sans-serif" },
+  bistro:  { name: "Classic bistro", d: "Playfair Display", b: "Source Sans 3", upper: false, dt: "serif", bt: "sans-serif" },
+  modern:  { name: "Modern cafe",  d: "Poppins",            b: "DM Sans",       upper: false, dt: "sans-serif", bt: "sans-serif" },
+  coastal: { name: "Coastal",      d: "Josefin Sans",       b: "Nunito Sans",   upper: true,  dt: "sans-serif", bt: "sans-serif" },
+  rustic:  { name: "Rustic grill", d: "Zilla Slab",         b: "Karla",         upper: false, dt: "serif", bt: "sans-serif" },
+  elegant: { name: "Fine dining",  d: "Cormorant Garamond", b: "Montserrat",    upper: false, dt: "serif", bt: "sans-serif" },
+  playful: { name: "Playful",      d: "Fredoka",            b: "Nunito",        upper: false, dt: "sans-serif", bt: "sans-serif" },
+  street:  { name: "Street food",  d: "Oswald",             b: "Rubik",         upper: true,  dt: "sans-serif", bt: "sans-serif" },
+};
+const fam = (f, w) => "family=" + f.replace(/ /g, "+") + ":wght@" + w;
+const fontsUrl = (keys) => "https://fonts.googleapis.com/css2?" + [...new Set(keys.flatMap((k) => [fam(FONTS[k].d, "600;700"), fam(FONTS[k].b, "400;500;600;700")]))].join("&") + "&display=swap";
+const stack = (f, t) => `"${f}",${t === "serif" ? "Georgia,serif" : "system-ui,-apple-system,sans-serif"}`;
+function fontCss(key) {
+  const f = FONTS[key]; if (!f || key === "brew") return "";
+  return `:root{--display:${stack(f.d, f.dt)};--body:${stack(f.b, f.bt)};--dcase:${f.upper ? "uppercase" : "none"}}`;
+}
+// One stylesheet link per font pair, so a problem with one font never blocks the others.
+function loadFonts(id, keys) {
+  keys.forEach((k) => {
+    const lid = `${id}-${k}`; if (document.getElementById(lid)) return;
+    const l = document.createElement("link"); l.rel = "stylesheet"; l.id = lid; l.href = fontsUrl([k]); document.head.appendChild(l);
+  });
+}
 
 // ---------- photos (menu items and logo) ----------
 // Stored as small compressed images in their own database documents, loaded once per phone.
@@ -580,6 +607,7 @@ function ownerScreen() {
   const PRESETS = [["Brewhouse", "#b9741a", "#3f5a2c"], ["Coastal", "#0f7c8c", "#e0603c"], ["Classic red", "#b3262e", "#3b3230"],
     ["Navy & gold", "#1f3a68", "#b58a2a"], ["Garden", "#3f7d3a", "#8a5a2b"], ["Sunset", "#e2572b", "#4a3f6b"]];
   function brandTab() {
+    loadFonts("fontsamples", Object.keys(FONTS));
     const c1 = BRAND.c1 || "#b9741a", c2 = BRAND.c2 || "#3f5a2c";
     return `<section style="max-width:640px">
       <div class="label" style="margin-top:0"><label for="bname">Restaurant name</label></div>
@@ -598,6 +626,12 @@ function ownerScreen() {
       </div>
       <p class="note">Pick colours from the restaurant's sign or menu. If a colour is too light or dark to read, the app adjusts the text shade automatically.</p>
       ${BRAND.c1 ? `<button class="btn ghost" data-act="resetcolors">Back to the original colours</button>` : ""}
+      <div class="label">Fonts</div>
+      <p class="note" style="margin-top:0">A heading font for names and titles, paired with an easy-to-read font for menu text.</p>
+      <div class="fontopts">${Object.entries(FONTS).map(([k, f]) => `<button class="fontopt" data-font="${k}" aria-pressed="${(BRAND.font || "brew") === k}">
+        <span class="fd" style="font-family:${esc(stack(f.d, f.dt))};text-transform:${f.upper ? "uppercase" : "none"}">${esc(BRAND.name || RESTAURANT)}</span>
+        <span class="fb" style="font-family:${esc(stack(f.b, f.bt))}">Pilsner, full 400ml · TSh 10,000</span>
+        <span class="fn">${esc(f.name)} · ${esc(f.d)} + ${esc(f.b)}</span></button>`).join("")}</div>
       <div class="label">Preview</div>
       <div class="preview"><div class="tablebar"><div><b>Table 4</b><div class="note" style="margin:2px 0 0">Hi Amani · friends join with code</div></div><span class="code num">4821</span></div>
         <div class="row" style="margin-top:10px"><button class="chip" aria-pressed="true" tabindex="-1">On tap</button><button class="chip" tabindex="-1">Cocktails</button></div>
@@ -746,6 +780,7 @@ function ownerScreen() {
     else if (d.delsec) { if (S.armed !== "s" + d.delsec) return arm("s" + d.delsec); MENU.splice(+d.delsec, 1); S.armed = null; render(); save("Section deleted"); }
     else if (d.act === "addsec") { MENU.push({ c: "New section", st: "kitchen", items: [] }); render(); save("Section added. Rename it and choose its station."); }
     else if (d.delw) { if (S.armed !== "w" + d.delw) return arm("w" + d.delw); const w = WAITERS[+d.delw]; WAITERS = WAITERS.filter((_, i) => i !== +d.delw); S.armed = null; render(); save(`${w.name} removed`); }
+    else if (d.font) { BRAND = { ...BRAND, font: d.font }; applyBrand(); render(); save(`${FONTS[d.font].name} fonts applied`); }
     else if (d.preset) { const [, a, c] = PRESETS[+d.preset]; BRAND = { ...BRAND, c1: a, c2: c }; applyBrand(); render(); save("Colours updated"); }
     else if (d.act === "resetcolors") { BRAND = { ...BRAND, c1: null, c2: null }; applyBrand(); render(); save("Original colours back"); }
     else if (d.act === "rmlogo") { const old = BRAND.logo; BRAND = { ...BRAND, logo: null }; applyBrand(); render(); await save("Logo removed"); deleteDoc(doc(db, "photos", old)).catch(() => {}); }
