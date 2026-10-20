@@ -15,7 +15,7 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 | Owner: dashboard, menu editor with photos, look (name, logo, colours, fonts), staff, owner and manager PINs (starting PIN 1234) | `#owner` |
 | Manager: menu editor and staff only (starting manager PIN 5678) | `#manager` |
 | Diner at table 4 (what a table QR opens; `k` is the table's secret key) | `?t=4&k=…` |
-| Join a friend's table with its current code (the Share invite; stops working when the table closes) | `?c=1234` |
+| Join a friend's table or group with its current code (the Share invite; stops working when it closes) | `?c=1234` |
 | A bare table number (`?t=4`) asks for the table code instead of joining | |
 | Waiter | `#waiter` |
 | Kitchen / Bar / Grill | `#kitchen`, `#bar`, `#grill` |
@@ -31,12 +31,13 @@ Live at https://vmm100.github.io/order-app/ once GitHub Pages is on.
 ## Data (Cloud Firestore)
 
 - `tablekeys/{n}`: secret key printed in each table's QR code (replaced by "Make new QR codes")
-- `tables/{n}`: current session, table code, waiter, guests, split mode, who has paid
+- `groups/{session}`: one party ordering together (table, 4-digit code, guests, waiter, split mode, who has paid, open/closed). Normal tables have one open group at a time; tables marked shared in Setup can have several.
+- `tables/{n}`: pointer to the current group on a normal table
 - `lines`: one document per ordered item, with station and status (new → preparing → ready → served)
 - `lines` also record `tPrep`, `tReady`, `tServed` and `servedBy` for the dashboard
 - `alerts`: call-waiter and bill requests, with on-my-way (`ack`, `ackBy`) and done (`doneAt`)
 - `sessions/{session}`: one record per closed table (opened, closed, waiter, guests, total)
-- `config/restaurant`: menu sections and items (with sold-out flags and photo ids), waiters, owner PIN, manager PIN, brand (name, logo id, two colours, font pair)
+- `config/restaurant`: shared table numbers, menu sections and items (with sold-out flags and photo ids), waiters, owner PIN, manager PIN, brand (name, logo id, two colours, font pair)
 - `photos/{id}`: logo and menu photos, resized on the owner's phone (JPEG about 640px, logo PNG 360px) and stored as data URLs so no paid Storage plan is needed. Move to Firebase Storage or a CDN before scaling up.
 - Sample data from the dashboard is marked `sample: true` and can be removed from the dashboard
 

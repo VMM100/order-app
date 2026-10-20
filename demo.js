@@ -62,11 +62,11 @@ $("#reset").addEventListener("click", async (e) => {
   b.disabled = true; b.textContent = "Resetting…";
   try {
     const batch = writeBatch(db);
-    for (const name of ["lines", "alerts"]) {
+    for (const name of ["lines", "alerts", "groups"]) {
       const s = await getDocs(query(collection(db, name), where("table", "==", TABLE)));
       s.docs.forEach((d) => { if (!d.data().sample) batch.delete(d.ref); });
     }
-    batch.set(doc(db, "tables", String(TABLE)), { table: TABLE, code: null, session: null, waiter: null, people: {}, split: "order", paid: {}, closed: Date.now() });
+    batch.set(doc(db, "tables", String(TABLE)), { table: TABLE, current: null });
     await batch.commit();
     Object.keys(localStorage).filter((k) => k.startsWith(`dees-me-${TABLE}`)).forEach((k) => localStorage.removeItem(k));
     toast("Demo table reset"); build();

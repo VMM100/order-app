@@ -102,19 +102,21 @@ const tableLink = (n, k) => `${BASE}?t=${n}&k=${k}`;
 // Until the owner saves for the first time, the starting menu from menu.js is used.
 // The database can't store a list inside a list, so prices are saved as {l, p} pairs.
 const cfgRef = doc(db, "config", "restaurant");
-let MENU = START_MENU, WAITERS = START_WAITERS, PIN = "1234", MPIN = "5678", CFG_SAVED = false;
+let MENU = START_MENU, WAITERS = START_WAITERS, PIN = "1234", MPIN = "5678", SHARED = [], CFG_SAVED = false;
 let BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...(store.get("dees-brand") || {}) };
 const cfgListeners = new Set();
+// Resolves once the restaurant settings (menu, shared tables…) have loaded, or failed to.
+let cfgLoaded; const cfgReady = new Promise((r) => (cfgLoaded = r));
 const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
 const menuToDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: c.items.map((it) => {
   const o = { n: it.n, v: it.v.map(([l, p]) => ({ l: l || "", p: Number(p) || 0 })) };
   if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (it.out) o.out = true; if (it.img) o.img = it.img; return o; }) }));
 onSnapshot(cfgRef, (snap) => {
-  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; if (d.mpin) MPIN = d.mpin; if (d.brand) { BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }; store.set("dees-brand", BRAND); } CFG_SAVED = true; }
+  if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; if (d.pin) PIN = d.pin; if (d.mpin) MPIN = d.mpin; SHARED = d.shared || []; if (d.brand) { BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }; store.set("dees-brand", BRAND); } CFG_SAVED = true; }
   applyBrand();
-  cfgListeners.forEach((f) => f());
-}, () => {});
-const saveConfig = () => setDoc(cfgRef, { sections: menuToDb(MENU), waiters: WAITERS, pin: PIN, mpin: MPIN, brand: BRAND, updated: Date.now() });
+  cfgLoaded(); cfgListeners.forEach((f) => f());
+}, () => cfgLoaded());
+const saveConfig = () => setDoc(cfgRef, { sections: menuToDb(MENU), waiters: WAITERS, pin: PIN, mpin: MPIN, shared: SHARED, brand: BRAND, updated: Date.now() });
 
 // ---------- branding: name, logo and two colours chosen by the owner ----------
 const hex2rgb = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
@@ -203,24 +205,40 @@ async function savePhoto(dataUrl, old) {
   return id;
 }
 
+// ---------- groups ----------
+// A group is one party ordering and paying together. Small tables have one group at a time;
+// tables the owner marks as shared can hold several groups, each with its own code and bill.
+const groupsCol = collection(db, "groups");
+const groupRef = (sid) => doc(db, "groups", sid);
+const isShared = (n) => SHARED.includes(Number(n));
+const gname = (g) => (g && g.label ? `${g.label}'s group` : "New group");
+// "Table 8", or "Table 8 · Amani's group" when the table has more than one group or is shared.
+const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []).filter((x) => x.table === g.table && x.open).length > 1 ? ` · ${gname(g)}` : "");
+
 async function newCode() {
   for (let i = 0; i < 6; i++) {
     const c = String(1000 + Math.floor(Math.random() * 9000));
-    const s = await getDocs(query(tablesCol, where("code", "==", c)));
-    if (s.empty) return c;
+    const s = await getDocs(query(groupsCol, where("code", "==", c)));
+    if (!s.docs.some((d) => d.data().open)) return c;
   }
   return String(Date.now()).slice(-4);
 }
-// Start a fresh session at a table if nobody is sitting there yet.
-async function ensureSession(n) {
-  const code = await newCode();
+const newGroup = (n, code) => ({ table: Number(n), session: `${n}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, code,
+  opened: Date.now(), waiter: null, people: {}, split: "order", paid: {}, open: true, label: null });
+// Small table: join the group already there, or start one. The transaction stops two phones scanning
+// at the same moment from creating two groups.
+async function tableGroup(n) {
+  const code = await newCode(); let sid = null;
   await runTransaction(db, async (tx) => {
-    const s = await tx.get(tableRef(n));
-    if (s.exists() && s.data().session) return;
-    tx.set(tableRef(n), { table: Number(n), code, session: `${n}-${Date.now().toString(36)}`, opened: Date.now(),
-      waiter: null, people: {}, split: "order", paid: {} });
+    const ts = await tx.get(tableRef(n)), cur = ts.exists() && ts.data().current;
+    if (cur) { const g = await tx.get(groupRef(cur)); if (g.exists() && g.data().open) { sid = cur; return; } }
+    const g = newGroup(n, code); tx.set(groupRef(g.session), g); tx.set(tableRef(n), { table: Number(n), current: g.session }); sid = g.session;
   });
+  return sid;
 }
+async function startGroup(n) { const g = newGroup(n, await newCode()); await setDoc(groupRef(g.session), g); return g.session; }
+async function openGroups() { const s = await getDocs(query(groupsCol, where("open", "==", true))); return s.docs.map((d) => d.data()); }
+
 const tableTotal = (lines) => lines.reduce((a, l) => a + l.pr, 0);
 function shares(t, lines) {
   const ids = Object.keys(t.people || {}); const total = tableTotal(lines);
@@ -231,17 +249,17 @@ function shares(t, lines) {
 function billHtml(t, lines, staff) {
   const total = tableTotal(lines);
   return `<div class="seg" role="group" aria-label="Split method">
-    <button aria-pressed="${t.split !== "equal"}" data-split="order" data-t="${t.table}">By what they ordered</button>
-    <button aria-pressed="${t.split === "equal"}" data-split="equal" data-t="${t.table}">Equally</button></div>
+    <button aria-pressed="${t.split !== "equal"}" data-split="order" data-g="${t.session}">By what they ordered</button>
+    <button aria-pressed="${t.split === "equal"}" data-split="equal" data-g="${t.session}">Equally</button></div>
    ${shares(t, lines).map((s) => `<div class="billrow"><div style="min-width:0"><div class="${s.paid ? "paid" : ""}" style="font-weight:600">${esc(s.name)}</div>
      ${t.split !== "equal" ? `<div class="note" style="margin:0">${s.items.map((l) => esc(l.n)).join(", ") || "Nothing ordered"}</div>` : ""}</div>
      <div class="row" style="flex-wrap:nowrap"><span class="amt num ${s.paid ? "paid" : ""}">${fmt(s.amt)}</span>
-     ${staff ? `<button class="btn ${s.paid ? "" : "primary"}" data-paid="${s.pid}" data-t="${t.table}">${s.paid ? "Undo" : "Mark paid"}</button>` : s.paid ? `<span class="pill s-ready">Paid</span>` : ""}</div></div>`).join("")}
-   <div class="total"><span>Table total</span><span class="num">TSh ${fmt(total)}</span></div>
+     ${staff ? `<button class="btn ${s.paid ? "" : "primary"}" data-paid="${s.pid}" data-g="${t.session}">${s.paid ? "Undo" : "Mark paid"}</button>` : s.paid ? `<span class="pill s-ready">Paid</span>` : ""}</div></div>`).join("")}
+   <div class="total"><span>${isShared(t.table) ? "Group total" : "Table total"}</span><span class="num">TSh ${fmt(total)}</span></div>
    ${t.split === "equal" ? `<p class="note">Equal shares round up to the nearest 100 shillings.</p>` : ""}`;
 }
-async function setSplit(n, mode) { try { await updateDoc(tableRef(n), { split: mode }); } catch (e) { fail(e); } }
-async function togglePaid(n, pid, now) { try { await updateDoc(tableRef(n), { [`paid.${pid}`]: now ? deleteField() : true }); } catch (e) { fail(e); } }
+async function setSplit(sid, mode) { try { await updateDoc(groupRef(sid), { split: mode }); } catch (e) { fail(e); } }
+async function togglePaid(sid, pid, now) { try { await updateDoc(groupRef(sid), { [`paid.${pid}`]: now ? deleteField() : true }); } catch (e) { fail(e); } }
 
 applyBrand();
 
@@ -258,89 +276,107 @@ else dinerScreen();
 
 // ================= DINER =================
 function dinerScreen() {
-  const S = { n: params.get("t"), t: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "", code: "" };
-  let unsub = [];
+  const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "" };
   // On the demo page several diners share one browser, so each gets its own slot (?as=1, ?as=2).
   const meKey = () => `dees-me-${S.n}${params.get("as") ? "-" + params.get("as") : ""}`;
+  let subGroup = null, subLines = null, subAlerts = null;
 
-  // Who may sit at this table: someone who scanned its QR (secret key), someone with the current
-  // table code (a friend's invite), or a guest returning to the table they already joined.
+  // Who may order: someone who scanned the table QR (secret key), someone with a group's current
+  // code (a friend's invite), or a guest coming back to the group they already joined.
   async function start() {
     const c = params.get("c"), k = params.get("k");
     if (!S.n && c) return findByCode(c);
     if (!S.n) return codeEntry();
     $("#sub").textContent = `Table ${S.n}`;
-    let ok = false;
+    const saved = store.get(meKey());
+    await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]);
     try {
+      const open = (await openGroups()).filter((g) => g.table === Number(S.n));
+      const mine = saved && open.find((g) => g.session === saved.session);
       if (k) {
-        const ks = await getDoc(keyRef(S.n)); ok = ks.exists() && ks.data().k === k; S.viaKey = ok;
-        if (!ok) S.err = "This QR code is out of date. Ask a waiter, or enter the table code from a friend at your table.";
-      } else {
-        const t = (await getDoc(tableRef(S.n))).data(), saved = store.get(meKey());
-        ok = !!(t && t.session && ((c && t.code === c) || (saved && saved.session === t.session)));
-        if (!ok && c) S.err = "This invite has expired. Ask your friend for the new table code.";
+        const ks = await getDoc(keyRef(S.n)); S.viaKey = ks.exists() && ks.data().k === k;
+        if (!S.viaKey) { S.err = "This QR code is out of date. Ask a waiter, or enter the code from a friend's phone."; return codeEntry(S.n); }
+        if (mine) return attach(mine.session);
+        if (!isShared(S.n)) return attach(await tableGroup(S.n));
+        if (!open.length) return attach(await startGroup(S.n));
+        return chooseGroup(open.length);
       }
-    } catch (e) { return paint(errorBox(e)); }
-    if (!ok) return codeEntry(S.n);
-    S.access = true;
-    if (S.viaKey) { try { await ensureSession(S.n); } catch (e) { return paint(errorBox(e)); } }
-    unsub.push(onSnapshot(tableRef(S.n), (snap) => {
-      const prev = S.t && S.t.session; S.t = snap.data() || null;
-      if (S.t && S.t.session && S.t.session !== prev) listen(S.t.session);
-      const saved = store.get(meKey());
-      S.me = S.t && saved && saved.session === S.t.session && S.t.people && S.t.people[saved.pid] ? saved : null;
-      render();
-    }, (e) => paint(errorBox(e))));
+      const byCode = c && open.find((g) => g.code === c);
+      if (byCode) return attach(byCode.session);
+      if (mine) return attach(mine.session);
+      if (c) S.err = "This invite has expired. Ask your friend for the new code.";
+      return codeEntry(S.n);
+    } catch (e) { paint(errorBox(e)); }
   }
-  let subLines = null, subAlerts = null;
-  function listen(session) {
-    subLines && subLines(); subAlerts && subAlerts();
-    subLines = onSnapshot(query(linesCol, where("session", "==", session)), (s) => { S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.t - b.t); render(); });
+  function attach(sid) {
+    S.sid = sid; S.access = true; S.err = "";
+    subGroup && subGroup(); subLines && subLines(); subAlerts && subAlerts();
+    subGroup = onSnapshot(groupRef(sid), (snap) => {
+      S.g = snap.data() || null;
+      const saved = store.get(meKey());
+      S.me = S.g && saved && saved.session === sid && S.g.people && S.g.people[saved.pid] ? saved : null;
+      render();
+    }, (e) => paint(errorBox(e)));
+    subLines = onSnapshot(query(linesCol, where("session", "==", sid)), (s) => { S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.t - b.t); render(); });
     const acked = new Set(); let primed = false;
-    subAlerts = onSnapshot(query(alertsCol, where("session", "==", session)), (s) => {
+    subAlerts = onSnapshot(query(alertsCol, where("session", "==", sid)), (s) => {
       S.alerts = s.docs.map((d) => ({ id: d.id, ...d.data() }));
       S.alerts.forEach((a) => { if (a.ack && !a.done && !acked.has(a.id)) { acked.add(a.id); if (primed) { try { navigator.vibrate?.(300); } catch {} } } });
       primed = true; render();
     });
   }
   async function findByCode(c) {
-    paint(`<p class="empty">Finding table…</p>`);
+    paint(`<p class="empty">Finding your friends…</p>`);
     try {
-      const s = await getDocs(query(tablesCol, where("code", "==", String(c).trim())));
-      const hit = s.docs.map((d) => d.data()).find((t) => t.session);
-      if (!hit) { S.err = "No open table with that code. Check the number with your friend."; return codeEntry(); }
+      const hit = (await openGroups()).find((g) => g.code === String(c).trim());
+      if (!hit) { S.err = "No open table or group with that code. Check the number with your friend."; return codeEntry(S.n); }
       const as = params.get("as");
       history.replaceState(null, "", `${BASE}?t=${hit.table}&c=${hit.code}${as ? "&as=" + as : ""}`);
-      params.set("t", hit.table); params.set("c", hit.code); params.delete("k"); S.n = String(hit.table); S.err = ""; start();
+      params.set("t", hit.table); params.set("c", hit.code); params.delete("k"); S.n = String(hit.table);
+      $("#sub").textContent = `Table ${S.n}`; attach(hit.session);
     } catch (e) { paint(errorBox(e)); }
   }
   function codeEntry(n) {
+    $("#cart").hidden = true;
     $("#sub").textContent = n ? `Table ${n}` : "Join a table";
     paint(`<section><div class="label">${n ? `Join table ${esc(n)}` : "Join your friends"}</div>
-      <p>Scan the QR code on your table, or enter the 4-digit table code shown on a friend's phone.</p>
-      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="Table code" autocomplete="off">
-      <button class="btn primary big">Join table</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}</section>`);
+      <p>Scan the QR code on your table, or enter the 4-digit code shown on a friend's phone.</p>
+      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="4-digit code" autocomplete="off">
+      <button class="btn primary big">Join</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}</section>`);
+  }
+  // Shared table with groups already ordering: join friends with their code, or start a new group.
+  function chooseGroup(count) {
+    S.choosing = true; $("#cart").hidden = true;
+    paint(`<section><div class="tablebar"><b>Table ${esc(S.n)}</b><span class="note" style="margin:0">Shared table · ${count} group${count > 1 ? "s" : ""} ordering</span></div>
+      <div class="label">Here with friends who already ordered?</div>
+      <p style="margin-top:0">Enter the 4-digit code shown on their phone.</p>
+      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="Their group code" autocomplete="off">
+      <button class="btn primary big">Join their group</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}
+      <div class="label">New here?</div>
+      <button class="btn big" data-act="newgroup">Start a new group</button>
+      <p class="note">Each group orders and pays separately, so you only see your own bill.</p></section>`);
   }
   function render() {
     if (!S.n || !S.access) return;
-    if (!S.t || !S.t.session) {
+    const shared = isShared(S.n), g = S.g;
+    if (!g || !g.open) {
       $("#cart").hidden = true;
-      return paint(`<section><p class="empty">This table has been closed. Thanks for visiting!</p>${S.viaKey
+      return paint(`<section><p class="empty">${shared ? "Your group's bill has been closed" : "This table has been closed"}. Thanks for visiting!</p>${S.viaKey
         ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
         : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
     if (!S.me) {
       $("#cart").hidden = true;
-      const names = Object.values(S.t.people || {}).map((p) => esc(p.name));
-      return paint(`<section><div class="tablebar"><b>Table ${esc(S.n)}</b><span class="note" style="margin:0">${names.length ? `With ${names.join(", ")}` : "You're the first one here"}</span></div>
+      const names = Object.values(g.people || {}).map((p) => esc(p.name));
+      return paint(`<section><div class="tablebar"><b>Table ${esc(S.n)}</b><span class="note" style="margin:0">${names.length ? `With ${names.join(", ")}` : shared ? "Starting a new group" : "You're the first one here"}</span></div>
         <div class="label">What's your name?</div>
         <form id="joinform" class="grid"><input class="field" id="namein" maxlength="16" placeholder="First name" autocomplete="given-name" value="${esc(S.name)}">
-        <button class="btn primary big">Join table</button></form>
-        <p class="note">Your name shows on your orders so the table can split the bill.</p></section>`);
+        <button class="btn primary big">Join ${shared ? "group" : "table"}</button></form>
+        <p class="note">Your name shows on your orders so ${shared ? "your group" : "the table"} can split the bill.</p></section>`);
     }
-    const t = S.t, open = S.alerts.filter((a) => !a.done);
+    const open = S.alerts.filter((a) => !a.done);
     const banners = open.filter((a) => a.ack).map((a) => `<div class="ontheway" role="status"><span>${esc(wname(a.ackBy) || "Your waiter")} ${a.type === "bill" ? "is bringing your bill" : "is on the way to your table"}</span><span class="note">${ago(a.ack)}</span></div>`).join("");
-    const tabs = [["menu", "Menu"], ["orders", `Table order${S.lines.length ? ` (${S.lines.length})` : ""}`], ["bill", "Bill"]];
+    const tabs = [["menu", "Menu"], ["orders", `${shared ? "Our order" : "Table order"}${S.lines.length ? ` (${S.lines.length})` : ""}`], ["bill", "Bill"]];
     let body = "";
     if (S.tab === "menu") {
       if (S.cat >= MENU.length) S.cat = 0;
@@ -349,15 +385,14 @@ function dinerScreen() {
        ${cat.items.map((it, ii) => `<div class="item${it.out ? " out" : ""}${it.img ? " withph" : ""}">${it.img ? `<div class="ph"><img data-photo="${esc(it.img)}" alt="${esc(it.n)}" loading="lazy"></div>` : ""}<h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}
        ${it.out ? "" : `<div class="vars">${it.v.map(([l, p], vi) => `<button class="var" data-add="${S.cat}.${ii}.${vi}">${l ? esc(l) + " " : "Add "}<span class="num">TSh ${fmt(p)}</span></button>`).join("")}</div>`}</div>`).join("")}`;
     } else if (S.tab === "orders") {
-      const ppl = Object.entries(t.people || {});
-      body = ppl.map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
+      body = Object.entries(g.people || {}).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
         return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
-    } else body = billHtml(t, S.lines, false) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
+    } else body = billHtml(g, S.lines, false) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
     paint(`<section>
-      <div class="tablebar"><div><b>Table ${esc(S.n)}</b><div class="note" style="margin:2px 0 0">Hi ${esc(S.me.name)} · friends join with code</div></div>
-       <div class="row"><span class="code num">${esc(t.code)}</span><button class="btn" data-act="share">Share</button></div></div>
+      <div class="tablebar"><div><b>Table ${esc(S.n)}</b><div class="note" style="margin:2px 0 0">${shared ? `${esc(gname(g))} · ` : ""}Hi ${esc(S.me.name)} · friends join with code</div></div>
+       <div class="row"><span class="code num">${esc(g.code)}</span><button class="btn" data-act="share">Share</button></div></div>
       ${banners}
-      <div class="waitbar"><div><div class="note" style="margin:0">Your waiter</div><b>${t.waiter ? esc(wname(t.waiter)) : "Being assigned…"}</b></div>
+      <div class="waitbar"><div><div class="note" style="margin:0">Your waiter</div><b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned…"}</b></div>
        <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
          return `<button class="btn${a ? "" : " primary"}" data-alert="${k}" ${a ? "disabled" : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
       <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
@@ -376,12 +411,21 @@ function dinerScreen() {
 
   document.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (e.target.id === "codeform") { const c = $("#codein").value.trim(); if (c.length === 4) findByCode(c); }
+    if (e.target.id === "codeform") {
+      const c = $("#codein").value.trim(); if (c.length !== 4) return;
+      if (S.choosing) {
+        const hit = (await openGroups()).find((g) => g.table === Number(S.n) && g.code === c);
+        if (!hit) { S.err = "That code doesn't match a group at this table. Check it on your friend's phone."; return chooseGroup((await openGroups()).filter((g) => g.table === Number(S.n)).length); }
+        S.choosing = false; return attach(hit.session);
+      }
+      findByCode(c);
+    }
     if (e.target.id === "joinform") {
       const name = $("#namein").value.trim(); if (!name) return;
-      const pid = uid("p");
-      try { await updateDoc(tableRef(S.n), { [`people.${pid}`]: { name, t: Date.now() } });
-        store.set(meKey(), { pid, name, session: S.t.session }); S.me = { pid, name, session: S.t.session }; render();
+      const pid = uid("p"), patch = { [`people.${pid}`]: { name, t: Date.now() } };
+      if (!S.g.label) patch.label = name;
+      try { await updateDoc(groupRef(S.sid), patch);
+        store.set(meKey(), { pid, name, session: S.sid }); S.me = { pid, name, session: S.sid }; render();
       } catch (err) { fail(err); }
     }
   });
@@ -393,26 +437,28 @@ function dinerScreen() {
     else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c]?.items[i]; if (!it || it.out || !it.v[v]) return render(); const [l, p] = it.v[v];
       S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}`); renderCart(); }
     else if (d.rm) { S.cart.splice(+d.rm, 1); renderCart(); }
-    else if (d.split) setSplit(S.n, d.split);
+    else if (d.split) setSplit(S.sid, d.split);
     else if (d.alert) {
-      try { await addDoc(alertsCol, { table: Number(S.n), session: S.t.session, type: d.alert, pid: S.me.pid, pname: S.me.name, t: Date.now(), ack: null, ackBy: null, done: false });
-        toast(S.t.waiter ? `${wname(S.t.waiter)} has been notified` : "All waiters notified"); } catch (err) { fail(err); }
+      try { await addDoc(alertsCol, { table: Number(S.n), session: S.sid, type: d.alert, pid: S.me.pid, pname: S.me.name, t: Date.now(), ack: null, ackBy: null, done: false });
+        toast(S.g.waiter ? `${wname(S.g.waiter)} has been notified` : "All waiters notified"); } catch (err) { fail(err); }
     }
     else if (d.act === "place" && S.cart.length && !S.placing) {
       S.placing = true; renderCart();
       const batch = writeBatch(db), bid = uid("b"), now = Date.now();
-      S.cart.forEach((l) => batch.set(doc(linesCol), { table: Number(S.n), session: S.t.session, batch: bid, pid: S.me.pid, pname: S.me.name,
+      S.cart.forEach((l) => batch.set(doc(linesCol), { table: Number(S.n), session: S.sid, batch: bid, pid: S.me.pid, pname: S.me.name,
         n: l.n, v: l.v, pr: l.pr, st: l.st, s: "new", t: now, note: S.note.trim() || null }));
       try { await batch.commit(); const sts = [...new Set(S.cart.map((l) => STATIONS[l.st]))]; S.cart = []; S.note = ""; toast("Sent to " + sts.join(" and ")); }
       catch (err) { fail(err); }
       S.placing = false; render();
     }
     else if (d.act === "share") {
-      const link = `${BASE}?c=${S.t.code}`, txt = `Join our table at ${rname()}: ${link} (table code ${S.t.code}, works until the table closes)`;
+      const link = `${BASE}?c=${S.g.code}`, what = isShared(S.n) ? "group" : "table";
+      const txt = `Join our ${what} at ${rname()}: ${link} (code ${S.g.code}, works until the ${what} closes)`;
       try { if (navigator.share) { await navigator.share({ text: txt }); return; } } catch { return; }
-      try { await navigator.clipboard.writeText(txt); toast("Invite copied. Paste it in WhatsApp."); } catch { toast(`Table code: ${S.t.code}`); }
+      try { await navigator.clipboard.writeText(txt); toast("Invite copied. Paste it in WhatsApp."); } catch { toast(`Code: ${S.g.code}`); }
     }
-    else if (d.act === "newsession" && S.viaKey) { try { await ensureSession(S.n); } catch (err) { fail(err); } }
+    else if (d.act === "newgroup" && S.viaKey) { S.choosing = false; try { attach(await startGroup(S.n)); } catch (err) { fail(err); } }
+    else if (d.act === "newsession" && S.viaKey) { S.access = false; S.sid = null; S.g = null; S.me = null; start(); }
   });
   setInterval(() => { if (S.alerts.some((a) => a.ack && !a.done)) render(); }, 30000);
   cfgListeners.add(() => { S.cart = S.cart.filter((c) => !soldOut(c.n)); render(); });
@@ -422,19 +468,19 @@ function dinerScreen() {
 // ================= STATION (kitchen / bar / grill) =================
 function stationScreen(st) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st] + " screen"; document.title = STATIONS[st] + " · " + rname();
-  const S = { lines: [], tables: {} }; const notify = watcher();
+  const S = { lines: [], groups: {}, all: [] }; const notify = watcher();
   onSnapshot(query(linesCol, where("s", "in", ["new", "preparing", "ready"])), (s) => {
     S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
     notify(S.lines.filter((l) => l.s === "new").map((l) => l.batch)); render();
   }, (e) => paint(errorBox(e)));
-  onSnapshot(tablesCol, (s) => { S.tables = {}; s.docs.forEach((d) => (S.tables[d.id] = d.data())); render(); });
+  onSnapshot(query(groupsCol, where("open", "==", true)), (s) => { S.all = s.docs.map((d) => d.data()); S.groups = {}; S.all.forEach((g) => (S.groups[g.session] = g)); render(); });
   const NEXT = { new: ["preparing", "Start"], preparing: ["ready", "Ready"] };
   function render() {
     const batches = [...new Set(S.lines.sort((a, b) => a.t - b.t).map((l) => l.batch))];
     const tix = batches.map((b) => {
       const bl = S.lines.filter((l) => l.batch === b), s = bl.some((l) => l.s === "new") ? "new" : bl.some((l) => l.s === "preparing") ? "preparing" : "ready";
-      const nx = NEXT[s], note = bl.find((l) => l.note), w = (S.tables[bl[0].table] || {}).waiter;
-      return `<article class="ticket ${s}"><header><b>Table ${bl[0].table}</b><span class="note" style="margin:0">${esc(bl[0].pname)} · ${ago(bl[0].t)}</span></header>
+      const nx = NEXT[s], note = bl.find((l) => l.note), g = S.groups[bl[0].session], w = g && g.waiter;
+      return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="note" style="margin:0">${esc(bl[0].pname)} · ${ago(bl[0].t)}</span></header>
         <div class="note" style="margin:2px 0 0">Waiter: ${w ? esc(wname(w)) : "not assigned yet"}</div>
         <ul>${bl.map((l) => `<li><span class="q">1×</span>${label(l)}</li>`).join("")}</ul>${note ? `<div class="nt">${esc(note.note)}</div>` : ""}
         <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${nx ? `<button class="btn primary" data-adv="${b}" data-to="${nx[0]}">${nx[1]}</button>` : ""}</div></article>`;
@@ -450,30 +496,32 @@ function stationScreen(st) {
       try { await batch.commit(); } catch (err) { fail(err); b.disabled = false; } }
   });
   setInterval(render, 30000);
+  cfgListeners.add(render);
 }
 
 // ================= WAITER =================
 function waiterScreen() {
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Waiter"; document.title = "Waiter · " + rname();
-  const S = { me: store.get("dees-waiter"), tables: [], lines: [], alerts: [], open: null, confirm: null };
+  const S = { me: store.get("dees-waiter"), groups: [], lines: [], alerts: [], open: null, confirm: null };
   const notify = watcher();
-  onSnapshot(tablesCol, (s) => { S.tables = s.docs.map((d) => d.data()).filter((t) => t.session).sort((a, b) => a.table - b.table); update(); }, (e) => paint(errorBox(e)));
+  onSnapshot(query(groupsCol, where("open", "==", true)), (s) => { S.groups = s.docs.map((d) => d.data()).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
   onSnapshot(query(linesCol, where("s", "in", ["new", "preparing", "ready"])), (s) => { S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })); update(); });
   onSnapshot(query(alertsCol, where("done", "==", false)), (s) => { S.alerts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.t - b.t); update(); });
-  // Bill totals need every line of open tables, including served ones.
+  // Bill totals need every line of the group, including served ones.
   let billSub = null, billLines = [];
-  function watchBill(session) { billSub && billSub(); billLines = []; if (!session) return;
-    billSub = onSnapshot(query(linesCol, where("session", "==", session)), (s) => { billLines = s.docs.map((d) => d.data()); render(); }); }
+  function watchBill(sid) { billSub && billSub(); billLines = []; if (!sid) return;
+    billSub = onSnapshot(query(linesCol, where("session", "==", sid)), (s) => { billLines = s.docs.map((d) => d.data()); render(); }); }
 
-  const live = (t) => (x) => x.session === t.session;
-  function mineOrFree(t) { return t.waiter === S.me || !t.waiter; }
+  const live = (g) => (x) => x.session === g.session;
+  const seated = (g) => Object.keys(g.people || {}).length > 0;
+  const name = (g) => where_(g, S.groups);
   function update() {
     if (S.me) {
-      const mine = S.tables.filter(mineOrFree);
+      const mine = S.groups.filter((g) => g.waiter === S.me || !g.waiter);
       notify([
-        ...S.tables.filter((t) => !t.waiter && Object.keys(t.people || {}).length).map((t) => "t" + t.session),
-        ...S.alerts.filter((a) => mine.some((t) => live(t)(a))).map((a) => "a" + a.id),
-        ...S.lines.filter((l) => l.s === "ready" && mine.some((t) => live(t)(l))).map((l) => "l" + l.id),
+        ...S.groups.filter((g) => !g.waiter && seated(g)).map((g) => "g" + g.session),
+        ...S.alerts.filter((a) => mine.some((g) => live(g)(a))).map((a) => "a" + a.id),
+        ...S.lines.filter((l) => l.s === "ready" && mine.some((g) => live(g)(l))).map((l) => "l" + l.id),
       ]);
     }
     render();
@@ -481,62 +529,62 @@ function waiterScreen() {
   function render() {
     const pick = `<div class="label" style="margin-top:0">I am</div><div class="row">${WAITERS.map((w) => `<button class="chip" aria-pressed="${w.id === S.me}" data-me="${w.id}">${esc(w.name)}</button>`).join("")}</div>`;
     if (!S.me) return paint(`<section>${pick}<p class="note">Pick your name once. This phone remembers it.</p></section>`);
-    const free = S.tables.filter((t) => !t.waiter && Object.keys(t.people || {}).length);
-    const mine = S.tables.filter((t) => t.waiter === S.me);
-    const others = S.tables.filter((t) => t.waiter && t.waiter !== S.me);
-    const alertCard = (a, t) => `<article class="ticket alert"><header><b>${ALERT[a.type]}</b><span class="note" style="margin:0">${ago(a.t)}</span></header>
-      <p class="note" style="margin:4px 0 0">Table ${t.table} · from ${esc(a.pname)}</p>
+    const free = S.groups.filter((g) => !g.waiter && seated(g));
+    const mine = S.groups.filter((g) => g.waiter === S.me);
+    const others = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
+    const alertCard = (a, g) => `<article class="ticket alert"><header><b>${ALERT[a.type]}</b><span class="note" style="margin:0">${ago(a.t)}</span></header>
+      <p class="note" style="margin:4px 0 0">${esc(name(g))} · from ${esc(a.pname)}</p>
       <div class="acts">${a.ack ? `<span class="pill s-preparing">Diner notified</span><button class="btn primary" data-done="${a.id}">${a.type === "bill" ? "Bill delivered" : "Done"}</button>`
-        : `<button class="btn primary" data-ack="${a.id}">On my way</button>`}${a.type === "bill" && t.waiter === S.me ? `<button class="btn" data-open="${t.table}">Open bill</button>` : ""}</div></article>`;
-    const freeCards = free.map((t) => { const al = S.alerts.filter(live(t));
-      return `<article class="ticket"><header><b>Table ${t.table}</b><span class="pill s-new">No waiter</span></header>
-       <p class="note" style="margin:4px 0 0">${Object.values(t.people).map((p) => esc(p.name)).join(", ")} · opened ${ago(t.opened)}</p>
-       <div class="acts"><button class="btn primary" data-accept="${t.table}">Accept table</button></div></article>` + al.map((a) => alertCard(a, t)).join(""); }).join("");
-    const mineCards = mine.map((t) => {
-      const al = S.alerts.filter(live(t)), ready = S.lines.filter((l) => live(t)(l) && l.s === "ready");
-      const open = S.open === t.table;
-      return `<article class="ticket preparing"><header><b>Table ${t.table}</b><span class="note" style="margin:0">code ${esc(t.code)}</span></header>
-        <p class="note" style="margin:4px 0 0">${Object.values(t.people || {}).map((p) => esc(p.name)).join(", ") || "No guests yet"}</p>
+        : `<button class="btn primary" data-ack="${a.id}">On my way</button>`}${a.type === "bill" && g.waiter === S.me ? `<button class="btn" data-open="${g.session}">Open bill</button>` : ""}</div></article>`;
+    const freeCards = free.map((g) => { const al = S.alerts.filter(live(g));
+      return `<article class="ticket"><header><b>${esc(name(g))}</b><span class="pill s-new">No waiter</span></header>
+       <p class="note" style="margin:4px 0 0">${Object.values(g.people).map((p) => esc(p.name)).join(", ")} · opened ${ago(g.opened)}</p>
+       <div class="acts"><button class="btn primary" data-accept="${g.session}">Accept</button></div></article>` + al.map((a) => alertCard(a, g)).join(""); }).join("");
+    const mineCards = mine.map((g) => {
+      const al = S.alerts.filter(live(g)), ready = S.lines.filter((l) => live(g)(l) && l.s === "ready"), open = S.open === g.session, unit = isShared(g.table) ? "group" : "table";
+      return `<article class="ticket preparing"><header><b>${esc(name(g))}</b><span class="note" style="margin:0">code ${esc(g.code)}</span></header>
+        <p class="note" style="margin:4px 0 0">${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "No guests yet"}</p>
         ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(l.pname)} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
-        <div class="acts"><button class="btn" data-open="${t.table}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${t.table}">Hand over</button>
-          ${S.confirm === t.table ? `<button class="btn danger" data-close="${t.table}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${t.table}">Close table</button>`}</div>
-        ${open ? billHtml(t, billLines, true) : ""}</article>` + al.map((a) => alertCard(a, t)).join("");
+        <div class="acts"><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${g.session}">Hand over</button>
+          ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>
+        ${open ? billHtml(g, billLines, true) : ""}</article>` + al.map((a) => alertCard(a, g)).join("");
     }).join("");
     paint(`<section>${pick}${soundBar()}
-      ${free.length ? `<div class="label">New tables · alerts go to every waiter</div><div class="grid">${freeCards}</div>` : ""}
+      ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
       <div class="label">My tables</div>${mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
-      ${others.length ? `<div class="label">Other waiters</div><p class="note">${others.map((t) => `Table ${t.table}: ${esc(wname(t.waiter))}`).join(" · ")}</p>` : ""}
+      ${others.length ? `<div class="label">Other waiters</div><p class="note">${others.map((g) => `${esc(name(g))}: ${esc(wname(g.waiter))}`).join(" · ")}</p>` : ""}
     </section>`);
   }
+  const find = (sid) => S.groups.find((g) => g.session === sid);
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     try {
       if (d.act === "sound") { await enableSound(); render(); }
       else if (d.act === "testsound") beep();
       else if (d.me) { S.me = d.me; store.set("dees-waiter", d.me); update(); }
-      else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(tableRef(d.accept)); if (s.data().waiter) throw new Error("taken"); tx.update(tableRef(d.accept), { waiter: S.me, accepted: Date.now() }); }); toast(`Table ${d.accept} is yours`); }
-      else if (d.release) { await updateDoc(tableRef(d.release), { waiter: null }); toast(`Table ${d.release} is open for another waiter`); }
+      else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(groupRef(d.accept)); if (!s.exists() || s.data().waiter) throw new Error("taken"); tx.update(groupRef(d.accept), { waiter: S.me, accepted: Date.now() }); }); toast(`${name(find(d.accept) || { table: "" })} is yours`); }
+      else if (d.release) { await updateDoc(groupRef(d.release), { waiter: null }); toast("Open for another waiter"); }
       else if (d.ack) { await updateDoc(doc(db, "alerts", d.ack), { ack: Date.now(), ackBy: S.me }); toast("Diner told you're on the way"); }
       else if (d.done) await updateDoc(doc(db, "alerts", d.done), { done: true, doneAt: Date.now() });
       else if (d.serve) await updateDoc(doc(db, "lines", d.serve), { s: "served", tServed: Date.now(), servedBy: S.me });
-      else if (d.open) { const n = +d.open; S.open = S.open === n ? null : n; watchBill(S.open ? S.tables.find((t) => t.table === n)?.session : null); render(); }
-      else if (d.split) await setSplit(d.t, d.split);
-      else if (d.paid) { const t = S.tables.find((x) => x.table === +d.t); await togglePaid(d.t, d.paid, !!(t.paid || {})[d.paid]); }
-      else if (d.confirm) { S.confirm = +d.confirm; render(); setTimeout(() => { if (S.confirm === +d.confirm) { S.confirm = null; render(); } }, 4000); }
-      else if (d.close) { await closeTable(+d.close); S.confirm = null; if (S.open === +d.close) { S.open = null; watchBill(null); } toast(`Table ${d.close} closed`); }
-    } catch (err) { if (err.message === "taken") toast("Another waiter just took that table"); else fail(err); }
+      else if (d.open) { S.open = S.open === d.open ? null : d.open; watchBill(S.open); render(); }
+      else if (d.split) await setSplit(d.g, d.split);
+      else if (d.paid) { const g = find(d.g); await togglePaid(d.g, d.paid, !!((g && g.paid) || {})[d.paid]); }
+      else if (d.confirm) { S.confirm = d.confirm; render(); setTimeout(() => { if (S.confirm === d.confirm) { S.confirm = null; render(); } }, 4000); }
+      else if (d.close) { const g = find(d.close), n = g && name(g); await closeGroup(d.close); S.confirm = null; if (S.open === d.close) { S.open = null; watchBill(null); } toast(`${n || "Table"} closed`); }
+    } catch (err) { if (err.message === "taken") toast("Another waiter just took it"); else fail(err); }
   });
-  async function closeTable(n) {
-    const t = S.tables.find((x) => x.table === n); if (!t) return;
-    const all = await getDocs(query(linesCol, where("session", "==", t.session)));
+  async function closeGroup(sid) {
+    const g = find(sid); if (!g) return;
+    const all = await getDocs(query(linesCol, where("session", "==", sid)));
     const batch = writeBatch(db), now = Date.now();
     // Items never marked served are closed without a serve time, so they don't skew the averages.
-    S.lines.filter(live(t)).forEach((l) => batch.update(doc(db, "lines", l.id), { s: "served", closedUnserved: true }));
-    S.alerts.filter(live(t)).forEach((a) => batch.update(doc(db, "alerts", a.id), { done: true, doneAt: now }));
-    batch.set(doc(db, "sessions", t.session), { table: n, session: t.session, opened: t.opened, accepted: t.accepted || null, closed: now,
-      waiter: t.waiter || null, guests: Object.keys(t.people || {}).length, total: tableTotal(all.docs.map((x) => x.data())),
-      paid: Object.keys(t.paid || {}).length });
-    batch.set(tableRef(n), { table: n, code: null, session: null, waiter: null, people: {}, split: "order", paid: {}, closed: Date.now() });
+    S.lines.filter(live(g)).forEach((l) => batch.update(doc(db, "lines", l.id), { s: "served", closedUnserved: true }));
+    S.alerts.filter(live(g)).forEach((a) => batch.update(doc(db, "alerts", a.id), { done: true, doneAt: now }));
+    batch.set(doc(db, "sessions", sid), { table: g.table, session: sid, opened: g.opened, accepted: g.accepted || null, closed: now,
+      waiter: g.waiter || null, guests: Object.keys(g.people || {}).length, total: tableTotal(all.docs.map((x) => x.data())),
+      paid: Object.keys(g.paid || {}).length });
+    batch.update(groupRef(sid), { open: false, closed: now });
     await batch.commit();
   }
   setInterval(render, 30000);
@@ -561,8 +609,9 @@ function setupScreen() {
     paint(`<section><div class="label" style="margin-top:0">Staff screens · open each on its own phone</div>
       <div class="links">${link(BASE + "demo.html", "Demo stage: several phones on one iPad or laptop")}${link(BASE + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "#manager", "Manager (menu and staff)")}${link(BASE + "#waiter", "Waiter")}${Object.entries(STATIONS).map(([k, v]) => link(BASE + "#" + k, v)).join("")}</div>
       <div class="label">Table QR codes · diners scan these</div>
-      <div class="qrs">${Array.from({ length: TABLE_COUNT }, (_, i) => `<div class="qr"><div class="box" id="qr${i + 1}"></div><b>Table ${i + 1}</b>${keys[i + 1] ? `<a class="note" href="${tableLink(i + 1, keys[i + 1])}">Open</a>` : `<span class="note">Loading…</span>`}</div>`).join("")}</div>
+      <div class="qrs">${Array.from({ length: TABLE_COUNT }, (_, i) => `<div class="qr"><div class="box" id="qr${i + 1}"></div><b>Table ${i + 1}</b><button class="chip sharetog" data-share="${i + 1}" aria-pressed="${isShared(i + 1)}">${isShared(i + 1) ? "Shared table" : "Normal table"}</button>${keys[i + 1] ? `<a class="note" href="${tableLink(i + 1, keys[i + 1])}">Open</a>` : `<span class="note">Loading…</span>`}</div>`).join("")}</div>
       <p class="note">Each code carries a secret key, so nobody can join a table by guessing its number. Print these for the tables, or screenshot one for a demo.</p>
+      <p class="note">Mark big communal tables as <b>Shared</b>: several groups can then order there, each with its own code and bill. On normal tables everyone who scans joins the same bill.</p>
       <button class="btn" data-act="rotate">${rot ? "Tap again: old printed codes will stop working" : "Make new QR codes"}</button>
       <div class="label">Demo</div>
       <p>Clear all orders, alerts, tables and dashboard history so the next demo starts fresh. The menu and staff list stay.</p>
@@ -577,6 +626,9 @@ function setupScreen() {
     else { toast("Wrong PIN"); $("#setuppin").value = ""; }
   });
   document.addEventListener("click", async (e) => {
+    const sh = e.target.closest("button[data-share]");
+    if (sh && unlocked) { const n = +sh.dataset.share; SHARED = isShared(n) ? SHARED.filter((x) => x !== n) : [...SHARED, n].sort((x, y) => x - y);
+      render(); try { await saveConfig(); toast(`Table ${n} is now ${isShared(n) ? "shared" : "a normal table"}`); } catch (err) { fail(err); } return; }
     const r = e.target.closest("button[data-act=rotate]");
     if (r && unlocked) { if (!rot) { rot = true; render(); setTimeout(() => { rot = false; render(); }, 4000); return; }
       rot = false; keys = {}; render(); await loadKeys(true); toast("New QR codes made. Reprint them for the tables."); return; }
@@ -584,7 +636,7 @@ function setupScreen() {
     if (!armed) { armed = true; render(); setTimeout(() => { armed = false; render(); }, 4000); return; }
     b.disabled = true; b.textContent = "Erasing…";
     try {
-      for (const col of [linesCol, alertsCol, tablesCol, sessionsCol]) {
+      for (const col of [linesCol, alertsCol, tablesCol, groupsCol, sessionsCol]) {
         const s = await getDocs(col); let batch = writeBatch(db), n = 0;
         for (const d of s.docs) { batch.delete(d.ref); if (++n % 400 === 0) { await batch.commit(); batch = writeBatch(db); } }
         await batch.commit();
@@ -596,6 +648,7 @@ function setupScreen() {
   });
   render();
   if (unlocked) loadKeys(false);
+  cfgListeners.add(() => { if (unlocked) render(); });
 }
 
 // ================= OWNER =================
@@ -720,8 +773,8 @@ function ownerScreen(role) {
         getDocs(since ? query(linesCol, where("t", ">=", since)) : linesCol),
         getDocs(since ? query(alertsCol, where("t", ">=", since)) : alertsCol),
         getDocs(since ? query(sessionsCol, where("closed", ">=", since)) : sessionsCol),
-        getDocs(tablesCol)]);
-      const open = ts.docs.map((d) => d.data()).filter((t) => t.session && Object.keys(t.people || {}).length);
+        getDocs(query(groupsCol, where("open", "==", true)))]);
+      const open = ts.docs.map((d) => d.data()).filter((t) => Object.keys(t.people || {}).length);
       S.m = computeMetrics({ lines: ls.docs.map((d) => d.data()), alerts: as.docs.map((d) => d.data()), sessions: ss.docs.map((d) => d.data()),
         openTables: open, waiters: WAITERS, stations: STATIONS });
       S.loaded = Date.now();
