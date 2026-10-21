@@ -2,16 +2,25 @@
 // Signing in is optional; guests still join with just a first name.
 import { app } from "./firebase.js";
 import {
-  getAuth, initializeAuth, inMemoryPersistence, onAuthStateChanged, GoogleAuthProvider,
+  getAuth, onAuthStateChanged, GoogleAuthProvider, signInAnonymously,
   signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, signOut, deleteUser,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 
-// On the demo stage several "phones" share one browser. Each keeps its sign-in in memory only,
-// so two simulated diners are never signed in as the same person.
-const demoFrame = new URLSearchParams(location.search).has("as");
-export const auth = demoFrame ? initializeAuth(app, { persistence: inMemoryPersistence }) : getAuth(app);
+// Each simulated phone on the demo stage has its own named app (see firebase.js), so its own sign-in.
+export const auth = getAuth(app);
 
 export const onUser = (f) => onAuthStateChanged(auth, f);
+// A real account (phone or Google), as opposed to the quiet anonymous sign-in every phone gets.
+export const isAccount = (u) => !!u && !u.isAnonymous;
+// Resolves with the signed-in user once Firebase has checked this phone's saved sign-in.
+export const authReady = () => new Promise((res) => { const off = onAuthStateChanged(auth, (u) => { off(); res(u); }); });
+// Every phone is signed in, at least anonymously: the database rules need to know who is asking.
+// Anonymous sign-in is invisible to the diner and needs nothing from them.
+export async function ensureUser() {
+  const u = auth.currentUser || (await authReady());
+  if (u) return u;
+  return (await signInAnonymously(auth)).user;
+}
 export const googleSignIn = () => signInWithPopup(auth, new GoogleAuthProvider());
 export const signOutUser = () => signOut(auth);
 export const deleteMe = () => deleteUser(auth.currentUser);

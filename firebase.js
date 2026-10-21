@@ -11,5 +11,8 @@ const firebaseConfig = {
   appId: "1:151565820125:web:4dc266a4bb5fa6ae793b34"
 };
 
-export const app = initializeApp(firebaseConfig);
+// On the demo stage several "phones" share one browser. Each simulated diner (?as=1, ?as=2) gets
+// its own named app, so each keeps its own sign-in, even across reloads.
+const as = new URLSearchParams(location.search).get("as");
+export const app = as ? initializeApp(firebaseConfig, "as-" + as) : initializeApp(firebaseConfig);
 export const db = getFirestore(app);

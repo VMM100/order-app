@@ -1,7 +1,8 @@
 // Demo stage: shows several live app screens side by side on one iPad or laptop.
 // Each frame is the real app, so everything syncs through the database exactly as on separate phones.
 import { db } from "./firebase.js";
-import { collection, doc, getDocs, query, where, writeBatch, runTransaction } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, query, where, writeBatch, runTransaction } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import { authReady, isAccount, googleSignIn } from "./account.js";
 
 const TABLE = 8; // demo table, kept apart from tables used for manual testing
 const BASE = location.origin + location.pathname.replace(/demo\.html$/, "");
@@ -65,7 +66,7 @@ $("#reset").addEventListener("click", async (e) => {
     const batch = writeBatch(db);
     for (const name of ["lines", "alerts", "groups"]) {
       const s = await getDocs(query(collection(db, name), where("table", "==", TABLE)));
-      s.docs.forEach((d) => { if (!d.data().sample) batch.delete(d.ref); });
+      s.docs.forEach((d) => { if (!d.data().sample) batch.delete(d.ref); if (name === "groups" && d.data().code) batch.delete(doc(db, "codes", d.data().code)); });
     }
     batch.set(doc(db, "tables", String(TABLE)), { table: TABLE, current: null });
     await batch.commit();
@@ -85,9 +86,20 @@ async function demoKey() {
 }
 $("#tno").textContent = TABLE;
 try { const b = store.get("dees-brand"); if (b && b.name) $("#title").textContent = `${b.name} · live demo`; } catch {}
+// The demo stage runs the staff screens on this device, so it needs the owner's or a manager's
+// Google sign-in. The simulated diners each get their own quiet sign-in inside their frame.
 $("#stage").innerHTML = `<p style="color:var(--muted)">Connecting…</p>`;
-demoKey().then((k) => {
-  KEY = k;
-  try { new QRCode($("#qr"), { text: `${BASE}?t=${TABLE}&k=${KEY}`, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M }); } catch {}
+async function begin() {
+  const u = await authReady();
+  const role = isAccount(u) && u.email ? await getDoc(doc(db, "admins", u.email)).then((s) => s.exists(), () => false) : false;
+  if (!role) {
+    $("#stage").innerHTML = `<div style="max-width:420px"><p>The demo stage shows staff screens, so it opens with the owner's or a manager's Google account.</p>
+      <button class="btn primary" id="signin">Sign in with Google</button>${isAccount(u) ? `<p style="color:var(--muted)">${u.email || "This account"} isn't an owner or manager here.</p>` : ""}</div>`;
+    $("#signin").addEventListener("click", async () => { try { await googleSignIn(); } catch (e) { console.error(e); } begin(); });
+    return;
+  }
+  KEY = await demoKey();
+  try { $("#qr").innerHTML = ""; new QRCode($("#qr"), { text: `${BASE}?t=${TABLE}&k=${KEY}`, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M }); } catch {}
   build();
-}).catch((e) => { console.error(e); $("#stage").innerHTML = `<p style="color:var(--muted)">Can't reach the database. Check the internet connection, then reload.</p>`; });
+}
+begin().catch((e) => { console.error(e); $("#stage").innerHTML = `<p style="color:var(--muted)">Can't reach the database. Check the internet connection, then reload.</p>`; });

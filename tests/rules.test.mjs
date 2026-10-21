@@ -314,3 +314,53 @@ test("diners read only their own visits and profile", async () => {
   await assertFails(db.doc("diners/g2").get());
   await assertFails(db.doc("visits/c").set({ uid: "g1", rid: "craftydees", date: 1 }));
 });
+
+// ---------- the app's own steps, as written in app.js ----------
+test("the app's table transaction: read table, start group, move pass, all in one", async () => {
+  const db = diner("t1");
+  await db.doc("passes/t1").set({ table: 4, via: "key", k: "KEY4", t: 1 });
+  await assertSucceeds(db.runTransaction(async (tx) => {
+    const ts = await tx.get(db.doc("tables/4"));
+    if (ts.exists) throw new Error("expected an empty table");
+    tx.set(db.doc("groups/4-t"), newGroup("4-t", 4, "4321"));
+    tx.set(db.doc("tables/4"), { table: 4, current: "4-t" });
+    tx.set(db.doc("codes/4321"), { session: "4-t", table: 4 });
+    tx.set(db.doc("passes/t1"), { table: 4, via: "key", k: "KEY4", session: "4-t", t: 2 });
+  }));
+  const db2 = diner("t2");
+  await db2.doc("passes/t2").set({ table: 4, via: "key", k: "KEY4", t: 1 });
+  await assertSucceeds(db2.runTransaction(async (tx) => {
+    const ts = await tx.get(db2.doc("tables/4")), cur = ts.data().current;
+    const g = await tx.get(db2.doc("groups/" + cur));
+    if (!g.data().open) throw new Error("expected open");
+    tx.set(db2.doc("passes/t2"), { table: 4, via: "key", k: "KEY4", session: cur, t: 2 });
+  }));
+});
+test("signed-in diner (phone account) orders the same way", async () => {
+  const db = env.authenticatedContext("p1", { phone_number: "+255748227000" }).firestore();
+  await db.doc("passes/p1").set({ table: 5, via: "key", k: "KEY5", t: 1 });
+  const b = db.batch();
+  b.set(db.doc("groups/5-p"), newGroup("5-p", 5, "2468"));
+  b.set(db.doc("codes/2468"), { session: "5-p", table: 5 });
+  b.set(db.doc("passes/p1"), { table: 5, via: "key", k: "KEY5", session: "5-p", t: 1 });
+  await assertSucceeds(b.commit());
+  await assertSucceeds(db.doc("groups/5-p").update({ "people.p1": { name: "Neha", t: 1, uid: "p1", acct: true }, label: "Neha" }));
+  await assertSucceeds(db.doc("lines/p").set({ ...line("p1", "5-p"), table: 5 }));
+});
+test("owner's Setup reset can clear codes and passes; diners can't", async () => {
+  await seatAt("d1");
+  await assertFails(diner("d1").doc("codes/1234").delete());
+  await assertFails(diner("x").collection("passes").get());
+  const db = owner();
+  const b = db.batch();
+  (await db.collection("passes").get()).docs.forEach((d) => b.delete(d.ref));
+  (await db.collection("codes").get()).docs.forEach((d) => b.delete(d.ref));
+  await assertSucceeds(b.commit());
+});
+test("staff and admins: who can read the sign-in list", async () => {
+  const s = await staffPhone();
+  await assertFails(s.collection("admins").get());
+  await assertSucceeds(manager().doc("admins/mgr@example.com").get());
+  await assertSucceeds(owner().collection("admins").get());
+  await assertSucceeds(env.unauthenticatedContext().firestore().doc("meta/claimed").get());
+});
