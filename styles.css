@@ -197,3 +197,5 @@ header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .sline:last-child{border-bottom:none}
 .sline .btn{padding:6px 12px;min-height:36px}
 .sline.done>span:first-child{color:var(--muted);text-decoration:line-through}
+/* reCAPTCHA's floating badge: hidden, as Google allows when the notice is shown in the sign-in step instead */
+.grecaptcha-badge{visibility:hidden!important}

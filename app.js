@@ -411,7 +411,8 @@ function dinerScreen() {
         <input class="field num" id="phonein" inputmode="tel" autocomplete="tel" placeholder="748 227 000" value="${esc(S.phone)}" aria-label="Mobile number"></div>
         <label class="optin"><input type="checkbox" id="offersin" ${S.offers ? "checked" : ""}> <span>Send me ${esc(rname())}'s offers on WhatsApp. <span class="note">Optional. Stop any time.</span></span></label>
         <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Sending…" : "Send code"}</button></form>${err}
-      <p class="note">You'll get one SMS with a sign-in code; standard SMS rates may apply. Your number is used to sign you in, and Google (which sends the code) keeps it to prevent abuse.</p>${back}</section>`;
+      <p class="note">You'll get one SMS with a sign-in code; standard SMS rates may apply. Your number is used to sign you in, and Google (which sends the code) keeps it to prevent abuse.
+        This step is protected by reCAPTCHA; Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms</a> apply.</p>${back}</section>`;
     if (S.step === "code") return `<section>${bar}<div class="label">Enter the code</div>
       <p style="margin-top:0">Sent by SMS to <b>${esc(S.phoneFull || "")}</b>.</p>
       <form id="smsform" class="grid"><input class="field num" id="smsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="6-digit code">

@@ -34,7 +34,12 @@ export async function phoneStart(number) {
     confirmation = await signInWithPhoneNumber(auth, number, verifier);
   } catch (e) { try { verifier && verifier.clear(); } catch {} verifier = null; throw e; }
 }
-export const phoneConfirm = (code) => confirmation.confirm(code);
+// Once the code is confirmed the robot check is no longer needed: remove it from the page.
+export async function phoneConfirm(code) {
+  const r = await confirmation.confirm(code);
+  try { verifier && verifier.clear(); } catch {} verifier = null; confirmation = null;
+  return r;
+}
 
 // Plain-language messages for the errors diners actually hit.
 export function authMessage(e) {
