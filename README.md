@@ -21,11 +21,12 @@ Live at https://vmm100.github.io/order-app/. Every restaurant has an id (`r`), e
 | Sign-up: a restaurant registers and waits for approval | `#signup` |
 | Owner: dashboard, menu, look, staff, managers, subscription. Without `r`, finds the restaurants this Google account runs | `?r=ID#owner` |
 | Manager: menu and staff (Google account added by the owner) | `?r=ID#manager` |
-| Setup: staff QR codes, number of tables, table QR codes, demo reset (owner or manager) | `?r=ID#setup` |
+| Tables & QR (Setup): number of tables, table QR codes, new code for one table or all, print table cards, staff QR codes, demo reset (owner or manager; also the "Tables & QR" tab on their pages) | `?r=ID#setup` |
 | Demo stage: 3–4 live screens on one iPad or laptop, table 8 (owner or manager) | `demo.html?r=ID` |
 | Diner at a table (what a table QR opens; `k` is the table's secret key) | `?r=ID&t=4&k=…` |
 | Join friends with their group's code (the Share invite) | `?r=ID&c=1234` |
-| Waiter / kitchen / bar / grill (opened once from the staff QR on Setup) | `?r=ID&s=…#waiter` |
+| Waiter (own phone, set up once from the staff QR; each shift starts with name + PIN and ends with End shift or after 16 hours) | `?r=ID&s=…#waiter` |
+| Kitchen / bar / grill (set up once from their staff QR) | `?r=ID&s=…#kitchen` |
 | Diner's account: visits at every restaurant | `#account` |
 
 ## Files
@@ -50,7 +51,7 @@ Platform:
 
 Each restaurant, under `restaurants/{id}`:
 - the restaurant document: menu sections and items, `prices` ("item|option" → price and station, used by the rules to check orders), waiters, look, shared tables, number of tables
-- `admins/{email}`: managers. `secrets/staff`: the staff QR token. `staff/{uid}`: staff phones that scanned it.
+- `admins/{email}`: managers. `secrets/staff`: the staff QR token. `secrets/waiters`: each waiter's 4-digit PIN (owner and managers only). `staff/{uid}`: staff phones that scanned the staff QR, and the waiter on shift on that phone (name, PIN, shift start).
 - `tablekeys/{n}`: each table QR's secret key. `passes/{uid}`: a diner's proof (table key or group code) and their group.
 - `tables/{n}`, `groups/{session}`, `codes/{code}`, `lines`, `alerts`, `sessions`, `photos/{id}`: tables, parties, invite codes, ordered items, waiter alerts, closed tables, photos
 
@@ -63,7 +64,8 @@ Every phone signs in: diners quietly (Firebase anonymous sign-in) or with phone/
 | Company team | Everything at every restaurant; approve, record payments, pause, change owners |
 | Owner (the account's email) | Their restaurant: dashboard, look, menu, staff, managers, Setup. Can't change their own subscription |
 | Manager | Menu, waiters, tables, Setup |
-| Staff phone | Open groups, orders, alerts; accept, serve, mark ready, mark paid, close |
+| Kitchen / bar / grill phone | See open orders; mark items preparing and ready |
+| Waiter phone, on shift (name + PIN) | Take free tables for themselves, hand back their own, answer alerts and serve as themselves, mark paid, close. A changed PIN or ended shift stops this straight away |
 | Diner with the table's QR key / a group's code | Join that table or group; order at menu prices; call the waiter; see their bill |
 | Anyone | A running restaurant's menu and look; register a restaurant (it waits for approval) |
 

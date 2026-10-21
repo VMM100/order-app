@@ -336,7 +336,7 @@ const params = new URLSearchParams(location.search);
 if (view === "company") companyScreen();
 else if (view === "signup") signupScreen();
 else if (view === "account") accountScreen();
-else if (STATIONS[view] || view === "waiter") staffGate(() => (view === "waiter" ? waiterScreen() : stationScreen(view)));
+else if (STATIONS[view] || view === "waiter") staffGate((boss) => (view === "waiter" ? waiterScreen(boss) : stationScreen(view)));
 else if (view === "setup") adminGate("setup", () => setupScreen());
 else if (view === "owner") adminGate("owner", (role) => ownerScreen(role === "owner" ? "owner" : "manager"));
 else if (view === "manager") adminGate("manager", () => ownerScreen("manager"));
@@ -417,10 +417,14 @@ function staffGate(go) {
     const u = await ensureUser();
     await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]);
     const role = await adminRole(u);
-    if (role === "company" || (role && subState(ACCOUNT).live)) return go();
+    if (role === "company" || (role && subState(ACCOUNT).live)) return go(true);
     if (PAUSED) return paint(pausedHtml());
     const t = store.get("dees-staff-" + RID);
-    if (t) { try { await setDoc(rdoc("staff", u.uid), { token: t, t: Date.now() }); return go(); } catch (e) { if (!denied(e)) throw e; } }
+    if (t) {
+      // Already set up with this code (keep any shift in progress), or register this phone now.
+      try { const mine = await getDoc(rdoc("staff", u.uid)); if (mine.exists() && mine.data().token === t) return go(false); } catch {}
+      try { await setDoc(rdoc("staff", u.uid), { token: t, t: Date.now() }); return go(false); } catch (e) { if (!denied(e)) throw e; }
+    }
     notSet(t);
   })().catch((e) => paint(errorBox(e)));
 }
@@ -845,9 +849,29 @@ function stationScreen(st) {
 }
 
 // ================= WAITER =================
-function waiterScreen() {
+// Waiters use their own phones. A phone is set up once with the staff code; each shift starts with the
+// waiter's name and PIN and ends with End shift (or after 16 hours). The database only accepts table,
+// alert and serving actions from the waiter on shift. Owners and managers can work as any waiter.
+const SHIFT_MS = 16 * 3600e3;
+function waiterScreen(boss) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Waiter"; document.title = "Waiter · " + rname();
-  const S = { me: store.get("dees-waiter-" + RID), groups: [], lines: [], alerts: [], open: null, confirm: null };
+  const S = { me: boss ? store.get("dees-waiter-" + RID) : null, since: null, picking: null, pinErr: "", busy: false, endArmed: false,
+    groups: [], lines: [], alerts: [], open: null, confirm: null };
+  const myRef = () => rdoc("staff", auth.currentUser.uid);
+  async function loadShift() {
+    if (boss) return;
+    try { const d = (await getDoc(myRef())).data() || {};
+      const ok = d.waiter && d.shift && Date.now() - d.shift < SHIFT_MS && WAITERS.some((w) => w.id === d.waiter);
+      S.me = ok ? d.waiter : null; S.since = ok ? d.shift : null; } catch { S.me = null; }
+    update();
+  }
+  async function endShift(msg) {
+    S.me = null; S.since = null; S.endArmed = false; S.picking = null; render();
+    try { await setDoc(myRef(), { token: store.get("dees-staff-" + RID), t: Date.now() }); } catch {}
+    if (msg) toast(msg);
+  }
+  // A shift that has run 16 hours ends by itself.
+  setInterval(() => { if (!boss && S.since && Date.now() - S.since >= SHIFT_MS) endShift("Your shift has ended. Start a new one to keep working."); }, 60000);
   const notify = watcher();
   onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.groups = s.docs.map((d) => d.data()).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => { S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })); update(); });
@@ -872,8 +896,25 @@ function waiterScreen() {
     render();
   }
   function render() {
-    const pick = `<div class="label" style="margin-top:0">I am</div><div class="row">${WAITERS.map((w) => `<button class="chip" aria-pressed="${w.id === S.me}" data-me="${w.id}">${esc(w.name)}</button>`).join("")}</div>`;
-    if (!S.me) return paint(`<section>${pick}<p class="note">Pick your name once. This phone remembers it.</p></section>`);
+    const hhmm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    let pick;
+    if (boss) {
+      pick = `<div class="label" style="margin-top:0">Working as</div><div class="row">${WAITERS.map((w) => `<button class="chip" aria-pressed="${w.id === S.me}" data-me="${w.id}">${esc(w.name)}</button>`).join("")}</div>`;
+      if (!S.me) return paint(`<section>${pick}<p class="note">Owners and managers can work as any waiter.</p></section>`);
+    } else if (!S.me) {
+      const w = S.picking && WAITERS.find((x) => x.id === S.picking);
+      return paint(`<section><div class="label" style="margin-top:0">Start your shift</div>
+        ${w ? `<p style="margin-top:0">Hi <b>${esc(w.name)}</b>. Enter your 4-digit PIN.</p>
+          <form id="pinform" class="grid" style="max-width:320px"><input class="field num" id="pinin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="Your PIN">
+          <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Starting…" : "Start shift"}</button></form>
+          ${S.pinErr ? `<p class="err">${esc(S.pinErr)}</p>` : ""}<button class="btn ghost" data-act="notme">Not ${esc(w.name)}?</button>`
+        : `<p style="margin-top:0">Tap your name.</p><div class="row">${WAITERS.map((x) => `<button class="chip" data-pickme="${x.id}">${esc(x.name)}</button>`).join("")}</div>
+          ${WAITERS.length ? "" : `<p class="note">No waiters yet. The owner adds them under Owner → Staff.</p>`}`}
+        <p class="note">Your PIN comes from the owner or manager. Your shift ends when you tap End shift, or after 16 hours.</p></section>`);
+    } else {
+      pick = `<div class="shiftbar"><span><b>${esc(wname(S.me))}</b> · on shift since ${hhmm(S.since)}</span>
+        <button class="btn ${S.endArmed ? "danger" : "ghost"}" data-act="endshift">${S.endArmed ? "Tap again to end shift" : "End shift"}</button></div>`;
+    }
     const free = S.groups.filter((g) => !g.waiter && seated(g));
     const mine = S.groups.filter((g) => g.waiter === S.me);
     const others = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
@@ -906,7 +947,12 @@ function waiterScreen() {
     try {
       if (d.act === "sound") { await enableSound(); render(); }
       else if (d.act === "testsound") beep();
-      else if (d.me) { S.me = d.me; store.set("dees-waiter-" + RID, d.me); update(); }
+      else if (d.me && boss) { S.me = d.me; store.set("dees-waiter-" + RID, d.me); update(); }
+      else if (d.pickme) { S.picking = d.pickme; S.pinErr = ""; render(); }
+      else if (d.act === "notme") { S.picking = null; S.pinErr = ""; render(); }
+      else if (d.act === "endshift") { if (!S.endArmed) { S.endArmed = true; render(); setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); return; }
+        const mine = S.groups.filter((g) => g.waiter === S.me).length;
+        await endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); }
       else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(groupRef(d.accept)); if (!s.exists() || s.data().waiter) throw new Error("taken"); tx.update(groupRef(d.accept), { waiter: S.me, accepted: Date.now() }); }); toast(`${name(find(d.accept) || { table: "" })} is yours`); }
       else if (d.release) { await updateDoc(groupRef(d.release), { waiter: null }); toast("Open for another waiter"); }
       else if (d.ack) { await updateDoc(rdoc("alerts", d.ack), { ack: Date.now(), ackBy: S.me }); toast("Diner told you're on the way"); }
@@ -917,8 +963,24 @@ function waiterScreen() {
       else if (d.paid) { const g = find(d.g); await togglePaid(d.g, d.paid, !!((g && g.paid) || {})[d.paid]); }
       else if (d.confirm) { S.confirm = d.confirm; render(); setTimeout(() => { if (S.confirm === d.confirm) { S.confirm = null; render(); } }, 4000); }
       else if (d.close) { const g = find(d.close), n = g && name(g); await closeGroup(d.close); S.confirm = null; if (S.open === d.close) { S.open = null; watchBill(null); } toast(`${n || "Table"} closed`); }
-    } catch (err) { if (err.message === "taken") toast("Another waiter just took it"); else fail(err); }
+    } catch (err) {
+      if (err.message === "taken") toast("Another waiter just took it");
+      // Refused: the shift has ended, or the owner changed this waiter's PIN.
+      else if (denied(err) && !boss) await endShift("Your shift has ended (your PIN may have changed). Start it again with your PIN.");
+      else fail(err);
+    }
   });
+  document.addEventListener("submit", async (e) => {
+    if (e.target.id !== "pinform") return; e.preventDefault();
+    const pin = $("#pinin").value.trim(), w = S.picking; if (!w || S.busy) return;
+    if (!/^\d{4}$/.test(pin)) { S.pinErr = "PINs are 4 digits."; return render(); }
+    S.busy = true; S.pinErr = ""; render();
+    try { const now = Date.now(); await setDoc(myRef(), { token: store.get("dees-staff-" + RID), t: now, waiter: w, pin, shift: now });
+      S.me = w; S.since = now; S.picking = null; toast(`Shift started. Welcome, ${wname(w)}!`); update(); }
+    catch (err) { S.pinErr = denied(err) ? "That PIN didn't work. Check it, or ask the owner or manager to set your PIN." : "Couldn't connect. Try again."; }
+    S.busy = false; render();
+  });
+  loadShift();
   async function closeGroup(sid) {
     const g = find(sid); if (!g) return;
     const all = await getDocs(query(rcol("lines"), where("session", "==", sid)));
@@ -948,7 +1010,7 @@ function waiterScreen() {
 function setupScreen() {
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Setup"; document.title = "Setup · " + rname();
   const link = (h, l) => `<div><div class="note" style="margin:0">${l}</div><a href="${h}">${esc(h)}</a></div>`;
-  let armed = false, rot = false, keys = {}, staffTok = null, rotStaff = false;
+  let armed = false, rot = false, keys = {}, staffTok = null, rotStaff = false, rekey = null;
   const unlocked = true;   // only owners and managers reach this screen (see adminGate)
   // The staff link's secret token. Phones that opened the link stay signed in until it is replaced.
   const staffRef = rdoc("secrets", "staff");
@@ -968,19 +1030,25 @@ function setupScreen() {
   }
   function render() {
     const screens = [["waiter", "Waiter"], ...Object.entries(STATIONS)];
-    paint(subBanner() + `<section><div class="label" style="margin-top:0">Staff phones · scan with each phone once</div>
+    const tableCard = (n) => `<div class="qr"><div class="box" id="qr${n}"></div><b>Table ${n}</b>
+      <button class="chip sharetog" data-share="${n}" aria-pressed="${isShared(n)}">${isShared(n) ? "Shared table" : "Normal table"}</button>
+      ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : `<span class="note">Loading…</span>`}
+      <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
+    paint(subBanner() + `<section><div class="label" style="margin-top:0">Tables and QR codes · diners scan these</div>
+      <div class="row"><button class="btn" data-tables="-1" aria-label="One table fewer">−</button><b class="num">${TABLES} tables</b><button class="btn" data-tables="1" aria-label="One more table">+</button>
+        <button class="btn primary" data-act="print" ${Object.keys(keys).length < TABLES ? "disabled" : ""}>Print table cards</button></div>
+      <div class="qrs">${Array.from({ length: TABLES }, (_, i) => tableCard(i + 1)).join("")}</div>
+      <p class="note">Each code carries a secret key, so nobody can order from outside by guessing a table number. If one table's card is damaged or photographed, tap <b>New code</b> under it and reprint just that one.</p>
+      <p class="note">Mark big communal tables as <b>Shared</b>: several groups can then order there, each with its own code and bill. On normal tables everyone who scans joins the same bill.</p>
+      <button class="btn" data-act="rotate">${rot ? "Tap again: every printed table card will stop working" : "Make new codes for all tables"}</button>
+      <div class="label">Staff phones · scan once with each phone</div>
       <div class="qrs">${screens.map(([k, v]) => `<div class="qr sqr"><div class="box" id="sqr-${k}"></div><b>${esc(v)}</b>${staffTok ? `<a class="note" href="${staffLink(k)}">Open here</a>` : `<span class="note">Loading…</span>`}</div>`).join("")}</div>
-      <p class="note">Each staff phone scans its code once and stays signed in. Keep these codes away from guests. If a staff phone is lost or someone leaves, make a new staff code: every staff phone is signed out and needs to scan again.</p>
+      <p class="note">Each waiter scans the <b>Waiter</b> code once with their own phone. After that they start each shift with their name and PIN (set the PINs under Owner → Staff). The kitchen, bar and grill phones scan their own code once. Keep these codes away from guests.</p>
+      <p class="note">If a phone is lost or someone leaves, make new staff codes: every staff phone is signed out and scans again.</p>
       <button class="btn" data-act="rotstaff">${rotStaff ? "Tap again: every staff phone must scan again" : "Make new staff codes"}</button>
       <div class="label">Owner and manager pages</div>
       <div class="links">${link(BASE + "demo.html?r=" + RID, "Demo stage: several phones on one iPad or laptop")}${link(BASE + "?r=" + RID + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "?r=" + RID + "#manager", "Manager (menu and staff)")}</div>
       <p class="note">These open with the owner's or a manager's Google sign-in. The owner adds managers under Owner → Staff.</p>
-      <div class="label">Table QR codes · diners scan these</div>
-      <div class="row"><button class="btn" data-tables="-1" aria-label="One table fewer">−</button><b class="num">${TABLES} tables</b><button class="btn" data-tables="1" aria-label="One more table">+</button></div>
-      <div class="qrs">${Array.from({ length: TABLES }, (_, i) => `<div class="qr"><div class="box" id="qr${i + 1}"></div><b>Table ${i + 1}</b><button class="chip sharetog" data-share="${i + 1}" aria-pressed="${isShared(i + 1)}">${isShared(i + 1) ? "Shared table" : "Normal table"}</button>${keys[i + 1] ? `<a class="note" href="${tableLink(i + 1, keys[i + 1])}">Open</a>` : `<span class="note">Loading…</span>`}</div>`).join("")}</div>
-      <p class="note">Each code carries a secret key, so nobody can join a table by guessing its number. Print these for the tables, or screenshot one for a demo.</p>
-      <p class="note">Mark big communal tables as <b>Shared</b>: several groups can then order there, each with its own code and bill. On normal tables everyone who scans joins the same bill.</p>
-      <button class="btn" data-act="rotate">${rot ? "Tap again: old printed codes will stop working" : "Make new QR codes"}</button>
       <div class="label">Demo</div>
       <p>Clear all orders, alerts, tables and dashboard history so the next demo starts fresh. The menu and staff list stay.</p>
       <button class="btn danger" data-act="reset">${armed ? "Tap again to erase everything" : "Reset demo"}</button></section>`);
@@ -988,7 +1056,26 @@ function setupScreen() {
       screens.forEach(([k]) => { const el = document.getElementById("sqr-" + k); if (el && !el.childNodes.length && staffTok) new QRCode(el, { text: staffLink(k), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }); };
     if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true });
   }
+  // A sheet of table cards to print and cut out: name, table number, QR, one line of instructions.
+  function printCards() {
+    let sheet = document.getElementById("printsheet"); if (sheet) sheet.remove();
+    sheet = document.createElement("div"); sheet.id = "printsheet";
+    sheet.innerHTML = Array.from({ length: TABLES }, (_, i) => `<div class="pcard"><div class="pname">${esc(rname())}</div><div class="ptable">Table ${i + 1}</div>
+      <div class="pqr" id="pqr${i + 1}"></div><div class="phow">Scan to see the menu, order,<br>call your waiter and split the bill</div></div>`).join("");
+    document.body.appendChild(sheet);
+    for (let i = 1; i <= TABLES; i++) { try { new QRCode(document.getElementById("pqr" + i), { text: tableLink(i, keys[i]), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M }); } catch {} }
+    document.body.classList.add("printing");
+    const done = () => { document.body.classList.remove("printing"); sheet.remove(); };
+    window.addEventListener("afterprint", done, { once: true });
+    setTimeout(() => { try { window.print(); } catch { done(); } }, 300);
+  }
   document.addEventListener("click", async (e) => {
+    const pr = e.target.closest("button[data-act=print]");
+    if (pr) { printCards(); return; }
+    const rk = e.target.closest("button[data-rekey]");
+    if (rk) { const n = +rk.dataset.rekey;
+      if (rekey !== n) { rekey = n; render(); setTimeout(() => { if (rekey === n) { rekey = null; render(); } }, 4000); return; }
+      rekey = null; try { keys[n] = await tableKey(n, true); const el = document.getElementById("qr" + n); if (el) el.innerHTML = ""; render(); toast(`Table ${n} has a new code. Reprint its card.`); } catch (err) { fail(err); } return; }
     const tb = e.target.closest("button[data-tables]");
     if (tb) { TABLES = Math.max(1, Math.min(80, TABLES + Number(tb.dataset.tables))); render(); try { await saveConfig(); } catch (err) { fail(err); } loadKeys(false); return; }
     const rs = e.target.closest("button[data-act=rotstaff]");
@@ -1027,9 +1114,13 @@ function ownerScreen(role) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = Title; document.title = Title + " · " + rname();
   const unlocked = true;
   const myEmail = auth.currentUser && auth.currentUser.email;
-  const TABS = owner ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["menu", "Menu"], ["staff", "Staff"]];
-  const S = { tab: TABS[0][0], edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "", admins: null };
+  const TABS = owner ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"], ["tables", "Tables & QR"]] : [["menu", "Menu"], ["staff", "Staff"], ["tables", "Tables & QR"]];
+  const S = { tab: TABS[0][0], edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "", admins: null, pins: null };
   // Who can sign in: the owner (set on the account by the company) and the managers the owner adds.
+  // Waiter PINs live in restaurants/{RID}/secrets/waiters, readable only by the owner and managers.
+  const pinsRef = () => rdoc("secrets", "waiters");
+  async function loadPins() { try { const d = await getDoc(pinsRef()); S.pins = (d.exists() && d.data().pins) || {}; } catch { S.pins = {}; } render(); }
+  async function savePins(msg) { try { await setDoc(pinsRef(), { pins: S.pins, t: Date.now() }); toast(msg); } catch (e) { fail(e); } render(); }
   async function loadAdmins() {
     let list = [];
     try { const s = await getDocs(rcol("admins")); list = s.docs.map((d) => ({ email: d.id, role: "manager" })).sort((a, b) => a.email.localeCompare(b.email)); } catch (e) {}
@@ -1126,8 +1217,13 @@ function ownerScreen(role) {
   function staffTab() {
     return `<section><div class="label" style="margin-top:0">Waiters</div>
       <p class="note" style="margin-top:0">These names appear on the waiter phones${owner ? " and the dashboard" : ""}.</p>
-      <div class="grid" style="max-width:520px">${WAITERS.map((w, i) => `<div class="vrow"><input class="field" id="wn-${i}" data-f="wname" data-i="${i}" value="${esc(w.name)}" aria-label="Waiter name">
-        <button class="btn danger" data-delw="${i}">${S.armed === "w" + i ? "Tap again" : "Remove"}</button></div>`).join("")}</div>
+      ${S.pins == null ? (loadPins(), "") : ""}
+      <div class="grid" style="max-width:640px">${WAITERS.map((w, i) => `<div class="wrow"><div class="vrow"><input class="field" id="wn-${i}" data-f="wname" data-i="${i}" value="${esc(w.name)}" aria-label="Waiter name">
+        <button class="btn danger" data-delw="${i}">${S.armed === "w" + i ? "Tap again" : "Remove"}</button></div>
+        <form class="vrow pinset" data-wid="${esc(w.id)}"><span class="pill ${(S.pins || {})[w.id] ? "s-ready" : "s-new"}">${S.pins == null ? "…" : (S.pins || {})[w.id] ? "PIN set" : "No PIN yet"}</span>
+          <input class="field num" id="wp-${i}" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="${(S.pins || {})[w.id] ? "New PIN" : "4-digit PIN"}" aria-label="PIN for ${esc(w.name)}">
+          <button class="btn">${(S.pins || {})[w.id] ? "Change" : "Set PIN"}</button></form></div>`).join("")}</div>
+      <p class="note">Each waiter starts a shift on their own phone with their name and PIN. Tell them their PIN in person. Changing a PIN ends that waiter's current shift.</p>
       <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name"><button class="btn primary">Add</button></form>
       ${owner ? `<div class="label">Owner and managers</div>
       <p class="note" style="margin-top:0">They sign in with Google. Managers can edit the menu and staff and open Setup; the owner also sees the dashboard and look, and adds or removes managers.</p>
@@ -1251,6 +1347,12 @@ function ownerScreen(role) {
   });
   document.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (e.target.classList.contains("pinset")) {
+      const wid = e.target.dataset.wid, inp = e.target.querySelector("input"), p = inp.value.trim();
+      if (!/^\d{4}$/.test(p)) return toast("Use exactly 4 digits");
+      if (Object.entries(S.pins || {}).some(([k, v]) => k !== wid && v === p)) return toast("Another waiter already has that PIN. Pick a different one.");
+      S.pins = { ...(S.pins || {}), [wid]: p }; inp.value = ""; savePins(`PIN set for ${wname(wid)}`);
+    }
     if (e.target.id === "addw") { const n = $("#addwin").value.trim(); if (!n) return; WAITERS = [...WAITERS, { id: uid("w"), name: n }]; save(`${n} added`); $("#addwin").value = ""; render(); }
     if (owner && e.target.id === "addadmin") {
       const em = $("#adminemail").value.trim().toLowerCase(), r = "manager";
@@ -1262,6 +1364,7 @@ function ownerScreen(role) {
     const b = e.target.closest("button"); if (!b || !unlocked) return; const d = b.dataset;
     const ix = (s) => s.split(".").map(Number);
     if (!owner && (d.font || d.preset || d.period || ["resetcolors", "rmlogo", "sample", "unsample", "reload"].includes(d.act))) return;
+    if (d.otab === "tables") { location.href = `${BASE}?r=${RID}#setup`; return; }
     if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; render(); }
     else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii]; it.out = !it.out; render(); save(it.out ? `${it.n} marked sold out` : `${it.n} back on the menu`); }
     else if (d.edit !== undefined) { S.edit = d.edit || null; render(); }
@@ -1273,7 +1376,8 @@ function ownerScreen(role) {
     else if (d.act === "addsec") { MENU.push({ c: "New section", st: "kitchen", items: [] }); render(); save("Section added. Rename it and choose its station."); }
     else if (d.deladmin && owner) { if (S.armed !== "a" + d.deladmin) return arm("a" + d.deladmin); S.armed = null;
       try { await deleteDoc(rdoc("admins", d.deladmin)); toast(`${d.deladmin} can no longer sign in`); loadAdmins(); } catch (err) { fail(err); } }
-    else if (d.delw) { if (S.armed !== "w" + d.delw) return arm("w" + d.delw); const w = WAITERS[+d.delw]; WAITERS = WAITERS.filter((_, i) => i !== +d.delw); S.armed = null; render(); save(`${w.name} removed`); }
+    else if (d.delw) { if (S.armed !== "w" + d.delw) return arm("w" + d.delw); const w = WAITERS[+d.delw]; WAITERS = WAITERS.filter((_, i) => i !== +d.delw); S.armed = null; render(); save(`${w.name} removed`);
+      if (S.pins && S.pins[w.id]) { const { [w.id]: _gone, ...rest } = S.pins; S.pins = rest; savePins(`${w.name} removed`); } }
     else if (d.font) { BRAND = { ...BRAND, font: d.font }; applyBrand(); render(); save(`${FONTS[d.font].name} fonts applied`); }
     else if (d.preset) { const [, a, c] = PRESETS[+d.preset]; BRAND = { ...BRAND, c1: a, c2: c }; applyBrand(); render(); save("Colours updated"); }
     else if (d.act === "resetcolors") { BRAND = { ...BRAND, c1: null, c2: null }; applyBrand(); render(); save("Original colours back"); }

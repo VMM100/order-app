@@ -202,3 +202,20 @@ header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .sline.done>span:first-child{color:var(--muted);text-decoration:line-through}
 /* reCAPTCHA's floating badge: hidden, as Google allows when the notice is shown in the sign-in step instead */
 .grecaptcha-badge{visibility:hidden!important}
+
+/* Printable table cards (Setup → Print table cards): only the sheet prints. */
+#printsheet{display:none}
+@media print{
+  body.printing>*:not(#printsheet){display:none!important}
+  body.printing{background:#fff}
+  body.printing #printsheet{display:grid;grid-template-columns:repeat(2,1fr);gap:0}
+  .pcard{break-inside:avoid;border:1px dashed #999;padding:18px 12px;text-align:center;color:#000;font-family:var(--body)}
+  .pname{font-family:var(--display);text-transform:var(--dcase);font-size:20px;font-weight:700}
+  .ptable{font-size:30px;font-weight:700;margin:4px 0 10px}
+  .pqr{display:inline-block;line-height:0}
+  .pqr img,.pqr canvas{width:220px!important;height:220px!important}
+  .phow{font-size:13px;margin-top:10px}
+}
+.btn.small{padding:4px 10px;font-size:12px}
+.shiftbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-radius:12px;background:var(--hop-soft);border:1px solid var(--hop)}
+.wrow{display:grid;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}
