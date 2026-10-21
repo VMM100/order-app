@@ -94,16 +94,20 @@ const sessionsCol = collection(db, "sessions");
 const dinersCol = collection(db, "diners"), visitsCol = collection(db, "visits");
 const dinerRef = (u) => doc(db, "diners", u);
 async function myVisits(u) { const s = await getDocs(query(visitsCol, where("uid", "==", u))); return s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.date - a.date); }
-// The two items a diner orders most here, still on the menu and not sold out.
+// What to suggest re-ordering: items on at least 2 of the last 5 visits ("Your usual"), most recent
+// first; if nothing repeats, the last visit's order ("Last time"). Quantity in one night counts once.
+// Only items still on the menu and not sold out, at today's price.
 function usualFrom(visits) {
-  const count = {};
-  visits.forEach((v) => (v.items || []).forEach((it) => { const k = it.n + "|" + (it.v || ""); count[k] = (count[k] || 0) + 1; }));
-  const found = [];
-  Object.entries(count).sort((a, b) => b[1] - a[1]).forEach(([k]) => {
-    if (found.length >= 2) return; const [n, v] = k.split("|");
-    MENU.forEach((sec) => sec.items.forEach((it) => { if (it.n !== n || it.out) return; const opt = it.v.find(([l]) => (l || "") === v); if (opt && !found.some((f) => f.n === n && f.v === v)) found.push({ n, v, pr: opt[1], st: sec.st }); }));
-  });
-  return found;
+  const recent = [...visits].sort((a, b) => b.date - a.date).slice(0, 5);
+  const onMenu = (n, v) => { let hit = null; MENU.forEach((sec) => sec.items.forEach((it) => { if (hit || it.n !== n || it.out) return; const opt = it.v.find(([l]) => (l || "") === v); if (opt) hit = { n, v, pr: opt[1], st: sec.st }; })); return hit; };
+  const seen = {};
+  recent.forEach((vis, rank) => new Set((vis.items || []).map((it) => it.n + "|" + (it.v || ""))).forEach((k) => {
+    seen[k] ||= { k, visits: 0, last: rank }; seen[k].visits++; }));
+  const pick = (keys) => keys.map((k) => { const [n, v] = k.split("|"); return onMenu(n, v); }).filter(Boolean).slice(0, 2);
+  const usual = pick(Object.values(seen).filter((x) => x.visits >= 2).sort((a, b) => a.last - b.last || b.visits - a.visits).map((x) => x.k));
+  if (usual.length) { usual.kind = "usual"; return usual; }
+  const last = recent[0] ? pick([...new Set((recent[0].items || []).map((it) => it.n + "|" + (it.v || "")))]) : [];
+  last.kind = "last"; return last;
 }
 
 // Each table has a secret key printed in its QR code, so a table can't be joined by guessing its number.
@@ -441,8 +445,8 @@ function dinerScreen() {
     return `<div class="welcome"><div class="row" style="justify-content:space-between"><b>${S.visits.length ? `Welcome back, ${esc(S.profile.name)}` : `Hi ${esc(S.profile.name)}`}</b>
       <a class="note" style="margin:0" href="${BASE}#account">My account</a></div>
       <div class="note" style="margin:2px 0 0">${S.visits.length ? `Your ${ordinal(n)} visit to ${esc(rname())}` : "Your visits here will be saved to your account"}</div>
-      ${usual.length ? `<div class="usual"><span>Your usual: ${usual.map((u) => esc(u.n) + (u.v ? ` · ${esc(u.v)}` : "")).join(" + ")}</span>
-        <button class="btn primary" data-act="usual">Add my usual</button></div>` : ""}</div>`;
+      ${usual.length ? `<div class="usual"><span>${usual.kind === "usual" ? "Your usual" : "Last time"}: ${usual.map((u) => esc(u.n) + (u.v ? ` · ${esc(u.v)}` : "")).join(" + ")}</span>
+        <button class="btn primary" data-act="usual">${usual.kind === "usual" ? "Add my usual" : "Order again"}</button></div>` : ""}</div>`;
   }
   async function joinAs(name, u) {
     const pid = uid("p"), person = { name, t: Date.now() }, patch = {};
