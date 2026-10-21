@@ -30,6 +30,7 @@ async function seedRestaurant(db, rid, acct) {
   await db.doc(`restaurants/${rid}`).set({ sections: [], waiters: [{ id: "w1", name: "Grace" }], shared: [6], prices: PRICES, brand: { name: acct.name } });
   for (const n of [4, 5, 6]) await db.doc(`restaurants/${rid}/tablekeys/${n}`).set({ k: "KEY" + n });
   await db.doc(`restaurants/${rid}/secrets/staff`).set({ token: "STAFFTOK" });
+  await db.doc(`restaurants/${rid}/secrets/waiters`).set({ pins: { w1: "1111", w2: "2222" } });
 }
 beforeEach(async () => {
   await env.clearFirestore();
@@ -67,6 +68,12 @@ const line = (uid, sid, extra = {}) => ({ table: 4, session: sid, batch: "b1", p
 const staffPhone = async (uid = "s1", token = "STAFFTOK", rid = "r1") => {
   const db = env.authenticatedContext(uid, anon).firestore();
   await db.doc(`restaurants/${rid}/staff/${uid}`).set({ token, t: 1 });
+  return db;
+};
+// A waiter's own phone, set up with the staff code, starting a shift with name and PIN.
+const waiterPhone = async (uid = "s1", waiter = "w1", pin = "1111") => {
+  const db = await staffPhone(uid);
+  await db.doc(`${R}/staff/${uid}`).set({ token: "STAFFTOK", t: 1, waiter, pin, shift: Date.now() });
   return db;
 };
 
@@ -233,7 +240,7 @@ test("staff phone: sees orders, moves them along, can't change prices", async ()
   await assertSucceeds(db.collection(`${R}/groups`).where("open", "==", true).get());
   await assertSucceeds(db.doc(`${R}/lines/l1`).update({ s: "preparing", tPrep: 2 }));
   await assertFails(db.doc(`${R}/lines/l1`).update({ pr: 0 }));
-  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ waiter: "w1", accepted: 3, "paid.d1": true }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ waiter: "w1", accepted: 3 }));
   await assertFails(db.doc(`${R}/tablekeys/4`).get());
   await assertFails(db.doc(R).update({ waiters: [] }));
   await assertFails(db.collection(`${R}/sessions`).get());
@@ -243,7 +250,7 @@ test("waiter closes a busy table in one go, saving a visit", async () => {
   const ids = [];
   for (let i = 0; i < 12; i++) { ids.push("c" + i); await d.doc(`${R}/lines/c` + i).set(line("d1", "4-a")); }
   await d.doc(`${R}/alerts/a1`).set({ table: 4, session: "4-a", type: "bill", pid: "d1", pname: "Amani", t: 1, ack: null, ackBy: null, done: false });
-  const db = await staffPhone();
+  const db = await waiterPhone();
   const b = db.batch();
   ids.forEach((id) => b.update(db.doc(`${R}/lines/` + id), { s: "served", closedUnserved: true }));
   b.update(db.doc(`${R}/alerts/a1`), { done: true, doneAt: 9 });
@@ -417,4 +424,61 @@ test("payment history: the company records it, the owner can read it, nobody edi
 });
 test("manager can change the number of tables", async () => {
   await assertSucceeds(manager().doc(R).update({ tables: 12, updated: 3 }));
+});
+
+// ---------- waiter shifts ----------
+test("a waiter starts a shift with the right PIN, not a wrong one", async () => {
+  const db = await staffPhone();
+  await assertFails(db.doc(`${R}/staff/s1`).set({ token: "STAFFTOK", t: 1, waiter: "w1", pin: "0000", shift: Date.now() }));
+  await assertFails(db.doc(`${R}/staff/s1`).set({ token: "STAFFTOK", t: 1, waiter: "w1", pin: "2222", shift: Date.now() }));
+  await assertFails(db.doc(`${R}/staff/s1`).set({ token: "STAFFTOK", t: 1, waiter: "w9", pin: "", shift: Date.now() }));
+  await assertFails(db.doc(`${R}/staff/s1`).set({ token: "STAFFTOK", t: 1, waiter: "w1", pin: "1111", shift: Date.now() + 864e5 }));
+  await assertSucceeds(db.doc(`${R}/staff/s1`).set({ token: "STAFFTOK", t: 1, waiter: "w1", pin: "1111", shift: Date.now() }));
+  await assertFails(db.doc(`${R}/secrets/waiters`).get());
+});
+test("on shift, a waiter takes tables, answers alerts and serves, as themselves only", async () => {
+  const d = await seatAt("d1"); await d.doc(`${R}/lines/l1`).set(line("d1", "4-a"));
+  await d.doc(`${R}/alerts/a1`).set({ table: 4, session: "4-a", type: "call", pid: "d1", pname: "Amani", t: 1, ack: null, ackBy: null, done: false });
+  const db = await waiterPhone();
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ waiter: "w2", accepted: 3 }));
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ waiter: "w1", accepted: 3 }));
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ "paid.d1": true }));
+  await assertFails(db.doc(`${R}/alerts/a1`).update({ ack: 5, ackBy: "w2" }));
+  await assertSucceeds(db.doc(`${R}/alerts/a1`).update({ ack: 5, ackBy: "w1" }));
+  await assertFails(db.doc(`${R}/lines/l1`).update({ s: "served", tServed: 6, servedBy: "w2" }));
+  await assertSucceeds(db.doc(`${R}/lines/l1`).update({ s: "served", tServed: 6, servedBy: "w1" }));
+});
+test("a waiter can't hand back another waiter's table", async () => {
+  await seatAt("d1");
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`${R}/groups/4-a`).update({ waiter: "w2" }));
+  const db = await waiterPhone();
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ waiter: null }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ waiter: "w1" }));
+});
+test("kitchen phone (no shift) marks items ready but can't serve or take tables", async () => {
+  const d = await seatAt("d1"); await d.doc(`${R}/lines/l1`).set(line("d1", "4-a"));
+  const k = await staffPhone("k1");
+  await assertSucceeds(k.doc(`${R}/lines/l1`).update({ s: "ready", tReady: 2, tPrep: 1 }));
+  await assertFails(k.doc(`${R}/lines/l1`).update({ s: "served", tServed: 3, servedBy: "w1" }));
+  await assertFails(k.doc(`${R}/groups/4-a`).update({ waiter: "w1" }));
+});
+test("ending a shift, an old shift, or a changed PIN stops waiter actions", async () => {
+  await seatAt("d1");
+  const db = await waiterPhone();
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ split: "equal" }));
+  await assertSucceeds(db.doc(`${R}/staff/s1`).set({ token: "STAFFTOK", t: 2 }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ split: "order" }));
+  await waiterPhone();
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`${R}/staff/s1`).update({ shift: Date.now() - 17 * 3600e3 }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ split: "order" }));
+  await waiterPhone();
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ split: "order" }));
+  await assertSucceeds(owner().doc(`${R}/secrets/waiters`).set({ pins: { w1: "9999", w2: "2222" } }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ split: "equal" }));
+});
+test("owner and managers set waiter PINs; the owner can work as any waiter", async () => {
+  await assertSucceeds(manager().doc(`${R}/secrets/waiters`).set({ pins: { w1: "4321" } }));
+  await assertSucceeds(owner().doc(`${R}/secrets/waiters`).get());
+  await seatAt("d1");
+  await assertSucceeds(owner().doc(`${R}/groups/4-a`).update({ waiter: "w2" }));
 });

@@ -88,6 +88,16 @@ service cloud.firestore {
       function staffToken() { return get(/databases/$(database)/documents/restaurants/$(rid)/secrets/staff).data.token; }
       function isStaffPhone() { return signedIn() && exists(staffPath()) && get(staffPath()).data.token == staffToken(); }
       function isStaff() { return isCompany() || (live(rid) && (isStaffPhone() || isAdmin(rid))); }
+      // Waiter shifts: a staff phone starts a shift with a waiter's name and PIN (secrets/waiters holds the
+      // PINs). The shift lasts 16 hours, or until ended, or until the owner changes that waiter's PIN.
+      function staffDoc() { return get(staffPath()).data; }
+      function waiterPins() { return get(/databases/$(database)/documents/restaurants/$(rid)/secrets/waiters).data.pins; }
+      function onShift() {
+        return live(rid) && isStaffPhone() && staffDoc().get('waiter', null) != null
+          && request.time.toMillis() < staffDoc().shift + 16 * 60 * 60 * 1000
+          && waiterPins().get(staffDoc().waiter, '') == staffDoc().pin;
+      }
+      function myWaiter() { return staffDoc().waiter; }
 
       function passPath() { return /databases/$(database)/documents/restaurants/$(rid)/passes/$(me()); }
       function hasPass() { return signedIn() && exists(passPath()); }
@@ -130,15 +140,21 @@ service cloud.firestore {
           && request.resource.data.role == 'manager' && request.resource.data.email == em;
         allow delete: if bossOwner(rid);
       }
-      match /secrets/staff {
+      match /secrets/{which} {
         allow read, write: if boss(rid);
       }
       match /staff/{uid} {
         allow get: if signedIn() && (uid == me() || boss(rid));
         allow list: if boss(rid);
         allow create, update: if live(rid) && signedIn() && uid == me()
-          && request.resource.data.keys().hasOnly(['token', 't'])
-          && request.resource.data.token == staffToken();
+          && request.resource.data.keys().hasOnly(['token', 't', 'waiter', 'pin', 'shift'])
+          && request.resource.data.token == staffToken()
+          && (request.resource.data.get('waiter', null) == null
+              || (request.resource.data.pin is string
+                  && request.resource.data.pin == waiterPins().get(request.resource.data.waiter, '-')
+                  && request.resource.data.shift is int
+                  && request.resource.data.shift > request.time.toMillis() - 10 * 60 * 1000
+                  && request.resource.data.shift < request.time.toMillis() + 10 * 60 * 1000));
         allow delete: if signedIn() && (uid == me() || boss(rid));
       }
       match /tablekeys/{n} {
@@ -196,7 +212,14 @@ service cloud.firestore {
               && request.resource.data.waiter == null && request.resource.data.people.size() == 0
               && request.resource.data.paid.size() == 0
               && request.resource.data.code is string && request.resource.data.code.size() == 4);
-        allow update: if isStaff() || (inSession(sid) && resource.data.open == true && dinerEdit());
+        // Staff phones change groups only during a waiter's shift, and can only take a table for
+        // themselves, or hand back their own.
+        function waiterEdit() {
+          let d = request.resource.data;
+          return !d.diff(resource.data).affectedKeys().hasAny(['waiter'])
+            || d.waiter == myWaiter() || (d.waiter == null && resource.data.waiter == myWaiter());
+        }
+        allow update: if boss(rid) || (onShift() && waiterEdit()) || (inSession(sid) && resource.data.open == true && dinerEdit());
         allow delete: if boss(rid);
       }
       match /lines/{id} {
@@ -212,8 +235,11 @@ service cloud.firestore {
         }
         allow read: if isStaff() || (hasPass() && live(rid) && resource.data.session == pass().session);
         allow create: if boss(rid) || dinerLine(request.resource.data);
+        // Kitchen, bar and grill move items along; "served" is recorded against the waiter on shift.
         allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['s', 'tPrep', 'tReady', 'tServed', 'servedBy', 'closedUnserved']);
+          .hasOnly(['s', 'tPrep', 'tReady', 'tServed', 'servedBy', 'closedUnserved'])
+          && (boss(rid) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['servedBy'])
+              || (onShift() && request.resource.data.servedBy == myWaiter()));
         allow delete: if boss(rid);
       }
       match /alerts/{id} {
@@ -226,8 +252,9 @@ service cloud.firestore {
         }
         allow read: if isStaff() || (hasPass() && live(rid) && resource.data.session == pass().session);
         allow create: if boss(rid) || dinerAlert(request.resource.data);
-        allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['ack', 'ackBy', 'done', 'doneAt']);
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ack', 'ackBy', 'done', 'doneAt'])
+          && (boss(rid) || (onShift() && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ackBy'])
+                                          || request.resource.data.ackBy == myWaiter())));
         allow delete: if boss(rid);
       }
       match /sessions/{sid} {
