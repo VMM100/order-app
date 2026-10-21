@@ -408,3 +408,13 @@ test("owner's Setup reset can clear codes and passes; diners can't", async () =>
   (await db.collection(`${R}/codes`).get()).docs.forEach((d) => b.delete(d.ref));
   await assertSucceeds(b.commit());
 });
+test("payment history: the company records it, the owner can read it, nobody edits it", async () => {
+  await assertSucceeds(boss().doc("accounts/r1/payments/p1").set({ amount: 130000, months: 1, until: 2, by: "boss@example.com", t: 1 }));
+  await assertSucceeds(owner().doc("accounts/r1/payments/p1").get());
+  await assertFails(owner().doc("accounts/r1/payments/p2").set({ amount: 0, months: 12 }));
+  await assertFails(boss().doc("accounts/r1/payments/p1").update({ amount: 1 }));
+  await assertFails(diner("x").doc("accounts/r1/payments/p1").get());
+});
+test("manager can change the number of tables", async () => {
+  await assertSucceeds(manager().doc(R).update({ tables: 12, updated: 3 }));
+});

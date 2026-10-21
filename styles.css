@@ -109,6 +109,9 @@ section{padding-top:16px}
 .paid{text-decoration:line-through;color:var(--muted)}
 .total{display:flex;justify-content:space-between;font-weight:600;padding-top:12px}
 .soundbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding:10px 14px;border-radius:12px;background:var(--accent-soft)}
+.warnbar{background:#fbe3dc;color:#5a1d0e}
+@media (prefers-color-scheme:dark){.warnbar{background:#4a2117;color:#ffd9cc}}
+.warnbar a{color:inherit;font-weight:600}
 .qrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
 .qr{background:#fff;color:#22261f;border-radius:12px;padding:12px;text-align:center;border:1px solid var(--line)}
 .qr .box{display:flex;justify-content:center}

@@ -4,7 +4,7 @@
 export const RESTAURANT = "Crafty Dee's";
 // Short permanent id for this restaurant. Diner accounts work across restaurants; their visits are
 // labelled with this id so each restaurant only ever looks at its own guests.
-export const RESTAURANT_ID = "craftydees";
+export const RESTAURANT_ID = "crafty-dees";   // the id the company page gives "Crafty Dee's"; this one starts with the menu below
 export const TABLE_COUNT = 10;
 
 // Placeholder staff names. Replace with the restaurant's real waiters.

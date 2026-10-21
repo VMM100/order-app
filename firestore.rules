@@ -70,6 +70,13 @@ service cloud.firestore {
       allow update, delete: if isCompany();
     }
 
+    // Payments the company records against an account (history for the company and the owner).
+    match /accounts/{rid}/payments/{pid} {
+      allow read: if isCompany() || isOwner(rid);
+      allow create: if isCompany();
+      allow update, delete: if false;
+    }
+
     // Managers find the restaurants they help run (a search across every restaurant's admins list).
     match /{path=**}/admins/{em} {
       allow list: if verified() && resource.data.email == email();
@@ -108,7 +115,7 @@ service cloud.firestore {
       allow create: if boss(rid);
       allow update: if bossOwner(rid)
         || (boss(rid) && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['sections', 'waiters', 'shared', 'prices', 'updated']));
+              .hasOnly(['sections', 'waiters', 'shared', 'prices', 'tables', 'updated']));
       allow delete: if isCompany();
 
       match /photos/{id} {
