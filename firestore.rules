@@ -212,12 +212,13 @@ service cloud.firestore {
               && request.resource.data.waiter == null && request.resource.data.people.size() == 0
               && request.resource.data.paid.size() == 0
               && request.resource.data.code is string && request.resource.data.code.size() == 4);
-        // Staff phones change groups only during a waiter's shift, and can only take a table for
-        // themselves, or hand back their own.
+        // Staff phones change groups only during a waiter's shift, and can only take a free table for
+        // themselves, or hand back their own. Moving a table between waiters is for the owner or manager.
         function waiterEdit() {
           let d = request.resource.data;
           return !d.diff(resource.data).affectedKeys().hasAny(['waiter'])
-            || d.waiter == myWaiter() || (d.waiter == null && resource.data.waiter == myWaiter());
+            || (d.waiter == myWaiter() && resource.data.waiter == null)
+            || (d.waiter == null && resource.data.waiter == myWaiter());
         }
         allow update: if boss(rid) || (onShift() && waiterEdit()) || (inSession(sid) && resource.data.open == true && dinerEdit());
         allow delete: if boss(rid);
