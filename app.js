@@ -337,7 +337,7 @@ if (view === "company") companyScreen();
 else if (view === "signup") signupScreen();
 else if (view === "account") accountScreen();
 else if (STATIONS[view] || view === "waiter") staffGate((boss) => (view === "waiter" ? waiterScreen(boss) : stationScreen(view)));
-else if (view === "setup") adminGate("setup", () => setupScreen());
+else if (view === "setup") adminGate("setup", (role) => setupScreen(role === "manager" ? "manager" : "owner"));
 else if (view === "owner") adminGate("owner", (role) => ownerScreen(role === "owner" ? "owner" : "manager"));
 else if (view === "manager") adminGate("manager", () => ownerScreen("manager"));
 else dinerScreen();
@@ -1007,8 +1007,11 @@ function waiterScreen(boss) {
 }
 
 // ================= SETUP =================
-function setupScreen() {
-  $("#wrap").classList.add("wide"); $("#sub").textContent = "Setup"; document.title = "Setup · " + rname();
+// The same tabs as the owner and manager pages, with Tables & QR selected; the others open that page.
+const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"], ["tables", "Tables & QR"]] : [["menu", "Menu"], ["staff", "Staff"], ["tables", "Tables & QR"]]);
+const tabBar = (tabs, cur) => `<div class="seg" role="tablist" style="max-width:640px">${tabs.map(([k, l]) => `<button aria-pressed="${cur === k}" data-otab="${k}">${l}</button>`).join("")}</div>`;
+function setupScreen(role) {
+  $("#wrap").classList.add("wide"); $("#sub").textContent = role === "owner" ? "Owner" : "Manager"; document.title = "Tables & QR · " + rname();
   const link = (h, l) => `<div><div class="note" style="margin:0">${l}</div><a href="${h}">${esc(h)}</a></div>`;
   let armed = false, rot = false, keys = {}, staffTok = null, rotStaff = false, rekey = null;
   const unlocked = true;   // only owners and managers reach this screen (see adminGate)
@@ -1034,7 +1037,7 @@ function setupScreen() {
       <button class="chip sharetog" data-share="${n}" aria-pressed="${isShared(n)}">${isShared(n) ? "Shared table" : "Normal table"}</button>
       ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : `<span class="note">Loading…</span>`}
       <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
-    paint(subBanner() + `<section><div class="label" style="margin-top:0">Tables and QR codes · diners scan these</div>
+    paint(subBanner() + tabBar(ownerTabs(role), "tables") + `<section><div class="label">Tables and QR codes · diners scan these</div>
       <div class="row"><button class="btn" data-tables="-1" aria-label="One table fewer">−</button><b class="num">${TABLES} tables</b><button class="btn" data-tables="1" aria-label="One more table">+</button>
         <button class="btn primary" data-act="print" ${Object.keys(keys).length < TABLES ? "disabled" : ""}>Print table cards</button></div>
       <div class="qrs">${Array.from({ length: TABLES }, (_, i) => tableCard(i + 1)).join("")}</div>
@@ -1070,6 +1073,8 @@ function setupScreen() {
     setTimeout(() => { try { window.print(); } catch { done(); } }, 300);
   }
   document.addEventListener("click", async (e) => {
+    const ot = e.target.closest("button[data-otab]");
+    if (ot && ot.dataset.otab !== "tables") { try { sessionStorage.setItem("dees-otab", ot.dataset.otab); } catch {} location.href = `${BASE}?r=${RID}#${role}`; return; }
     const pr = e.target.closest("button[data-act=print]");
     if (pr) { printCards(); return; }
     const rk = e.target.closest("button[data-rekey]");
@@ -1114,8 +1119,9 @@ function ownerScreen(role) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = Title; document.title = Title + " · " + rname();
   const unlocked = true;
   const myEmail = auth.currentUser && auth.currentUser.email;
-  const TABS = owner ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"], ["tables", "Tables & QR"]] : [["menu", "Menu"], ["staff", "Staff"], ["tables", "Tables & QR"]];
-  const S = { tab: TABS[0][0], edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "", admins: null, pins: null };
+  const TABS = ownerTabs(owner ? "owner" : "manager");
+  let startTab = null; try { startTab = sessionStorage.getItem("dees-otab"); sessionStorage.removeItem("dees-otab"); } catch {}
+  const S = { tab: TABS.some(([k]) => k === startTab) ? startTab : TABS[0][0], edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "", admins: null, pins: null };
   // Who can sign in: the owner (set on the account by the company) and the managers the owner adds.
   // Waiter PINs live in restaurants/{RID}/secrets/waiters, readable only by the owner and managers.
   const pinsRef = () => rdoc("secrets", "waiters");
@@ -1138,7 +1144,7 @@ function ownerScreen(role) {
 
   function render() {
     if (!TABS.some(([k]) => k === S.tab)) S.tab = TABS[0][0];
-    paint(subBanner() + `<div class="seg" role="tablist" style="max-width:520px">${TABS.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-otab="${k}">${l}</button>`).join("")}</div>
+    paint(subBanner() + tabBar(TABS, S.tab) + `
       ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
   }
 
