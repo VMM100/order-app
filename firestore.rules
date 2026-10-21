@@ -1,0 +1,237 @@
+rules_version = '2';
+
+// Order App security rules.
+//
+// Who is who:
+//   - Diners: every phone signs in quietly (anonymously) or with phone/Google. A diner gets a
+//     "pass" (passes/{uid}) by proving they scanned a table QR (its secret key) or know an open
+//     group's code. The pass decides which table and group they can see and order at.
+//   - Staff phones (waiter, kitchen, bar, grill): join with the staff link from Setup, which
+//     carries a secret token. Making a new staff link signs out every staff phone.
+//   - Owner and managers: Google accounts listed in admins/{email}. The first person to sign in
+//     to the owner page claims the restaurant; after that only an owner can add people.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- who is asking ----------
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function email() { return request.auth.token.get('email', '-'); }
+    function verified() { return request.auth.token.get('email_verified', false) == true; }
+
+    function adminPath() { return /databases/$(database)/documents/admins/$(email()); }
+    function isAdmin() { return signedIn() && verified() && exists(adminPath()); }
+    function isOwner() { return isAdmin() && get(adminPath()).data.role == 'owner'; }
+
+    function staffPath() { return /databases/$(database)/documents/staff/$(me()); }
+    function staffToken() { return get(/databases/$(database)/documents/secrets/staff).data.token; }
+    function isStaffPhone() { return signedIn() && exists(staffPath()) && get(staffPath()).data.token == staffToken(); }
+    function isStaff() { return isStaffPhone() || isAdmin(); }
+
+    // ---------- diner passes ----------
+    function passPath() { return /databases/$(database)/documents/passes/$(me()); }
+    function hasPass() { return signedIn() && exists(passPath()); }
+    function pass() { return get(passPath()).data; }
+    function keyOk(p) {
+      return p.via == 'key' && p.k is string
+        && p.k == get(/databases/$(database)/documents/tablekeys/$(string(p.table))).data.k;
+    }
+    // A diner whose current pass came from the table QR of table n.
+    function keyPassFor(n) { return hasPass() && pass().via == 'key' && pass().table == n && keyOk(pass()); }
+    // A diner whose pass is for this group (session).
+    function inSession(sid) { return hasPass() && pass().session == sid; }
+
+    function groupAfter(sid) { return getAfter(/databases/$(database)/documents/groups/$(sid)).data; }
+    function groupNow(sid) { return get(/databases/$(database)/documents/groups/$(sid)).data; }
+
+    function validPass(p) {
+      return p.keys().hasOnly(['table', 'via', 'k', 'c', 'session', 't'])
+        && p.table is int
+        && (
+          // Scanned the table QR: the key must match. The pass may name a group at that table.
+          (keyOk(p) && (p.get('session', null) == null
+              || (groupAfter(p.session).table == p.table && groupAfter(p.session).open == true)))
+          ||
+          // A friend's invite code: the code must belong to that open group.
+          (p.via == 'code' && p.c is string && p.session is string
+              && get(/databases/$(database)/documents/codes/$(p.c)).data.session == p.session
+              && groupNow(p.session).open == true
+              && groupNow(p.session).table == p.table)
+        );
+    }
+
+    match /passes/{uid} {
+      allow get: if signedIn() && uid == me();
+      allow list: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && uid == me());
+      allow create, update: if signedIn() && uid == me() && validPass(request.resource.data);
+    }
+
+    // ---------- restaurant settings ----------
+    // The menu, waiter names, look and shared tables are public (every diner's phone needs them).
+    match /config/restaurant {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isOwner()
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['sections', 'waiters', 'shared', 'prices', 'updated']));
+      allow delete: if false;
+    }
+    match /photos/{id} {
+      allow read: if true;
+      allow create: if isAdmin() && request.resource.data.data is string;
+      allow delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // ---------- owner, managers and staff phones ----------
+    match /meta/claimed {
+      allow read: if true;
+      // The very first owner: allowed only once, together with their own admins entry.
+      allow create: if signedIn() && verified()
+        && getAfter(adminPath()).data.role == 'owner'
+        && request.resource.data.by == email();
+      allow update, delete: if false;
+    }
+    match /admins/{em} {
+      allow read: if isAdmin() || (signedIn() && verified() && em == email());
+      allow create: if signedIn() && verified() && request.resource.data.keys().hasOnly(['role', 'name', 'by', 't'])
+        && request.resource.data.role in ['owner', 'manager']
+        && (isOwner()
+            || (em == email() && request.resource.data.role == 'owner'
+                && !exists(/databases/$(database)/documents/meta/claimed)
+                && existsAfter(/databases/$(database)/documents/meta/claimed)));
+      allow update: if isOwner() && request.resource.data.role in ['owner', 'manager'] && em != email();
+      allow delete: if isOwner() && em != email();
+    }
+    match /secrets/staff {
+      allow read, write: if isAdmin();
+    }
+    match /staff/{uid} {
+      allow get: if signedIn() && (uid == me() || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if signedIn() && uid == me()
+        && request.resource.data.keys().hasOnly(['token', 't'])
+        && request.resource.data.token == staffToken();
+      allow delete: if signedIn() && (uid == me() || isAdmin());
+    }
+
+    // ---------- tables and groups ----------
+    match /tablekeys/{n} {
+      allow read, write: if isAdmin();
+    }
+    match /tables/{n} {
+      allow read: if isStaff() || keyPassFor(int(n));
+      allow write: if isStaff()
+        || (keyPassFor(int(n)) && request.resource.data.keys().hasOnly(['table', 'current'])
+            && request.resource.data.table == int(n)
+            && groupAfter(request.resource.data.current).table == int(n)
+            && groupAfter(request.resource.data.current).open == true);
+    }
+    // codes/{4 digits} → the open group using it. Anyone signed in may look up one code;
+    // only staff may list them.
+    match /codes/{code} {
+      allow get: if signedIn();
+      allow list: if isStaff();
+      allow create: if (isStaff() || keyPassFor(request.resource.data.table)) && newCode(code);
+      // A code left behind by a closed group may be reused.
+      allow update: if (isStaff() || keyPassFor(request.resource.data.table)) && newCode(code)
+        && groupNow(resource.data.session).open == false;
+      allow delete: if isStaff();
+    }
+    function newCode(code) {
+      return request.resource.data.keys().hasOnly(['session', 'table'])
+        && groupAfter(request.resource.data.session).code == code
+        && groupAfter(request.resource.data.session).table == request.resource.data.table
+        && groupAfter(request.resource.data.session).open == true;
+    }
+
+    match /groups/{sid} {
+      allow get: if isStaff() || inSession(sid) || keyPassFor(resource.data.table);
+      allow list: if isStaff() || keyPassFor(resource.data.table);
+      // Diners start a group only at a table whose QR they scanned, and it starts empty.
+      allow create: if isStaff()
+        || (keyPassFor(request.resource.data.table)
+            && request.resource.data.session == sid
+            && request.resource.data.open == true
+            && request.resource.data.waiter == null
+            && request.resource.data.people.size() == 0
+            && request.resource.data.paid.size() == 0
+            && request.resource.data.code is string && request.resource.data.code.size() == 4);
+      // Diners may add themselves, name the group, and choose how to split. Staff do the rest.
+      allow update: if isStaff() || (inSession(sid) && resource.data.open == true && dinerGroupEdit());
+      allow delete: if isAdmin();
+    }
+    function dinerGroupEdit() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      let ppl = d.people.diff(resource.data.people);
+      return changed.hasOnly(['people', 'label', 'split'])
+        && d.split in ['order', 'equal']
+        && ppl.removedKeys().size() == 0
+        && ppl.addedKeys().union(ppl.changedKeys()).hasOnly([me()])
+        && (!(me() in d.people) || validPerson(d.people[me()]))
+        && (!changed.hasAny(['label']) || resource.data.label == null);
+    }
+    function validPerson(p) {
+      return p.keys().hasOnly(['name', 't', 'uid', 'acct'])
+        && p.name is string && p.name.size() > 0 && p.name.size() <= 20
+        && p.uid == me();
+    }
+
+    // ---------- orders and alerts ----------
+    match /lines/{id} {
+      allow read: if isStaff() || (hasPass() && resource.data.session == pass().session);
+      allow create: if isAdmin() || dinerLine(request.resource.data);
+      // Station and waiter screens move items along; the order itself can't be changed.
+      allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['s', 'tPrep', 'tReady', 'tServed', 'servedBy', 'closedUnserved']);
+      allow delete: if isAdmin();
+    }
+    // An order line: from a member of an open group, for themselves, at today's menu price.
+    function dinerLine(l) {
+      let g = groupNow(l.session);
+      let price = get(/databases/$(database)/documents/config/restaurant).data.prices.get(l.n + '|' + l.v, null);
+      return inSession(l.session)
+        && g.open == true && me() in g.people
+        && l.keys().hasOnly(['table', 'session', 'batch', 'pid', 'pname', 'n', 'v', 'pr', 'st', 's', 't', 'note'])
+        && l.pid == me() && l.table == g.table && l.s == 'new'
+        && l.n is string && l.v is string
+        && price != null && l.pr == price.p && l.st == price.st
+        && (l.note == null || (l.note is string && l.note.size() <= 200));
+    }
+
+    match /alerts/{id} {
+      allow read: if isStaff() || (hasPass() && resource.data.session == pass().session);
+      allow create: if isAdmin() || dinerAlert(request.resource.data);
+      allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['ack', 'ackBy', 'done', 'doneAt']);
+      allow delete: if isAdmin();
+    }
+    function dinerAlert(a) {
+      let g = groupNow(a.session);
+      return inSession(a.session) && g.open == true && me() in g.people
+        && a.keys().hasOnly(['table', 'session', 'type', 'pid', 'pname', 't', 'ack', 'ackBy', 'done'])
+        && a.type in ['call', 'bill'] && a.pid == me() && a.table == g.table
+        && a.ack == null && a.ackBy == null && a.done == false;
+    }
+
+    // ---------- history ----------
+    match /sessions/{sid} {
+      allow read: if isAdmin();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    // ---------- diner accounts ----------
+    match /diners/{uid} {
+      allow read, write: if signedIn() && uid == me();
+    }
+    match /visits/{id} {
+      allow read: if signedIn() && (resource.data.uid == me() || isAdmin());
+      allow create: if isStaff() && request.resource.data.uid is string;
+      allow delete: if signedIn() && (resource.data.uid == me() || isAdmin());
+      allow update: if false;
+    }
+  }
+}
