@@ -102,6 +102,16 @@ const tableRef = (n) => rdoc("tables", n);
 // each visit is a document in visits, labelled with its restaurant (rid).
 const dinersCol = collection(db, "diners"), visitsCol = collection(db, "visits");
 const dinerRef = (u) => doc(db, "diners", u);
+// Consent to WhatsApp offers is per restaurant. Every yes or no is logged (diners/{uid}/consents) with the
+// exact words the diner saw, when, and where, as proof under Tanzania's Personal Data Protection Act.
+// Change OFFERS_VERSION whenever the wording changes.
+const OFFERS_VERSION = "2026-10-22";
+const offersText = (name) => `Send me ${name}'s offers and news on WhatsApp. I can stop any time in My account.`;
+const offersOn = (profile, rid) => !!(profile && profile.offers && typeof profile.offers === "object" && profile.offers[rid]);
+function logConsent(batch, u, rid, name, on, source) {
+  batch.set(doc(collection(db, "diners", u.uid, "consents")), { rid, rname: name, on, channel: "whatsapp", phone: u.phoneNumber || null,
+    text: on ? offersText(name) : `Stop ${name}'s offers on WhatsApp.`, version: OFFERS_VERSION, source, at: Date.now() });
+}
 async function myVisits(u) { const s = await getDocs(query(visitsCol, where("uid", "==", u))); return s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.date - a.date); }
 // What to suggest re-ordering: items on at least 2 of the last 5 visits ("Your usual"), most recent
 // first; if nothing repeats, the last visit's order ("Last time"). Quantity in one night counts once.
@@ -616,7 +626,6 @@ function dinerScreen() {
       <p style="margin-top:0">We'll text you a 6-digit code. No password to remember.</p>
       <form id="phoneform" class="grid"><div class="vrow"><span class="field" style="flex:0 0 auto;width:auto">+255</span>
         <input class="field num" id="phonein" inputmode="tel" autocomplete="tel" placeholder="748 227 000" value="${esc(S.phone)}" aria-label="Mobile number"></div>
-        <label class="optin"><input type="checkbox" id="offersin" ${S.offers ? "checked" : ""}> <span>Send me ${esc(rname())}'s offers on WhatsApp. <span class="note">Optional. Stop any time.</span></span></label>
         <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Sending…" : "Send code"}</button></form>${err}
       <p class="note">You'll get one SMS with a sign-in code; standard SMS rates may apply. Your number is used to sign you in, and Google (which sends the code) keeps it to prevent abuse.
         This step is protected by reCAPTCHA; Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms</a> apply.</p>${back}</section>`;
@@ -627,6 +636,7 @@ function dinerScreen() {
       <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="resend">Send a new code</button>${back}</div></section>`;
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
       <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
+        ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}
         <button class="btn primary big">Join ${unit}</button></form>${err}</section>`;
     if (S.user && S.profile && S.profile.name) return `<section>${bar}
       <button class="btn primary big" data-act="joinme" style="margin-top:16px">Join as ${esc(S.profile.name)}</button>
@@ -764,7 +774,7 @@ function dinerScreen() {
       try { await joinAs(name, null); } catch (err) { fail(err); }
     }
     if (e.target.id === "phoneform") {
-      S.phone = $("#phonein").value; S.offers = $("#offersin").checked;
+      S.phone = $("#phonein").value;
       const full = normalisePhone(S.phone); if (!full) { S.authErr = "That doesn't look like a phone number. Try 0748 227 000."; return render(); }
       S.phoneFull = full; S.busy = true; S.authErr = ""; render();
       try { await phoneStart(full); S.step = "code"; } catch (err) { S.authErr = authMessage(err); }
@@ -778,8 +788,10 @@ function dinerScreen() {
     }
     if (e.target.id === "profileform") {
       const name = $("#profilein").value.trim(); if (!name || !S.user) return;
-      const prof = { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: !!S.offers, created: Date.now() };
-      try { await setDoc(dinerRef(S.user.uid), prof); S.profile = prof; S.step = ""; await joinAs(name, S.user); } catch (err) { fail(err); }
+      const on = !!($("#offersin") && $("#offersin").checked);
+      const prof = { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: on ? { [RID]: true } : {}, offerNames: on ? { [RID]: rname() } : {}, created: Date.now() };
+      try { const b = writeBatch(db); b.set(dinerRef(S.user.uid), prof); if (on) logConsent(b, S.user, RID, rname(), true, "sign-up at table");
+        await b.commit(); S.profile = prof; S.step = ""; await joinAs(name, S.user); } catch (err) { fail(err); }
     }
   });
   document.addEventListener("input", (e) => { if (e.target.id === "note") S.note = e.target.value; if (e.target.id === "namein") S.name = e.target.value; });
@@ -1679,16 +1691,26 @@ function accountScreen() {
           <header><b>${esc(g.name)}</b><span class="note" style="margin:0">${g.list.length} visit${g.list.length > 1 ? "s" : ""} · TSh ${fmt(g.list.reduce((a, v) => a + (v.share || 0), 0))}</span></header>
           ${g.list.map((v) => `<div class="oline"><span class="l">${day(v.date)} · Table ${v.table}<br><span class="note">${(v.items || []).map((i) => esc(i.n)).join(", ") || "Nothing ordered"}</span></span><span class="num">TSh ${fmt(v.share)}</span></div>`).join("")}
         </div>`).join("") : `<p class="note">No visits yet. They'll appear here after your table's bill is closed.</p>`}
+      <div class="label">WhatsApp offers</div>
+      ${(() => { const names = { ...((S.profile && S.profile.offerNames) || {}) }; Object.entries(by).forEach(([rid, g]) => (names[rid] ||= g.name));
+        const rids = Object.keys(names); if (!S.user.phoneNumber) return `<p class="note" style="margin-top:0">Offers come by WhatsApp, so they need a phone sign-in.</p>`;
+        return rids.length ? `<div class="grid">${rids.map((rid) => `<label class="optin"><input type="checkbox" data-offers="${esc(rid)}" data-name="${esc(names[rid])}" ${offersOn(S.profile, rid) ? "checked" : ""}> <span>${esc(offersText(names[rid]))}</span></label>`).join("")}</div>
+          <p class="note">Each restaurant can only message you if its box is ticked. Every change is saved with the date.</p>` : `<p class="note" style="margin-top:0">Restaurants you visit will appear here. You choose for each one.</p>`; })()}
       <div class="label">Settings</div>
-      <label class="optin"><input type="checkbox" id="acctoffers" ${S.profile && S.profile.offers ? "checked" : ""}> <span>WhatsApp offers from restaurants I've visited</span></label>
       <div class="grid" style="margin-top:20px">${back()}
         <button class="btn" data-act="signout">Sign out</button>
         <button class="btn danger" data-act="delete">${S.armed ? "Tap again to delete everything" : "Delete my account and data"}</button></div>
       <p class="note">Each restaurant only sees your visits to it, never your visits elsewhere.</p></section>`);
   }
   document.addEventListener("change", async (e) => {
-    if (e.target.id !== "acctoffers" || !S.user) return;
-    try { await updateDoc(dinerRef(S.user.uid), { offers: e.target.checked }); S.profile = { ...(S.profile || {}), offers: e.target.checked }; toast("Saved"); } catch (err) { fail(err); }
+    const rid = e.target.dataset && e.target.dataset.offers; if (!rid || !S.user) return;
+    const on = e.target.checked, name = e.target.dataset.name;
+    try {
+      const b = writeBatch(db), offers = { ...(typeof (S.profile || {}).offers === "object" ? S.profile.offers : {}), [rid]: on }, offerNames = { ...((S.profile || {}).offerNames || {}), [rid]: name };
+      if (S.profile) b.update(dinerRef(S.user.uid), { offers, offerNames }); else b.set(dinerRef(S.user.uid), { offers, offerNames, phone: S.user.phoneNumber || null, created: Date.now() });
+      logConsent(b, S.user, rid, name, on, "My account");
+      await b.commit(); S.profile = { ...(S.profile || {}), offers, offerNames }; toast(on ? `You'll get ${name}'s offers` : `No more offers from ${name}`);
+    } catch (err) { e.target.checked = !on; fail(err); }
   });
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b || !S.user) return; const d = b.dataset;
@@ -1699,6 +1721,7 @@ function accountScreen() {
       try {
         const u = S.user.uid, batch = writeBatch(db);
         (await getDocs(query(visitsCol, where("uid", "==", u)))).docs.forEach((x) => batch.delete(x.ref));
+        (await getDocs(collection(db, "diners", u, "consents"))).docs.forEach((x) => batch.delete(x.ref));
         batch.delete(dinerRef(u)); await batch.commit();
         await deleteMe(); toast("Your account and visits are deleted");
       } catch (err) { S.err = authMessage(err); }

@@ -47,7 +47,8 @@ Live at https://vmm100.github.io/order-app/. Every restaurant has an id (`r`), e
 Platform:
 - `company/{email}`: the company team (Google accounts). `meta/company`: set when the first one claims the company page.
 - `accounts/{id}`: one per restaurant: name, owner's Google email, phone, area, tables, `status` (`pending`, `active`, `suspended`), `paidUntil` (date), plan, last payment. Only the company changes it. `accounts/{id}/payments`: payment history.
-- `diners/{uid}`, `visits/{…}`: diner accounts and their visits, across restaurants (each visit has its restaurant id).
+- `diners/{uid}`, `visits/{…}`: diner accounts and their visits, across restaurants (each visit has its restaurant id). `offers` holds the diner's WhatsApp offers choice per restaurant.
+- `diners/{uid}/consents`: proof of consent: every yes or no to a restaurant's offers, with the exact wording shown, its version, where it was given, the phone number and the time. Entries can't be edited; they're deleted with the account.
 
 Each restaurant, under `restaurants/{id}`:
 - the restaurant document: menu sections and items, `prices` ("item|option" → price and station, used by the rules to check orders), waiters, look, shared tables, number of tables

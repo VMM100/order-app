@@ -268,6 +268,18 @@ service cloud.firestore {
     // ---------- diner accounts (shared across restaurants) ----------
     match /diners/{uid} {
       allow read, write: if signedIn() && uid == me();
+      // Proof of consent to offers: a diner can add entries and read their own, never change one.
+      // The whole log goes when they delete their account.
+      match /consents/{id} {
+        allow read, delete: if signedIn() && uid == me();
+        allow create: if signedIn() && uid == me()
+          && request.resource.data.keys().hasOnly(['rid', 'rname', 'on', 'channel', 'phone', 'text', 'version', 'source', 'at'])
+          && request.resource.data.on is bool && request.resource.data.text is string && request.resource.data.version is string
+          && request.resource.data.at is int
+          && request.resource.data.at > request.time.toMillis() - 10 * 60 * 1000
+          && request.resource.data.at < request.time.toMillis() + 10 * 60 * 1000;
+        allow update: if false;
+      }
     }
     match /visits/{id} {
       allow read: if signedIn() && (resource.data.uid == me() || boss(resource.data.rid));

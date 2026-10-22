@@ -482,3 +482,16 @@ test("owner and managers set waiter PINs; the owner can work as any waiter", asy
   await seatAt("d1");
   await assertSucceeds(owner().doc(`${R}/groups/4-a`).update({ waiter: "w2" }));
 });
+
+// ---------- proof of consent to offers ----------
+test("a diner logs consent to offers; nobody can change or read someone else's log", async () => {
+  const db = env.authenticatedContext("p1", { phone_number: "+255748227000" }).firestore();
+  const entry = { rid: "r1", rname: "Crafty Dee's", on: true, channel: "whatsapp", phone: "+255748227000", text: "Send me Crafty Dee's offers…", version: "2026-10-22", source: "My account", at: Date.now() };
+  await assertSucceeds(db.doc("diners/p1/consents/c1").set(entry));
+  await assertFails(db.doc("diners/p1/consents/c1").update({ on: false }));
+  await assertFails(db.doc("diners/p1/consents/c2").set({ ...entry, at: Date.now() - 864e5 }));
+  await assertFails(db.doc("diners/p1/consents/c3").set({ ...entry, extra: 1 }));
+  await assertFails(env.authenticatedContext("p2", { phone_number: "+255700000000" }).firestore().doc("diners/p1/consents/c1").get());
+  await assertFails(owner().doc("diners/p1/consents/c1").get());
+  await assertSucceeds(db.doc("diners/p1/consents/c1").delete());
+});
