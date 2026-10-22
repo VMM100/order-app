@@ -315,7 +315,7 @@ button.mitem:hover,a.mitem:hover,button.mitem:focus-visible,a.mitem:focus-visibl
 .hello-name{display:block;max-width:80vw;background:var(--accent);color:var(--accent-ink);font-family:var(--display);text-transform:var(--dcase,uppercase);
   font-weight:700;font-size:40px;line-height:1.05;text-align:center;padding:22px 28px;border-radius:24px;border:8px solid #fff;box-shadow:0 10px 24px rgba(0,0,0,.25)}
 .hello-tap{margin-top:30px;margin-bottom:auto;color:#f6f4ee;font-size:16px;font-weight:600;letter-spacing:.01em}
-/* "Powered by Wasabi": a wasabi-green die-cut badge (img/brand/powered-by-wasabi.png): the edge follows the leaf and stem, then the word: low over "wasa", a rounded notch for "Powered by", level with the tall b and i. */
+/* "Spiced by Wasabi" badge (img/brand/powered-by-wasabi.png): wasabi-green die-cut; the edge follows the leaf and stem, then the word: low over "wasa", a rounded notch for "Spiced by", level with the tall b and i. */
 .hello-by{display:block;animation:hello-pop .35s .12s cubic-bezier(.2,.9,.3,1.25) both}
 .hello-wasabi{display:block;height:72px;width:auto;filter:drop-shadow(0 4px 10px rgba(0,0,0,.28))}
 body.hello-on{overflow:hidden}
