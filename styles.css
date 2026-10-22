@@ -308,20 +308,19 @@ button.mitem:hover,a.mitem:hover,button.mitem:focus-visible,a.mitem:focus-visibl
 .hello-go{all:unset;box-sizing:border-box;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;cursor:pointer;
   padding:max(24px,env(safe-area-inset-top,0px)) 24px max(28px,env(safe-area-inset-bottom,0px));font-family:var(--body)}
 .hello-go:focus-visible .hello-tap{outline:2px solid #f6f4ee;outline-offset:6px;border-radius:6px}
-.hello-stick{--r:-5deg;margin-top:auto;display:flex;align-items:center;justify-content:center;transform:rotate(var(--r));animation:hello-pop .35s cubic-bezier(.2,.9,.3,1.25) both}
-/* Die-cut: a white outline that follows the logo's own shape (transparent logos), then a soft shadow. */
+.hello-stick{margin-top:auto;display:flex;align-items:center;justify-content:center;animation:hello-pop .35s cubic-bezier(.2,.9,.3,1.25) both}
+/* Die-cut: a white edge that follows the shape (a transparent logo's own outline), then a soft shadow. */
 .hello-logo{display:block;width:min(64vw,240px);height:min(64vw,240px);object-fit:contain;
   filter:drop-shadow(5px 0 0 #fff) drop-shadow(-5px 0 0 #fff) drop-shadow(0 5px 0 #fff) drop-shadow(0 -5px 0 #fff) drop-shadow(0 10px 14px rgba(0,0,0,.28))}
 .hello-name{display:block;max-width:80vw;background:var(--accent);color:var(--accent-ink);font-family:var(--display);text-transform:var(--dcase,uppercase);
   font-weight:700;font-size:40px;line-height:1.05;text-align:center;padding:22px 28px;border-radius:24px;border:8px solid #fff;box-shadow:0 10px 24px rgba(0,0,0,.25)}
 .hello-tap{margin-top:30px;margin-bottom:auto;color:#f6f4ee;font-size:16px;font-weight:600;letter-spacing:.01em}
-.hello-by{--r:3deg;transform:rotate(var(--r));background:#fff;border-radius:999px;padding:5px;box-shadow:0 6px 14px rgba(0,0,0,.22);animation:hello-pop .35s .12s cubic-bezier(.2,.9,.3,1.25) both}
-.hello-pill{display:flex;align-items:center;gap:8px;background:#1a2117;color:#f6f4ee;border-radius:999px;padding:9px 18px 9px 14px;font-size:13px}
-.hello-pill>span{color:#a5ad9c}
-.hello-wasabi{height:19px;width:auto;display:block}
+/* "Powered by Wasabi": one die-cut sticker image (img/brand/powered-by-wasabi.png); its white edge hugs the leaf, the word and "Powered by". */
+.hello-by{display:block;animation:hello-pop .35s .12s cubic-bezier(.2,.9,.3,1.25) both}
+.hello-wasabi{display:block;height:72px;width:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))}
 body.hello-on{overflow:hidden}
 @keyframes hello-in{from{opacity:0}}
-@keyframes hello-pop{from{opacity:0;transform:rotate(var(--r)) scale(.85)}}
+@keyframes hello-pop{from{opacity:0;transform:scale(.85)}}
 @media (prefers-reduced-motion:reduce){.hello,.hello-stick,.hello-by{animation:none}.hello.out{transition:none}}
 
 /* ---------- Wasabi: "Ordered with Wasabi" line on diner screens ---------- */
