@@ -317,7 +317,7 @@ button.mitem:hover,a.mitem:hover,button.mitem:focus-visible,a.mitem:focus-visibl
 .hello-tap{margin-top:30px;margin-bottom:auto;color:#f6f4ee;font-size:16px;font-weight:600;letter-spacing:.01em}
 /* "Powered by Wasabi": one die-cut sticker image (img/brand/powered-by-wasabi.png); its white edge hugs the leaf, the word and "Powered by". */
 .hello-by{display:block;animation:hello-pop .35s .12s cubic-bezier(.2,.9,.3,1.25) both}
-.hello-wasabi{display:block;height:72px;width:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))}
+.hello-wasabi{display:block;height:68px;width:auto;filter:drop-shadow(0 4px 8px rgba(0,0,0,.22))}
 body.hello-on{overflow:hidden}
 @keyframes hello-in{from{opacity:0}}
 @keyframes hello-pop{from{opacity:0;transform:scale(.85)}}
