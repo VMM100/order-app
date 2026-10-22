@@ -548,7 +548,7 @@ function welcomeSplash() {
   el.className = "hello"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", `Welcome to ${rname()}`);
   el.innerHTML = `<button class="hello-go" type="button"><span class="hello-stick" id="hellostick">${welcomeSticker()}</span>
     <span class="hello-tap">Tap to start ordering</span>
-    <span class="hello-by"><img class="hello-wasabi" src="img/brand/powered-by-wasabi.svg" alt="Powered by Wasabi"></span></button>`;
+    <span class="hello-by"><img class="hello-wasabi" src="img/brand/powered-by-wasabi.png" alt="Powered by Wasabi"></span></button>`;
   document.body.appendChild(el); document.body.classList.add("hello-on"); hydratePhotos();
   const btn = el.querySelector("button");
   // The restaurant's look can arrive a moment later: swap the sticker if the logo changed.
