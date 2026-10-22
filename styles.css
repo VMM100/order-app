@@ -280,3 +280,24 @@ header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .cline .qb{border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:18px;padding:0}
 .soundbar>span{flex:1 1 200px}
 .tablebar.slim b{font-family:var(--body);font-size:14px;text-transform:none;letter-spacing:0;font-weight:600}
+/* The ☰ menu: a panel that drops from the header. */
+header.top{position:sticky}
+.hright{display:flex;align-items:center;gap:10px;margin-left:auto}
+.menubtn{width:42px;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;padding:0;color:var(--fg)}
+.menubtn[aria-expanded="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.drawer{position:absolute;right:0;top:calc(100% + 6px);width:min(320px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 12px 32px rgb(0 0 0 / .18);padding:6px;display:grid;gap:2px;z-index:8;max-height:calc(100vh - 120px);overflow-y:auto}
+.mitem{display:grid;text-align:left;width:100%;border:none;background:none;padding:11px 12px;border-radius:10px;font-size:15px;font-weight:600;color:var(--fg);text-decoration:none}
+.mitem span{font-size:12px;font-weight:400;color:var(--muted)}
+button.mitem:hover,a.mitem:hover,button.mitem:focus-visible,a.mitem:focus-visible{background:var(--bg)}
+.mitem.danger{color:var(--crit)}
+.mitem.info{font-weight:400;font-size:13px;color:var(--muted);border-bottom:1px solid var(--line);border-radius:0;padding-bottom:12px;margin-bottom:2px}
+.mitem.info b{color:var(--fg);font-size:15px}
+.mitem.info .code{font-size:24px}
+.tcard>.trow{flex-wrap:wrap}
+.helpcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:14px}
+.helpcard ol{margin:8px 0 0;padding-left:20px;display:grid;gap:6px}
+.ptitle{font-family:var(--display);font-weight:700;font-size:24px;text-transform:var(--dcase,uppercase);letter-spacing:.02em;margin:16px 0 4px}
+.mitem.info{display:block;line-height:1.5}
+.mitem.info:last-child{border-bottom:none;margin-bottom:0}
+.mitem.info a{color:var(--hop);font-weight:600}

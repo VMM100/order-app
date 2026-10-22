@@ -47,6 +47,31 @@ function paint(html) {
   if (id) { const el = document.getElementById(id); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} } }
 }
 
+// ---------- the ☰ menu in the header ----------
+// Each screen fills it with the things people need now and then; the actions that keep orders moving stay
+// on the page. Items: {label, sub, run, href, danger, keep (stay open after the tap)} or {html} for text.
+const MENU_UI = { items: [], open: false };
+function setMenu(items) {
+  MENU_UI.items = items || []; const b = $("#menubtn"); if (b) b.hidden = !MENU_UI.items.length;
+  if (!MENU_UI.items.length) MENU_UI.open = false; drawMenu();
+}
+function drawMenu() {
+  const d = $("#drawer"), b = $("#menubtn"); if (!d || !b) return;
+  d.hidden = !MENU_UI.open; b.setAttribute("aria-expanded", String(MENU_UI.open));
+  if (!MENU_UI.open) return;
+  d.innerHTML = MENU_UI.items.map((it, i) => it.html ? `<div class="mitem info">${it.html}</div>`
+    : it.href ? `<a class="mitem" href="${esc(it.href)}">${esc(it.label)}${it.sub ? `<span>${esc(it.sub)}</span>` : ""}</a>`
+    : `<button class="mitem${it.danger ? " danger" : ""}" data-mi="${i}">${esc(it.label)}${it.sub ? `<span>${esc(it.sub)}</span>` : ""}</button>`).join("");
+}
+const menuOpen = (open) => { MENU_UI.open = open; drawMenu(); };
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#menubtn")) return menuOpen(!MENU_UI.open);
+  const mi = e.target.closest("[data-mi]");
+  if (mi) { const it = MENU_UI.items[+mi.dataset.mi]; if (it && it.run) it.run(); if (!(it && it.keep)) menuOpen(false); else drawMenu(); return; }
+  if (MENU_UI.open && !e.target.closest("#drawer")) menuOpen(false);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && MENU_UI.open) { menuOpen(false); $("#menubtn").focus(); } });
+
 // Sound + vibration for staff screens (browsers only allow sound after a tap).
 // The chime is a regular audio file (built here as a WAV), not Web Audio: iPhones mute Web Audio
 // when the silent switch is on, but they still play media files like this one.
@@ -79,7 +104,7 @@ function beep() {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && audio) keepAwake(); });
 const soundBar = () => audio
-  ? `<div class="soundbar"><span>Alerts on</span><button class="btn" data-act="testsound">Test sound</button></div>`
+  ? ""
   : `<div class="soundbar"><span><b>Sound is off.</b> Turn it on to hear new orders and keep the screen awake.</span><button class="btn primary" data-act="sound">Turn on sound</button></div>`;
 
 // Tell staff screens when something new arrives. Tables, orders and alerts load separately when a
@@ -678,7 +703,7 @@ function dinerScreen() {
         ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
         : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
-    if (!S.me) { $("#cart").hidden = true; return paint(joinScreen(g, shared)); }
+    if (!S.me) { $("#cart").hidden = true; setMenu([]); return paint(joinScreen(g, shared)); }
     const open = S.alerts.filter((a) => !a.done);
     const banners = open.filter((a) => a.ack).map((a) => `<div class="ontheway" role="status"><span>${esc(wname(a.ackBy) || "Your waiter")} ${a.type === "bill" ? "is bringing your bill" : "is on the way to your table"}</span><span class="note">${ago(a.ack)}</span></div>`).join("");
     const tabs = [["menu", "Menu"], ["orders", `${shared ? "Our order" : "Table order"}${S.lines.length ? ` (${S.lines.length})` : ""}`], ["bill", "Bill"]];
@@ -698,11 +723,21 @@ function dinerScreen() {
       body = Object.entries(g.people || {}).sort(([a], [b]) => (a === S.me.pid ? -1 : b === S.me.pid ? 1 : 0)).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
         return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
     } else body = billHtml(g, S.lines, false, S.me.pid) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
-    paint(`<section class="dsec">
+    // ☰: inviting friends, the account and help. Waiter, Call waiter and Bill please stay on the page.
+    setMenu([
+      { html: `<b>${esc(S.me.name)}</b> at Table ${esc(S.n)}${shared ? ` · ${esc(gname(g))}` : ""}<br>Friends join with code <b class="code num">${esc(g.code)}</b><div style="margin-top:8px"><button class="btn small primary" data-act="share">Share invite</button></div>` },
+      ...(S.user ? [{ label: "My account", sub: "Your visits and WhatsApp offers", href: BASE + "#account" }] : []),
+      { label: "How it works", sub: "Ordering, the bill and your waiter", run: () => { S.help = true; render(); window.scrollTo(0, 0); } },
+    ]);
+    const help = S.help ? `<div class="helpcard"><div class="trow"><b>How it works</b><button class="btn small ghost" data-act="helpclose">Close</button></div>
+      <ol><li>Tap a size or price to add it to your basket, then <b>Place order</b>. It goes straight to the kitchen or bar.</li>
+        <li>Everyone at the table orders on their own phone. See it all under <b>Table order</b>.</li>
+        <li><b>Call waiter</b> or <b>Bill please</b> alerts your waiter, and you'll see when they're on the way.</li>
+        <li><b>Bill</b> shows what each person owes. Pay your waiter as usual.</li>
+        <li>Friends can join with the code under ☰ → Share invite.</li></ol></div>` : "";
+    paint(`<section class="dsec">${help}
       <div class="tcard">
-        <div class="trow"><div class="who1"><b>Hi ${esc(S.me.name)}</b><span>${shared ? `${esc(gname(g))} · ` : ""}Friends join with <b class="code num">${esc(g.code)}</b></span></div>
-          <button class="btn small" data-act="share">Share</button></div>
-        <div class="trow wrow2"><div class="who2"><span>Waiter</span> <b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned"}</b></div>
+        <div class="trow"><div class="who2"><span>Waiter</span> <b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned"}</b></div>
           <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
             return `<button class="btn small${a ? "" : " primary"}" data-alert="${k}" ${a ? "disabled" : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
       </div>
@@ -819,6 +854,7 @@ function dinerScreen() {
       catch (err) { fail(err); }
       S.placing = false; render();
     }
+    else if (d.act === "helpclose") { S.help = false; render(); }
     else if (d.act === "share") {
       const link = `${BASE}?r=${RID}&c=${S.g.code}`, what = isShared(S.n) ? "group" : "table";
       const txt = `Join our ${what} at ${rname()}: ${link} (code ${S.g.code}, works until the ${what} closes)`;
@@ -868,6 +904,8 @@ function stationScreen(st) {
         <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
           ${bl.filter((l) => l.s !== "ready").length > 1 ? `<button class="btn primary" data-adv="${b}" data-to="ready">All ready</button>` : ""}</div></article>`;
     });
+    setMenu([{ html: `<b>${esc(STATIONS[st])} screen</b><br>${esc(rname())}. Orders for the ${esc(STATIONS[st].toLowerCase())} appear here.` },
+      ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : [])]);
     paint(soundBar() + (tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
   }
   document.addEventListener("click", async (e) => {
@@ -950,10 +988,18 @@ function waiterScreen(boss) {
         : `<p style="margin-top:0">Tap your name.</p><div class="row">${WAITERS.map((x) => `<button class="chip" data-pickme="${x.id}">${esc(x.name)}</button>`).join("")}</div>
           ${WAITERS.length ? "" : `<p class="note">No waiters yet. The owner adds them under Owner → Staff.</p>`}`}
         <p class="note">Your PIN comes from the owner or manager. Your shift ends when you tap End shift, or after 16 hours.</p></section>`);
-    } else {
-      pick = `<div class="shiftbar"><span><b>${esc(wname(S.me))}</b> · on shift since ${hhmm(S.since)}</span>
-        <button class="btn ${S.endArmed ? "danger" : "ghost"}" data-act="endshift">${S.endArmed ? "Tap again to end shift" : "End shift"}</button></div>`;
-    }
+    } else pick = "";
+    // ☰: the shift, sound test and other waiters' tables. Table cards and their buttons stay on the page.
+    const othersList = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
+    $("#sub").textContent = S.me && !boss ? `${wname(S.me)} · on shift` : "Waiter";
+    setMenu(!S.me ? [] : [
+      ...(!boss ? [{ html: `<b>${esc(wname(S.me))}</b><br>On shift since ${hhmm(S.since)}` },
+        { label: S.endArmed ? "Tap again to end your shift" : "End shift", sub: S.endArmed ? "" : "Your tables stay yours until handed over", danger: true, keep: !S.endArmed,
+          run: () => { if (!S.endArmed) { S.endArmed = true; setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); render(); }
+            else { const mine = S.groups.filter((g) => g.waiter === S.me).length; endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); } } }] : []),
+      ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : []),
+      { html: othersList.length ? `<b>Other waiters' tables</b><br>${othersList.map((g) => `${esc(name(g))}: ${esc(wname(g.waiter))}`).join("<br>")}` : "<b>Other waiters' tables</b><br>None right now" },
+    ]);
     const free = S.groups.filter((g) => !g.waiter && seated(g));
     const mine = S.groups.filter((g) => g.waiter === S.me);
     const others = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
@@ -981,7 +1027,6 @@ function waiterScreen(boss) {
     paint(`<section>${pick}${soundBar()}
       ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
       <div class="label">My tables</div>${mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
-      ${others.length ? `<div class="label">Other waiters</div><p class="note">${others.map((g) => `${esc(name(g))}: ${esc(wname(g.waiter))}`).join(" · ")}</p>` : ""}
     </section>`);
   }
   const find = (sid) => S.groups.find((g) => g.session === sid);
@@ -1051,7 +1096,22 @@ function waiterScreen(boss) {
 
 // ================= SETUP =================
 // The same tabs as the owner and manager pages, with Tables & QR selected; the others open that page.
-const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"], ["tables", "Tables & QR"]] : [["menu", "Menu"], ["staff", "Staff"], ["tables", "Tables & QR"]]);
+const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["menu", "Menu"], ["staff", "Staff"]]);
+// ☰ on the owner, manager and Tables & QR pages: things used now and then. extra = items for this page.
+function bossMenu(role, extra = []) {
+  const st = subState(ACCOUNT), page = role === "owner" ? "owner" : "manager";
+  setMenu([
+    { html: `<b>${esc(rname())}</b><br>${role === "owner" ? "Owner" : "Manager"}${auth.currentUser && auth.currentUser.email ? ` · ${esc(auth.currentUser.email)}` : ""}` },
+    { label: "Tables & QR codes", sub: "Add tables, print cards, staff codes", href: `${BASE}?r=${RID}#setup` },
+    ...(location.hash === "#setup" ? [{ label: role === "owner" ? "Owner page" : "Manager page", sub: "Dashboard, menu, staff", href: `${BASE}?r=${RID}#${page}` }] : []),
+    ...(role === "owner" && ACCOUNT ? [{ html: `<b>Subscription</b><br>${ACCOUNT.status === "active" ? `Paid until ${day(ACCOUNT.paidUntil)}${st.kind === "grace" ? " · overdue" : ""}` : "Not active"}. ${price()}.` }] : []),
+    { label: "My restaurants", sub: "Switch restaurant", href: `${BASE}#${page}` },
+    { label: "Demo stage", sub: "Several phones on one iPad or laptop", href: `${BASE}demo.html?r=${RID}` },
+    ...extra,
+    { html: `<b>Help from ${esc(COMPANY.name)}</b><br>${contactLine()}` },
+    { label: "Sign out", danger: true, run: async () => { try { await signOutUser(); } catch {} location.reload(); } },
+  ]);
+}
 const tabBar = (tabs, cur) => `<div class="seg tabs" role="tablist" style="max-width:640px">${tabs.map(([k, l]) => `<button aria-pressed="${cur === k}" data-otab="${k}">${l}</button>`).join("")}</div>`;
 function setupScreen(role) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = role === "owner" ? "Owner" : "Manager"; document.title = "Tables & QR · " + rname();
@@ -1080,7 +1140,9 @@ function setupScreen(role) {
       <button class="chip sharetog" data-share="${n}" aria-pressed="${isShared(n)}">${isShared(n) ? "Shared table" : "Normal table"}</button>
       ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : `<span class="note">Loading…</span>`}
       <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
-    paint(subBanner() + tabBar(ownerTabs(role), "tables") + `<section><div class="label">Tables and QR codes · diners scan these</div>
+    bossMenu(role, [{ label: armed ? "Tap again to erase all orders" : "Reset demo", sub: armed ? "Orders, alerts and history go; menu and staff stay" : "Clear orders and history before a demo", danger: true, keep: !armed,
+      run: () => { if (!armed) { armed = true; render(); setTimeout(() => { armed = false; render(); }, 4000); } else resetDemo(); } }]);
+    paint(subBanner() + tabBar(ownerTabs(role), "tables") + `<section><h2 class="ptitle">Tables and QR codes</h2><p class="note" style="margin-top:0">Diners scan these.</p>
       <div class="row"><button class="btn" data-tables="-1" aria-label="One table fewer">−</button><b class="num">${TABLES} tables</b><button class="btn" data-tables="1" aria-label="One more table">+</button>
         <button class="btn primary" data-act="print" ${Object.keys(keys).length < TABLES ? "disabled" : ""}>Print table cards</button></div>
       <div class="qrs">${Array.from({ length: TABLES }, (_, i) => tableCard(i + 1)).join("")}</div>
@@ -1094,10 +1156,7 @@ function setupScreen(role) {
       <button class="btn" data-act="rotstaff">${rotStaff ? "Tap again: every staff phone must scan again" : "Make new staff codes"}</button>
       <div class="label">Owner and manager pages</div>
       <div class="links">${link(BASE + "demo.html?r=" + RID, "Demo stage: several phones on one iPad or laptop")}${link(BASE + "?r=" + RID + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "?r=" + RID + "#manager", "Manager (menu and staff)")}</div>
-      <p class="note">These open with the owner's or a manager's Google sign-in. The owner adds managers under Owner → Staff.</p>
-      <div class="label">Demo</div>
-      <p>Clear all orders, alerts, tables and dashboard history so the next demo starts fresh. The menu and staff list stay.</p>
-      <button class="btn danger" data-act="reset">${armed ? "Tap again to erase everything" : "Reset demo"}</button></section>`);
+      <p class="note">These open with the owner's or a manager's Google sign-in. The owner adds managers under Owner → Staff.</p></section>`);
     const draw = () => { for (let i = 1; i <= TABLES; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length && keys[i]) new QRCode(el, { text: tableLink(i, keys[i]), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }
       screens.forEach(([k]) => { const el = document.getElementById("sqr-" + k); if (el && !el.childNodes.length && staffTok) new QRCode(el, { text: staffLink(k), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }); };
     if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true });
@@ -1135,9 +1194,10 @@ function setupScreen(role) {
     const r = e.target.closest("button[data-act=rotate]");
     if (r && unlocked) { if (!rot) { rot = true; render(); setTimeout(() => { rot = false; render(); }, 4000); return; }
       rot = false; keys = {}; render(); await loadKeys(true); toast("New QR codes made. Reprint them for the tables."); return; }
-    const b = e.target.closest("button"); if (!b || b.dataset.act !== "reset" || !unlocked) return;
-    if (!armed) { armed = true; render(); setTimeout(() => { armed = false; render(); }, 4000); return; }
-    b.disabled = true; b.textContent = "Erasing…";
+  });
+  // Reset demo (from ☰): clears orders, alerts, tables, groups, history, codes and passes. Menu and staff stay.
+  async function resetDemo() {
+    armed = false; toast("Erasing…");
     try {
       for (const col of [rcol("lines"), rcol("alerts"), rcol("tables"), rcol("groups"), rcol("sessions"), rcol("codes"), rcol("passes")]) {
         const s = await getDocs(col); let batch = writeBatch(db), n = 0;
@@ -1148,7 +1208,7 @@ function setupScreen(role) {
       toast("Demo reset");
     } catch (err) { fail(err); }
     armed = false; render();
-  });
+  }
   render();
   loadKeys(false); loadStaff(false);
   cfgListeners.add(() => render());
@@ -1186,6 +1246,7 @@ function ownerScreen(role) {
   const arm = (key) => { S.armed = key; render(); setTimeout(() => { if (S.armed === key) { S.armed = null; render(); } }, 4000); };
 
   function render() {
+    bossMenu(owner ? "owner" : "manager");
     if (!TABS.some(([k]) => k === S.tab)) S.tab = TABS[0][0];
     paint(subBanner() + tabBar(TABS, S.tab) + `
       ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
