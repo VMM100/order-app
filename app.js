@@ -80,12 +80,14 @@ function beep() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && audio) keepAwake(); });
 const soundBar = () => audio
   ? `<div class="soundbar"><span>Alerts on</span><button class="btn" data-act="testsound">Test sound</button></div>`
-  : `<div class="soundbar"><span>Tap to turn on sound alerts and keep the screen awake</span><button class="btn primary" data-act="sound">Turn on alerts</button></div>`;
+  : `<div class="soundbar"><span><b>Sound is off.</b> Turn it on to hear new orders and keep the screen awake.</span><button class="btn primary" data-act="sound">Turn on sound</button></div>`;
 
-// Tell staff screens when something new arrives (skips the first load).
+// Tell staff screens when something new arrives. Tables, orders and alerts load separately when a
+// screen opens, so everything that arrives in its first few seconds counts as already there.
 function watcher() {
-  const seen = new Set(); let primed = false;
-  return (ids) => { let fresh = false; ids.forEach((id) => { if (!seen.has(id)) { seen.add(id); if (primed) fresh = true; } }); primed = true; if (fresh) beep(); };
+  const seen = new Set(), born = Date.now();
+  return (ids) => { let fresh = false; const settled = Date.now() - born > 4000;
+    ids.forEach((id) => { if (!seen.has(id)) { seen.add(id); if (settled) fresh = true; } }); if (fresh) beep(); };
 }
 
 // ---------- data ----------
@@ -169,11 +171,15 @@ const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - 
 // Nudge a colour toward black or white until it reads as text on the given background.
 const readable = (c, bg, toward) => { let out = c; for (let t = 0.1; contrast(out, bg) < 4.5 && t <= 1; t += 0.1) out = mix(c, toward, t); return out; };
 const inkOn = (c) => (contrast(c, "#ffffff") >= contrast(c, "#1b1408") ? "#ffffff" : "#1b1408");
+// A button colour whose text (white or near-black) is readable: deepen or lighten it until it is.
+const buttonColour = (c) => { const ink = inkOn(c), toward = ink === "#ffffff" ? "#000000" : "#ffffff"; let out = c;
+  for (let t = 0.05; contrast(out, ink) < 4.5 && t <= 1; t += 0.05) out = mix(c, toward, t); return out; };
 function brandCss(c1, c2) {
   if (!c1 || !c2) return "";
   const L = { bg: "#f6f4ee", surface: "#ffffff" }, D = { bg: "#161812", surface: "#20231b" };
-  const a1 = mix(c1, "#ffffff", lum(c1) < 0.04 ? 0.35 : 0.15), a2 = readable(c2, D.surface, "#ffffff");
-  const light = `--accent:${c1};--accent-ink:${inkOn(c1)};--accent-soft:${mix(c1, L.surface, 0.84)};--hop:${readable(c2, L.surface, "#000000")};--hop-soft:${mix(c2, L.surface, 0.86)}`;
+  const a1 = buttonColour(mix(c1, "#ffffff", lum(c1) < 0.04 ? 0.35 : 0.15)), a2 = readable(c2, D.surface, "#ffffff");
+  const b1 = buttonColour(c1);
+  const light = `--accent:${b1};--accent-ink:${inkOn(b1)};--accent-soft:${mix(c1, L.surface, 0.84)};--hop:${readable(c2, L.surface, "#000000")};--hop-soft:${mix(c2, L.surface, 0.86)}`;
   const dark = `--accent:${a1};--accent-ink:${inkOn(a1)};--accent-soft:${mix(c1, D.bg, 0.72)};--hop:${a2};--hop-soft:${mix(c2, D.bg, 0.75)}`;
   return `:root{${light}}@media (prefers-color-scheme:dark){:root{${dark}}}`;
 }
@@ -301,12 +307,15 @@ function shares(t, lines) {
     items: lines.filter((l) => l.pid === pid),
     amt: t.split === "equal" ? Math.ceil(total / Math.max(ids.length, 1) / 100) * 100 : lines.filter((l) => l.pid === pid).reduce((a, l) => a + l.pr, 0) }));
 }
-function billHtml(t, lines, staff) {
+function billHtml(t, lines, staff, me) {
   const total = tableTotal(lines);
+  const all = shares(t, lines), mine = me && all.find((s) => s.pid === me);
+  const rows = mine ? [mine, ...all.filter((s) => s !== mine)] : all;
   return `<div class="seg" role="group" aria-label="Split method">
     <button aria-pressed="${t.split !== "equal"}" data-split="order" data-g="${t.session}">By what they ordered</button>
     <button aria-pressed="${t.split === "equal"}" data-split="equal" data-g="${t.session}">Equally</button></div>
-   ${shares(t, lines).map((s) => `<div class="billrow"><div style="min-width:0"><div class="${s.paid ? "paid" : ""}" style="font-weight:600">${esc(s.name)}</div>
+   ${mine ? `<div class="myshare"><span>Your share${mine.paid ? " · paid" : ""}</span><b class="num ${mine.paid ? "paid" : ""}">TSh ${fmt(mine.amt)}</b></div>` : ""}
+   ${rows.map((s) => `<div class="billrow${s === mine ? " me" : ""}"><div style="min-width:0"><div class="${s.paid ? "paid" : ""}" style="font-weight:600">${esc(s.name)}${s === mine ? " (you)" : ""}</div>
      ${t.split !== "equal" ? `<div class="note" style="margin:0">${s.items.map((l) => esc(l.n)).join(", ") || "Nothing ordered"}</div>` : ""}</div>
      <div class="row" style="flex-wrap:nowrap"><span class="amt num ${s.paid ? "paid" : ""}">${fmt(s.amt)}</span>
      ${staff ? `<button class="btn ${s.paid ? "" : "primary"}" data-paid="${s.pid}" data-g="${t.session}">${s.paid ? "Undo" : "Mark paid"}</button>` : s.paid ? `<span class="pill s-ready">Paid</span>` : ""}</div></div>`).join("")}
@@ -600,7 +609,7 @@ function dinerScreen() {
   // Joining: signed-in diners join in one tap; others choose phone, Google, or just a first name.
   function joinScreen(g, shared) {
     const names = Object.values(g.people || {}).map((p) => esc(p.name)), unit = shared ? "group" : "table";
-    const bar = `<div class="tablebar"><b>Table ${esc(S.n)}</b><span class="note" style="margin:0">${names.length ? `With ${names.join(", ")}` : shared ? "Starting a new group" : "You're the first one here"}</span></div>`;
+    const bar = `<div class="tablebar slim"><span>${names.length ? `With <b>${names.join(", ")}</b>` : shared ? "Starting a new group" : "You're the first one here"}</span></div>`;
     const err = S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : "";
     const back = `<button class="btn ghost" data-act="authback">Back</button>`;
     if (S.step === "phone") return `<section>${bar}<div class="label">Your phone number</div>
@@ -622,15 +631,15 @@ function dinerScreen() {
     if (S.user && S.profile && S.profile.name) return `<section>${bar}
       <button class="btn primary big" data-act="joinme" style="margin-top:16px">Join as ${esc(S.profile.name)}</button>
       <p class="note">Not ${esc(S.profile.name)}? <button class="linkbtn" data-act="signout">Sign out</button></p>${err}</section>`;
-    return `<section>${bar}<div class="label">Join the ${unit}</div>
-      <p style="margin-top:0">Sign in to keep your receipts and order your usual in one tap. Or just use your first name.</p>
-      <div class="grid"><button class="btn primary big" data-act="auth-phone">Continue with phone number</button>
-        <button class="btn big" data-act="auth-google" ${S.busy ? "disabled" : ""}>Continue with Google</button></div>${err}
-      <div class="orline"><span>or</span></div>
-      <form id="joinform" class="grid"><label class="note" for="namein" style="margin:0">Just your first name, no account</label>
-        <input class="field" id="namein" maxlength="16" placeholder="First name" autocomplete="given-name" value="${esc(S.name)}">
-        <button class="btn big">Join ${unit}</button></form>
-      <p class="note">Signing in is optional. Ordering and splitting the bill work the same either way.</p></section>`;
+    // Most people just type their name, so that comes first; signing in is the optional extra.
+    return `<section>${bar}<h2 class="jtitle">Join the ${unit}</h2>
+      <form id="joinform" class="grid"><label class="flabel" for="namein">Your first name <span>Just your first name, no account needed</span></label>
+        <input class="field" id="namein" maxlength="16" placeholder="e.g. Amani" autocomplete="given-name" value="${esc(S.name)}">
+        <button class="btn primary big">Join ${unit}</button></form>
+      <div class="orline"><span>or sign in</span></div>
+      <div class="grid two"><button class="btn big" data-act="auth-phone">Phone number</button>
+        <button class="btn big" data-act="auth-google" ${S.busy ? "disabled" : ""}>Google</button></div>${err}
+      <p class="note">Signing in is optional: it keeps your receipts and lets you order your usual in one tap. Ordering and splitting the bill work the same either way.</p></section>`;
   }
   // Welcome card for signed-in diners: visit number here, their usual, and a link to their account.
   function welcomeCard() {
@@ -670,19 +679,24 @@ function dinerScreen() {
       // the header and highlights whichever section is on screen (see spy() below).
       body = `<div class="cats" id="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${esc(m.c)}</button>`).join("")}</div>
        ${MENU.map((cat, ci) => `<div class="msec" id="sec-${ci}" data-sec="${ci}"><h2 class="sech">${esc(cat.c)}</h2>
-       ${cat.items.map((it, ii) => { const gp = !it.img && genericPhoto(it.n); return `<div class="item${it.out ? " out" : ""}${it.img || gp ? " withph" : ""}">${it.img ? `<div class="ph"><img data-photo="${esc(it.img)}" alt="${esc(it.n)}" loading="lazy"></div>` : gp ? `<div class="ph loaded"><img src="${gp}" alt="${esc(it.n)}" loading="lazy"></div>` : ""}<h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}
-       ${it.out ? "" : `<div class="vars">${it.v.map(([l, p], vi) => `<button class="var" data-add="${ci}.${ii}.${vi}">${l ? esc(l) + " " : "Add "}<span class="num">TSh ${fmt(p)}</span></button>`).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
+       ${cat.items.map((it, ii) => { const gp = !it.img && genericPhoto(it.n), inCart = S.cart.filter((c) => c.n === it.n).length;
+         return `<div class="item${it.out ? " out" : ""}${it.img || gp ? " withph" : ""}">
+         <div class="itxt"><h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}${inCart ? ` <span class="incart num">${inCart} in basket</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}</div>
+         ${it.img ? `<div class="ph"><img data-photo="${esc(it.img)}" alt="${esc(it.n)}" loading="lazy"></div>` : gp ? `<div class="ph loaded"><img src="${gp}" alt="${esc(it.n)}" loading="lazy"></div>` : ""}
+         ${it.out ? "" : `<div class="vars${it.v.length === 1 ? " one" : ""}">${it.v.map(([l, p], vi) => `<button class="var" data-add="${ci}.${ii}.${vi}" aria-label="Add ${esc(it.n)}${l ? " " + esc(l) : ""}, TSh ${fmt(p)}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num">${fmt(p)}</span></button>`).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
     } else if (S.tab === "orders") {
-      body = Object.entries(g.people || {}).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
+      body = Object.entries(g.people || {}).sort(([a], [b]) => (a === S.me.pid ? -1 : b === S.me.pid ? 1 : 0)).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
         return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
-    } else body = billHtml(g, S.lines, false) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
-    paint(`<section>
-      <div class="tablebar"><div><b>Table ${esc(S.n)}</b><div class="note" style="margin:2px 0 0">${shared ? `${esc(gname(g))} · ` : ""}Hi ${esc(S.me.name)} · friends join with code</div></div>
-       <div class="row"><span class="code num">${esc(g.code)}</span><button class="btn" data-act="share">Share</button></div></div>
+    } else body = billHtml(g, S.lines, false, S.me.pid) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
+    paint(`<section class="dsec">
+      <div class="tcard">
+        <div class="trow"><div class="who1"><b>Hi ${esc(S.me.name)}</b><span>${shared ? `${esc(gname(g))} · ` : ""}Friends join with <b class="code num">${esc(g.code)}</b></span></div>
+          <button class="btn small" data-act="share">Share</button></div>
+        <div class="trow wrow2"><div class="who2"><span>Waiter</span> <b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned"}</b></div>
+          <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
+            return `<button class="btn small${a ? "" : " primary"}" data-alert="${k}" ${a ? "disabled" : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
+      </div>
       ${banners}${welcomeCard()}
-      <div class="waitbar"><div><div class="note" style="margin:0">Your waiter</div><b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned…"}</b></div>
-       <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
-         return `<button class="btn${a ? "" : " primary"}" data-alert="${k}" ${a ? "disabled" : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
       <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
       ${body}</section>`);
     renderCart();
@@ -722,13 +736,20 @@ function dinerScreen() {
   }
   function renderCart() {
     setBarTop(); keepBar();
-    const c = $("#cart"); if (!S.me || S.tab !== "menu" || !S.cart.length) { c.hidden = true; c.innerHTML = ""; return; }
-    const tot = S.cart.reduce((a, l) => a + l.pr, 0); c.hidden = false;
+    const c = $("#cart"); if (!S.me || S.tab !== "menu" || !S.cart.length) { c.hidden = true; c.innerHTML = ""; document.body.classList.remove("hascart"); return; }
+    const tot = S.cart.reduce((a, l) => a + l.pr, 0), n = S.cart.length; c.hidden = false;
     const a = document.activeElement, focused = a && a.id === "note";
-    c.innerHTML = `<div class="in">${S.cart.map((l, i) => `<div class="cline"><span>${label(l)}</span><span class="num">${fmt(l.pr)} <button data-rm="${i}" aria-label="Remove">Remove</button></span></div>`).join("")}
-      <input id="note" placeholder="Note for the kitchen or bar (e.g. no onions)" value="${esc(S.note)}">
-      <button class="cartbtn" data-act="place" ${S.placing ? "disabled" : ""}><span>${S.placing ? "Sending…" : "Place order"}</span><span class="num">TSh ${fmt(tot)}</span></button></div>`;
-    if (focused) $("#note").focus();
+    // The same item and size twice shows once, with a count and − / +.
+    const groups = []; S.cart.forEach((l) => { const k = l.n + "|" + (l.v || ""); const g = groups.find((x) => x.k === k); if (g) g.q++; else groups.push({ k, l, q: 1 }); });
+    c.innerHTML = `<div class="in">
+      ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}</span>
+          <span class="qty"><button class="qb" data-dec="${esc(g.k)}" aria-label="One fewer ${esc(g.l.n)}">−</button><b class="num">${g.q}</b><button class="qb" data-inc="${esc(g.k)}" aria-label="One more ${esc(g.l.n)}">+</button></span>
+          <span class="num cp">${fmt(g.l.pr * g.q)}</span></div>`).join("")}
+        <input id="note" placeholder="Note for the kitchen or bar (e.g. no onions)" value="${esc(S.note)}"></div>` : ""}
+      <div class="cbar"><button class="cview" data-act="cart" aria-expanded="${!!S.cartOpen}"><b class="num">${n}</b> item${n > 1 ? "s" : ""}<span>${S.cartOpen ? "Hide" : "View"}</span></button>
+        <button class="cartbtn" data-act="place" ${S.placing ? "disabled" : ""}><span>${S.placing ? "Sending…" : "Place order"}</span><span class="num">TSh ${fmt(tot)}</span></button></div></div>`;
+    document.body.classList.toggle("hascart", true);
+    if (focused && $("#note")) $("#note").focus();
   }
 
   document.addEventListener("submit", async (e) => {
@@ -767,8 +788,11 @@ function dinerScreen() {
     if (d.tab) { S.tab = d.tab; render(); window.scrollTo(0, 0); }
     else if (d.cat) { S.cat = +d.cat; markCat(); jumpTo(S.cat); }
     else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c]?.items[i]; if (!it || it.out || !it.v[v]) return render(); const [l, p] = it.v[v];
-      S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}`); renderCart(); }
-    else if (d.rm) { S.cart.splice(+d.rm, 1); renderCart(); }
+      S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}${l ? " · " + l : ""}`); render(); }
+    else if (d.rm) { S.cart.splice(+d.rm, 1); render(); }
+    else if (d.inc) { const x = S.cart.find((l) => l.n + "|" + (l.v || "") === d.inc); if (x) S.cart.push({ ...x }); render(); }
+    else if (d.dec) { const i = S.cart.map((l) => l.n + "|" + (l.v || "")).lastIndexOf(d.dec); if (i >= 0) S.cart.splice(i, 1); if (!S.cart.length) S.cartOpen = false; render(); }
+    else if (d.act === "cart") { S.cartOpen = !S.cartOpen; renderCart(); }
     else if (d.split) setSplit(S.sid, d.split);
     else if (d.alert) {
       try { await addDoc(rcol("alerts"), { table: Number(S.n), session: S.sid, type: d.alert, pid: S.me.pid, pname: S.me.name, t: Date.now(), ack: null, ackBy: null, done: false });
@@ -779,7 +803,7 @@ function dinerScreen() {
       const batch = writeBatch(db), bid = uid("b"), now = Date.now();
       S.cart.forEach((l) => batch.set(doc(rcol("lines")), { table: Number(S.n), session: S.sid, batch: bid, pid: S.me.pid, pname: S.me.name,
         n: l.n, v: l.v, pr: l.pr, st: l.st, s: "new", t: now, note: S.note.trim() || null }));
-      try { await batch.commit(); const sts = [...new Set(S.cart.map((l) => STATIONS[l.st]))]; S.cart = []; S.note = ""; toast("Sent to " + sts.join(" and ")); }
+      try { await batch.commit(); const sts = [...new Set(S.cart.map((l) => STATIONS[l.st]))]; S.cart = []; S.note = ""; S.cartOpen = false; toast("Sent to " + sts.join(" and ")); }
       catch (err) { fail(err); }
       S.placing = false; render();
     }
@@ -822,8 +846,11 @@ function stationScreen(st) {
     const tix = batches.map((b) => {
       const bl = S.lines.filter((l) => l.batch === b), s = bl.some((l) => l.s === "new") ? "new" : bl.some((l) => l.s === "preparing") ? "preparing" : "ready";
       const note = bl.find((l) => l.note), g = S.groups[bl[0].session], w = g && g.waiter;
-      return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="note" style="margin:0">${esc(bl[0].pname)} · ${ago(bl[0].t)}</span></header>
-        <div class="note" style="margin:2px 0 0">Waiter: ${w ? esc(wname(w)) : "not assigned yet"}</div>
+      // How long this order has waited, large enough to read across the kitchen; amber, then red when late.
+      const mins = Math.max(0, Math.floor((Date.now() - bl[0].t) / 60000)), lim = st === "bar" ? [5, 10] : [15, 25];
+      const late = s === "ready" ? "" : mins >= lim[1] ? " late" : mins >= lim[0] ? " warn" : "";
+      return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="age num${late}" title="Waiting ${mins} min">${mins}<small> min</small></span></header>
+        <div class="note" style="margin:2px 0 0">${esc(bl[0].pname)} · waiter ${w ? esc(wname(w)) : "not assigned yet"}</div>
         <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}</span>${l.s === "ready"
           ? `<span class="pill s-ready">Ready</span>` : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">Ready</button>`}</li>`).join("")}</ul>${note ? `<div class="nt">${esc(note.note)}</div>` : ""}
         <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
@@ -918,22 +945,26 @@ function waiterScreen(boss) {
     const free = S.groups.filter((g) => !g.waiter && seated(g));
     const mine = S.groups.filter((g) => g.waiter === S.me);
     const others = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
-    const alertCard = (a, g) => `<article class="ticket alert"><header><b>${ALERT[a.type]}</b><span class="note" style="margin:0">${ago(a.t)}</span></header>
-      <p class="note" style="margin:4px 0 0">${esc(name(g))} · from ${esc(a.pname)}</p>
-      <div class="acts">${a.ack ? `<span class="pill s-preparing">Diner notified</span><button class="btn primary" data-done="${a.id}">${a.type === "bill" ? "Bill delivered" : "Done"}</button>`
-        : `<button class="btn primary" data-ack="${a.id}">On my way</button>`}${a.type === "bill" && g.waiter === S.me ? `<button class="btn" data-open="${g.session}">Open bill</button>` : ""}</div></article>`;
+    // A guest's call or bill request sits at the top of their table's card.
+    const alertRow = (a, g) => `<div class="arow"><div><b>${ALERT[a.type]}</b> <span class="note" style="margin:0">from ${esc(a.pname)} · ${ago(a.t)}</span></div>
+      <div class="row">${a.ack ? `<span class="pill s-preparing">On the way</span><button class="btn primary" data-done="${a.id}">${a.type === "bill" ? "Bill delivered" : "Done"}</button>`
+        : `<button class="btn primary" data-ack="${a.id}">On my way</button>`}${a.type === "bill" && g.waiter === S.me && S.open !== g.session ? `<button class="btn" data-open="${g.session}">Open bill</button>` : ""}</div></div>`;
+    const busy = (g) => S.alerts.filter(live(g)).some((a) => !a.ack) * 2 + S.lines.some((l) => live(g)(l) && l.s === "ready");
+    free.sort((a, b) => busy(b) - busy(a)); mine.sort((a, b) => busy(b) - busy(a));
     const freeCards = free.map((g) => { const al = S.alerts.filter(live(g));
-      return `<article class="ticket"><header><b>${esc(name(g))}</b><span class="pill s-new">No waiter</span></header>
+      return `<article class="ticket${al.some((a) => !a.ack) ? " alert" : ""}"><header><b>${esc(name(g))}</b><span class="pill s-new">No waiter</span></header>
+       ${al.map((a) => alertRow(a, g)).join("")}
        <p class="note" style="margin:4px 0 0">${Object.values(g.people).map((p) => esc(p.name)).join(", ")} · opened ${ago(g.opened)}</p>
-       <div class="acts"><button class="btn primary" data-accept="${g.session}">Accept</button></div></article>` + al.map((a) => alertCard(a, g)).join(""); }).join("");
+       <div class="acts"><button class="btn primary" data-accept="${g.session}">Accept</button></div></article>`; }).join("");
     const mineCards = mine.map((g) => {
       const al = S.alerts.filter(live(g)), ready = S.lines.filter((l) => live(g)(l) && l.s === "ready"), open = S.open === g.session, unit = isShared(g.table) ? "group" : "table";
-      return `<article class="ticket preparing"><header><b>${esc(name(g))}</b><span class="note" style="margin:0">code ${esc(g.code)}</span></header>
+      return `<article class="ticket${al.some((a) => !a.ack) ? " alert" : ""}"><header><b>${esc(name(g))}</b><span class="note" style="margin:0">code ${esc(g.code)}</span></header>
+        ${al.map((a) => alertRow(a, g)).join("")}
         <p class="note" style="margin:4px 0 0">${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "No guests yet"}</p>
         ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(l.pname)} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
         <div class="acts"><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${g.session}">Hand over</button>
           ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>
-        ${open ? billHtml(g, billLines, true) : ""}</article>` + al.map((a) => alertCard(a, g)).join("");
+        ${open ? billHtml(g, billLines, true) : ""}</article>`;
     }).join("");
     paint(`<section>${pick}${soundBar()}
       ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
@@ -1009,7 +1040,7 @@ function waiterScreen(boss) {
 // ================= SETUP =================
 // The same tabs as the owner and manager pages, with Tables & QR selected; the others open that page.
 const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"], ["tables", "Tables & QR"]] : [["menu", "Menu"], ["staff", "Staff"], ["tables", "Tables & QR"]]);
-const tabBar = (tabs, cur) => `<div class="seg" role="tablist" style="max-width:640px">${tabs.map(([k, l]) => `<button aria-pressed="${cur === k}" data-otab="${k}">${l}</button>`).join("")}</div>`;
+const tabBar = (tabs, cur) => `<div class="seg tabs" role="tablist" style="max-width:640px">${tabs.map(([k, l]) => `<button aria-pressed="${cur === k}" data-otab="${k}">${l}</button>`).join("")}</div>`;
 function setupScreen(role) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = role === "owner" ? "Owner" : "Manager"; document.title = "Tables & QR · " + rname();
   const link = (h, l) => `<div><div class="note" style="margin:0">${l}</div><a href="${h}">${esc(h)}</a></div>`;
@@ -1268,8 +1299,8 @@ function ownerScreen(role) {
   }
   function dashTab() {
     const periods = [["today", "Today"], ["7", "7 days"], ["30", "30 days"], ["all", "All time"]];
-    const head = `<div class="row" style="margin-top:14px;justify-content:space-between"><div class="row">${periods.map(([k, l]) => `<button class="chip" aria-pressed="${S.period === k}" data-period="${k}">${l}</button>`).join("")}</div>
-      <button class="btn ghost" data-act="reload">${S.loading ? "Loading…" : "Refresh"}</button></div>`;
+    const head = `<div class="periods">${periods.map(([k, l]) => `<button class="chip" aria-pressed="${S.period === k}" data-period="${k}">${l}</button>`).join("")}
+      <button class="btn ghost small hide-phone" data-act="reload">${S.loading ? "Loading…" : "Refresh"}</button></div>`;
     if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : `<p class="empty">Loading numbers…</p>`); }
     const m = S.m;
     const sampleNote = m.sample ? `<div class="soundbar" style="margin-top:12px"><span>Includes <b>sample data</b> for demonstration, not real sales.</span><button class="btn" data-act="unsample">${S.busy === "unsample" ? "Removing…" : "Remove sample data"}</button></div>` : "";
@@ -1281,23 +1312,23 @@ function ownerScreen(role) {
     const hourRows = m.byHour.filter((h) => h.h >= h0 && h.h <= h1);
     const peak = hours.length ? hours.reduce((a, b) => (b.revenue > a.revenue ? b : a)) : null;
     return head + sampleNote + `<section>
-      <div class="kpis">${kpi("TSh " + fmt(m.revenue), "Sales", `${fmt(m.items)} items · ${fmt(m.orders)} orders`)}${kpi(fmt(m.tables), "Tables", `${fmt(m.guests)} guests`)}
+      <div class="kpis">${kpi(fmt(m.revenue), "Sales · TSh", `${fmt(m.items)} items · ${fmt(m.orders)} orders`)}${kpi(fmt(m.tables), "Tables", `${fmt(m.guests)} guests`)}
         ${kpi(m.avgBill ? fmt(Math.round(m.avgBill / 100) * 100) : "–", "Average bill", "per closed table")}${kpi(m.avgPerGuest ? fmt(Math.round(m.avgPerGuest / 100) * 100) : "–", "Spend per guest", "")}
         ${kpi(dur(m.toTable), "Order to table", "typical item")}${kpi(dur(m.tableTime), "Table stay", "typical visit")}</div>
 
       <div class="label">Speed</div>
-      <div class="tablewrap"><table><thead><tr><th>Step</th><th>Typical</th><th>Slowest 10%</th><th>Count</th></tr></thead><tbody>
-        ${STN.map(([k, v]) => `<tr><td>${v} prep (order → ready)</td><td class="num">${dur(m.prep[k].median)}</td><td class="num">${dur(m.prep[k].p90)}</td><td class="num">${fmt(m.prep[k].items)}</td></tr>`).join("")}
-        <tr><td>Waiter pickup (ready → served)</td><td class="num">${dur(m.serve)}</td><td></td><td></td></tr>
-        <tr><td>Order to table, all items</td><td class="num">${dur(m.toTable)}</td><td class="num">${dur(m.toTableP90)}</td><td></td></tr>
-        <tr><td>Response to "Call waiter"</td><td class="num">${dur(m.callResp)}</td><td></td><td></td></tr>
-        <tr><td>Response to "Bill please"</td><td class="num">${dur(m.billResp)}</td><td></td><td></td></tr>
+      <div class="tablewrap"><table><thead><tr><th>Step</th><th>Typical</th><th>Slowest 10%</th><th class="opt">Count</th></tr></thead><tbody>
+        ${STN.map(([k, v]) => `<tr><td>${v} prep (order → ready)</td><td class="num">${dur(m.prep[k].median)}</td><td class="num">${dur(m.prep[k].p90)}</td><td class="num opt">${fmt(m.prep[k].items)}</td></tr>`).join("")}
+        <tr><td>Waiter pickup (ready → served)</td><td class="num">${dur(m.serve)}</td><td></td><td class="opt"></td></tr>
+        <tr><td>Order to table, all items</td><td class="num">${dur(m.toTable)}</td><td class="num">${dur(m.toTableP90)}</td><td class="opt"></td></tr>
+        <tr><td>Response to "Call waiter"</td><td class="num">${dur(m.callResp)}</td><td></td><td class="opt"></td></tr>
+        <tr><td>Response to "Bill please"</td><td class="num">${dur(m.billResp)}</td><td></td><td class="opt"></td></tr>
       </tbody></table></div>
       ${m.unanswered ? `<p class="note">${m.unanswered} alert${m.unanswered > 1 ? "s" : ""} never got an "On my way".</p>` : ""}
 
       <div class="label">Waiters</div>
-      ${m.waiters.length ? `<div class="tablewrap"><table><thead><tr><th>Waiter</th><th>Tables</th><th>Sales (TSh)</th><th>Call response</th><th>Bill response</th><th>Pickup</th></tr></thead><tbody>
-        ${m.waiters.map((w) => `<tr><td>${esc(w.name)}</td><td class="num">${fmt(w.tables)}</td><td class="num">${fmt(w.sales)}</td><td class="num">${dur(w.callResp)}</td><td class="num">${dur(w.billResp)}</td><td class="num">${dur(w.serve)}</td></tr>`).join("")}
+      ${m.waiters.length ? `<div class="tablewrap"><table><thead><tr><th>Waiter</th><th>Tables</th><th>Sales (TSh)</th><th>Call response</th><th class="opt">Bill response</th><th class="opt">Pickup</th></tr></thead><tbody>
+        ${m.waiters.map((w) => `<tr><td>${esc(w.name)}</td><td class="num">${fmt(w.tables)}</td><td class="num">${fmt(w.sales)}</td><td class="num">${dur(w.callResp)}</td><td class="num opt">${dur(w.billResp)}</td><td class="num opt">${dur(w.serve)}</td></tr>`).join("")}
       </tbody></table></div><p class="note">Times are typical (median). Pickup is how long finished items wait before the waiter serves them.</p>` : `<p class="note">No waiter activity yet.</p>`}
 
       <div class="label">Sales by hour${peak ? ` · busiest ${String(peak.h).padStart(2, "0")}:00` : ""}</div>
@@ -1305,10 +1336,10 @@ function ownerScreen(role) {
       ${m.byDay.length > 1 ? `<div class="label">Sales by day</div>${bars(m.byDay, "revenue", (r) => { const d = new Date(r.day + "T12:00"); return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + d.getDate(); })}` : ""}
 
       <div class="label">Best sellers</div>
-      <div class="tablewrap"><table><thead><tr><th>Item</th><th style="text-align:left">Station</th><th>Sold</th><th>Sales (TSh)</th></tr></thead><tbody>
-        ${m.best.slice(0, 10).map((b) => `<tr><td>${esc(b.n)}</td><td>${esc(STATIONS[b.st] || "")}</td><td class="num">${fmt(b.qty)}</td><td class="num">${fmt(b.revenue)}</td></tr>`).join("")}
+      <div class="tablewrap"><table><thead><tr><th>Item</th><th style="text-align:left" class="opt">Station</th><th>Sold</th><th>Sales (TSh)</th></tr></thead><tbody>
+        ${m.best.slice(0, 10).map((b) => `<tr><td>${esc(b.n)}</td><td class="opt">${esc(STATIONS[b.st] || "")}</td><td class="num">${fmt(b.qty)}</td><td class="num">${fmt(b.revenue)}</td></tr>`).join("")}
       </tbody></table></div>
-      <p class="note">Updated ${S.loaded ? ago(S.loaded) : ""}. Tap Refresh for the latest.</p></section>`;
+      <p class="note">Updated ${S.loaded ? ago(S.loaded) : ""}. <button class="linkbtn" data-act="reload">Refresh</button></p></section>`;
   }
   async function writeAll(col, rows, idOf) {
     let batch = writeBatch(db), n = 0;
