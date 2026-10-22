@@ -98,7 +98,7 @@ async function begin() {
   const has = (ref) => getDoc(ref).then((s) => s.exists(), () => false);
   const role = isAccount(u) && u.email && (await has(doc(db, "company", u.email.toLowerCase())));
   if (!role) {
-    $("#stage").innerHTML = `<div style="max-width:420px"><p>The demo stage is for the Order App company team. Sign in with a company Google account.</p>
+    $("#stage").innerHTML = `<div style="max-width:420px"><p>The demo stage is for the Wasabi company team. Sign in with a company Google account.</p>
       <button class="btn primary" id="signin">Sign in with Google</button>${isAccount(u) ? `<p style="color:var(--muted)">${u.email || "This account"} isn't on the company team.</p>` : ""}</div>`;
     $("#signin").addEventListener("click", async () => { try { await googleSignIn(); } catch (e) { console.error(e); } begin(); });
     return;

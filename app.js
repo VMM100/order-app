@@ -1,4 +1,4 @@
-// Order App: one page, several screens chosen by the link.
+// Wasabi (order app): one page, several screens chosen by the link.
 //   index.html?t=4        diner at table 4 (what the table QR code opens)
 //   index.html?c=4821     diner joining a friend's table by code
 //   index.html#waiter     waiter phone
@@ -17,6 +17,7 @@ import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStar
 import { computeMetrics, sampleData } from "./metrics.js";
 import { genericPhoto } from "./photos.js";
 import { COMPANY } from "./platform.js";
+import { wasabiLockup, wasabiLeaf } from "./brand.js";
 
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
@@ -171,7 +172,12 @@ const tableLink = (n, k) => `${BASE}?r=${RID}&t=${n}&k=${k}`;
 // The database can't store a list inside a list, so prices are saved as {l, p} pairs.
 const cfgRef = () => doc(db, "restaurants", RID);
 let MENU = START_MENU, WAITERS = START_WAITERS, SHARED = [], CFG_SAVED = false, CFG_STALE = false;
-let BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...((RID && store.get("dees-brand-" + RID)) || {}) };
+// A restaurant's logo until its owner uploads one (or removes it, which saves "" rather than nothing).
+// Paths starting with img/ are files in this app; anything else is a photo id in the database.
+const DEFAULT_LOGOS = { "crafty-dees": "img/logos/crafty-dees.png" };
+const withDefaultLogo = (b) => (b.logo == null && RID && DEFAULT_LOGOS[RID] ? { ...b, logo: DEFAULT_LOGOS[RID] } : b);
+const isFileLogo = (id) => typeof id === "string" && id.startsWith("img/");
+let BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...((RID && store.get("dees-brand-" + RID)) || {}) });
 let TABLES = TABLE_COUNT, PAUSED = false;
 const cfgListeners = new Set();
 // Resolves once the restaurant settings (menu, shared tables…) have loaded, or failed to.
@@ -188,7 +194,7 @@ function startConfig() {
   if (RID !== RESTAURANT_ID) { MENU = starterMenu(); WAITERS = []; }
   onSnapshot(cfgRef(), (snap) => {
     PAUSED = false;
-    if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = { name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }; store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
+    if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
     applyBrand();
     cfgLoaded(); cfgListeners.forEach((f) => f());
   }, (e) => { if (denied(e)) PAUSED = true; cfgLoaded(); cfgListeners.forEach((f) => f()); });
@@ -222,7 +228,9 @@ function brandCss(c1, c2) {
 function applyBrand() {
   let el = document.getElementById("brandvars");
   if (!el) { el = document.createElement("style"); el.id = "brandvars"; document.head.appendChild(el); }
-  el.textContent = brandCss(BRAND.c1, BRAND.c2) + fontCss(BRAND.font);
+  // A new restaurant that hasn't picked colours yet starts in Wasabi green (the demo restaurant keeps its amber).
+  const fresh = !BRAND.c1 && RID && RID !== RESTAURANT_ID;
+  el.textContent = brandCss(fresh ? "#9cc43c" : BRAND.c1, fresh ? "#4a6716" : BRAND.c2) + fontCss(BRAND.font);
   if (BRAND.font && BRAND.font !== "brew" && FONTS[BRAND.font]) loadFonts("brandfont", [BRAND.font]);
   const h = $("#brandname"); if (h) h.textContent = BRAND.name || RESTAURANT;
   const lg = $("#brandlogo"); if (lg) { if (BRAND.logo) { lg.dataset.photo = BRAND.logo; lg.hidden = false; delete lg.dataset.done; hydratePhotos(); } else { lg.hidden = true; lg.removeAttribute("src"); } }
@@ -263,6 +271,7 @@ function hydratePhotos() {
   document.querySelectorAll("img[data-photo]").forEach(async (img) => {
     const id = img.dataset.photo; if (!id || img.dataset.done === id) return;
     img.dataset.done = id;
+    if (isFileLogo(id)) { img.src = id; img.closest(".ph")?.classList.add("loaded"); return; }
     if (!photoCache.has(id)) photoCache.set(id, getDoc(rdoc("photos", id)).then((s) => (s.exists() ? s.data().data : null)).catch(() => null));
     const src = await photoCache.get(id);
     if (src && img.dataset.photo === id) { img.src = src; img.closest(".ph")?.classList.add("loaded"); } else if (!src) img.closest(".ph")?.classList.add("none");
@@ -285,7 +294,7 @@ async function resizeImage(file, max, keepAlpha) {
 async function savePhoto(dataUrl, old) {
   const id = uid("ph"); await setDoc(rdoc("photos", id), { data: dataUrl, t: Date.now() });
   photoCache.set(id, Promise.resolve(dataUrl));
-  if (old) deleteDoc(rdoc("photos", old)).catch(() => {});
+  if (old && !isFileLogo(old)) deleteDoc(rdoc("photos", old)).catch(() => {});
   return id;
 }
 
@@ -522,7 +531,37 @@ function adminGate(page, go) {
 }
 
 // ================= DINER =================
+// ---------- diner welcome ----------
+// The first time a diner opens a table on this visit: the restaurant's logo as a die-cut sticker over a
+// grey, blurred view of the join screen, with a small "Powered by Wasabi" sticker. One tap and it's gone.
+// Not shown on the demo stage's diner slots (?as=1), which open many times over.
+function welcomeSticker() {
+  const logo = BRAND.logo;
+  if (!logo) return `<span class="hello-name">${esc(rname())}</span>`;
+  return `<img class="hello-logo" ${isFileLogo(logo) ? `src="${esc(logo)}"` : `data-photo="${esc(logo)}"`} alt="${esc(rname())}">`;
+}
+function welcomeSplash() {
+  if (!RID || params.get("as") || !(params.get("t") || params.get("c"))) return;
+  const key = `wasabi-hello-${RID}-${params.get("t") || "code"}`;
+  try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch {}
+  const el = document.createElement("div");
+  el.className = "hello"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", `Welcome to ${rname()}`);
+  el.innerHTML = `<button class="hello-go" type="button"><span class="hello-stick" id="hellostick">${welcomeSticker()}</span>
+    <span class="hello-tap">Tap to start ordering</span>
+    <span class="hello-by"><span class="hello-pill"><span>Powered by</span>${wasabiLockup("hello-wasabi")}</span></span></button>`;
+  document.body.appendChild(el); document.body.classList.add("hello-on"); hydratePhotos();
+  const btn = el.querySelector("button");
+  // The restaurant's look can arrive a moment later: swap the sticker if the logo changed.
+  const refresh = () => { const st = document.getElementById("hellostick"); if (st && !st.querySelector(`[src="${BRAND.logo}"],[data-photo="${BRAND.logo}"]`)) { st.innerHTML = welcomeSticker(); hydratePhotos(); } };
+  cfgListeners.add(refresh);
+  const close = () => { cfgListeners.delete(refresh); document.removeEventListener("keydown", onKey); el.classList.add("out"); document.body.classList.remove("hello-on");
+    setTimeout(() => el.remove(), matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  btn.addEventListener("click", close); document.addEventListener("keydown", onKey);
+}
+
 function dinerScreen() {
+  welcomeSplash();
   const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "",
     user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "", uid: null, proof: null, switching: false };
   // Every diner's phone is signed in, at least quietly (anonymously). Diners who sign in with their
@@ -725,6 +764,7 @@ function dinerScreen() {
       body = Object.entries(g.people || {}).sort(([a], [b]) => (a === S.me.pid ? -1 : b === S.me.pid ? 1 : 0)).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
         return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
     } else body = billHtml(g, S.lines, false, S.me.pid) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
+    if (S.tab !== "orders") body += poweredBy();
     // ☰: inviting friends, the account and help. Waiter, Call waiter and Bill please stay on the page.
     setMenu([
       { html: `<b>${esc(S.me.name)}</b> at Table ${esc(S.n)}${shared ? ` · ${esc(gname(g))}` : ""}<br>Friends join with code <b class="code num">${esc(g.code)}</b><div style="margin-top:8px"><button class="btn small primary" data-act="share">Share invite</button></div>` },
@@ -1493,7 +1533,7 @@ function ownerScreen(role) {
     else if (d.font) { BRAND = { ...BRAND, font: d.font }; applyBrand(); render(); save(`${FONTS[d.font].name} fonts applied`); }
     else if (d.preset) { const [, a, c] = PRESETS[+d.preset]; BRAND = { ...BRAND, c1: a, c2: c }; applyBrand(); render(); save("Colours updated"); }
     else if (d.act === "resetcolors") { BRAND = { ...BRAND, c1: null, c2: null }; applyBrand(); render(); save("Original colours back"); }
-    else if (d.act === "rmlogo") { const old = BRAND.logo; BRAND = { ...BRAND, logo: null }; applyBrand(); render(); await save("Logo removed"); deleteDoc(rdoc("photos", old)).catch(() => {}); }
+    else if (d.act === "rmlogo") { const old = BRAND.logo; BRAND = { ...BRAND, logo: "" }; applyBrand(); render(); await save("Logo removed"); if (old && !isFileLogo(old)) deleteDoc(rdoc("photos", old)).catch(() => {}); }
     else if (d.rmphoto) { const [si, ii] = ix(d.rmphoto), it = MENU[si].items[ii], old = it.img; delete it.img; render(); await save("Photo removed"); deleteDoc(rdoc("photos", old)).catch(() => {}); }
     else if (d.period) { S.period = d.period; S.m = null; S.err = null; render(); }
     else if (d.act === "reload") { S.m = null; S.err = null; render(); }
@@ -1522,13 +1562,23 @@ function ownerScreen(role) {
     save(CFG_SAVED ? "Settings updated" : RID === RESTAURANT_ID ? "Menu copied into the editor" : "Welcome! Add your menu below."); render(); });
 }
 
-// ================= COMPANY (the Order App business) =================
+// ================= COMPANY (the Wasabi business) =================
 // For the company running the platform: approve restaurants, record payments, pause, change owners.
 const slug = (n) => { const x = String(n).toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30); return x.length >= 3 ? x : (x || "restaurant") + "-place"; };
 const addMonths = (t, m) => { const d = new Date(t); d.setMonth(d.getMonth() + m); return d.getTime(); };
+// Wasabi's own pages wear Wasabi's look: the logo in the header, green buttons, Bricolage headings.
+function wasabiPage() {
+  document.body.classList.add("wasabi");
+  const h = $("#brandname"), lg = $("#brandlogo");
+  if (lg) lg.hidden = true;
+  if (h) { h.innerHTML = wasabiLockup(); h.setAttribute("aria-label", "Wasabi"); }
+  if (!document.getElementById("wasabifont")) { const l = document.createElement("link"); l.id = "wasabifont"; l.rel = "stylesheet";
+    l.href = "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap"; document.head.appendChild(l); }
+}
+const poweredBy = () => `<p class="poweredby">${wasabiLeaf()}<span>Ordered with Wasabi</span></p>`;
 function companyScreen() {
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Company"; document.title = "Company · " + COMPANY.name;
-  const h = $("#brandname"); if (h) h.textContent = COMPANY.name;
+  wasabiPage();
   const C = { u: null, ok: false, claimed: true, list: [], team: [], filter: "all", busy: "", err: "", armed: null, edit: null };
   async function check() {
     paint(`<p class="empty">Loading…</p>`);
@@ -1664,7 +1714,7 @@ function companyScreen() {
 // ================= SIGN-UP (a new restaurant applies) =================
 function signupScreen() {
   $("#sub").textContent = "Register your restaurant"; document.title = "Register · " + COMPANY.name;
-  const h = $("#brandname"); if (h) h.textContent = COMPANY.name;
+  wasabiPage();
   const U = { u: null, mine: [], busy: false, err: "", done: null, form: false };
   async function check() {
     paint(`<p class="empty">Loading…</p>`);
@@ -1728,7 +1778,8 @@ function signupScreen() {
 // ================= MY ACCOUNT (diners) =================
 // One account across every restaurant on the platform: visits are listed by restaurant.
 function accountScreen() {
-  $("#sub").textContent = "My account"; document.title = "My account";
+  $("#sub").textContent = "My account"; document.title = "My account · " + COMPANY.name;
+  wasabiPage();
   const S = { user: null, profile: null, visits: [], loading: true, armed: false, err: "" };
   onUser(async (u) => {
     if (u && !isAccount(u)) u = null;   // the quiet sign-in every phone has isn't an account

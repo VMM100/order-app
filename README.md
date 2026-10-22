@@ -1,4 +1,4 @@
-# Order App
+# Wasabi (order app)
 
 Table-side ordering for restaurants in Dar es Salaam, run as a subscription service: each restaurant signs up, is approved by the company, and stays switched on while it pays. Diners scan a QR code, join a shared table, order from their own phones and split the bill. Orders route to separate kitchen, bar and grill screens. The waiter who accepts a table gets that table's "Call waiter" and "Bill please" alerts, and diners see when the waiter is on the way.
 
@@ -7,7 +7,7 @@ Demo menu: Crafty Dee's Brewpub and Beer Garden (prices from public menu photos;
 ## Versions
 
 - **v1** (20 Oct 2026): first complete demo version, saved as the `v1` branch. Never changed after saving; new work goes on `main` and becomes v2.
-- **v2** (in progress, on `main`).
+- **v2** (in progress, on `main`). 23 Oct 2026: Wasabi branding (name, logo, favicon and app icons; Wasabi look on the company, sign-up and account pages; "Ordered with Wasabi" on the diner menu and bill), the diner welcome screen, and Crafty Dee's logo.
 
 To go back to v1, ask for the code to be reset to the `v1` branch, or browse it at https://github.com/VMM100/order-app/tree/v1.
 
@@ -23,7 +23,7 @@ Live at https://vmm100.github.io/order-app/. Every restaurant has an id (`r`), e
 | Manager: menu and staff (Google account added by the owner) | `?r=ID#manager` |
 | Tables & QR (Setup): number of tables, table QR codes, new code for one table or all, print table cards, staff QR codes, demo reset (owner or manager; open it from the ☰ menu on their pages) | `?r=ID#setup` |
 | Demo stage: 3–4 live screens on one iPad or laptop, table 8 (company team only; linked from the company page) | `demo.html?r=ID` |
-| Diner at a table (what a table QR opens; `k` is the table's secret key) | `?r=ID&t=4&k=…` |
+| Diner at a table (what a table QR opens; `k` is the table's secret key). The first time on a visit, a welcome screen shows the restaurant's logo as a sticker with "Powered by Wasabi"; one tap opens the table | `?r=ID&t=4&k=…` |
 | Join friends with their group's code (the Share invite) | `?r=ID&c=1234` |
 | Waiter (own phone, set up once from the staff QR; each shift starts with name + PIN and ends with End shift or after 16 hours) | `?r=ID&s=…#waiter` |
 | Kitchen / bar / grill (set up once from their staff QR) | `?r=ID&s=…#kitchen` |
@@ -35,6 +35,8 @@ Live at https://vmm100.github.io/order-app/. Every restaurant has an id (`r`), e
 - `demo.html`, `demo.js`: demo stage that frames several app screens on one device
 - `menu.js`: the starting menu, waiters and tables. After the owner first opens `#owner`, the menu and staff live in the database and are edited there.
 - `account.js`: diner sign-in (Firebase Authentication: Google, and phone number with SMS code). Optional; guests still join with a first name.
+- `brand.js`, `img/brand/`: Wasabi's logo (inline, for the app's own pages and stickers), favicon and home-screen icons
+- `img/logos/`: built-in restaurant logos (Crafty Dee's), used until the owner uploads one under Look
 - `photos.js`, `img/`: generic menu photos matched to items by name (free-licence photos from [Pexels](https://www.pexels.com/license/), 320px). An owner-uploaded photo always takes priority.
 - `metrics.js`: dashboard calculations (prep, pickup and order-to-table times, waiter response times and sales, sales by hour and day, best sellers) and the sample-week generator
 - `platform.js`: the company's name, contact, prices and grace period, shown to restaurants

@@ -1,6 +1,6 @@
-// The company running Order App: shown to restaurants for sign-up, renewals and support.
+// The company running Wasabi: shown to restaurants for sign-up, renewals and support.
 export const COMPANY = {
-  name: "Order App",
+  name: "Wasabi",
   contact: "Vandan Mamlani",
   phone: "0748 227 000",
   email: "vandanmamlani@gmail.com",
