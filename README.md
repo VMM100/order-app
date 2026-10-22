@@ -22,7 +22,7 @@ Live at https://vmm100.github.io/order-app/. Every restaurant has an id (`r`), e
 | Owner: dashboard, menu, look, staff, managers, subscription. Without `r`, finds the restaurants this Google account runs | `?r=ID#owner` |
 | Manager: menu and staff (Google account added by the owner) | `?r=ID#manager` |
 | Tables & QR (Setup): number of tables, table QR codes, new code for one table or all, print table cards, staff QR codes, demo reset (owner or manager; open it from the ☰ menu on their pages) | `?r=ID#setup` |
-| Demo stage: 3–4 live screens on one iPad or laptop, table 8 (owner or manager) | `demo.html?r=ID` |
+| Demo stage: 3–4 live screens on one iPad or laptop, table 8 (company team only; linked from the company page) | `demo.html?r=ID` |
 | Diner at a table (what a table QR opens; `k` is the table's secret key) | `?r=ID&t=4&k=…` |
 | Join friends with their group's code (the Share invite) | `?r=ID&c=1234` |
 | Waiter (own phone, set up once from the staff QR; each shift starts with name + PIN and ends with End shift or after 16 hours) | `?r=ID&s=…#waiter` |

@@ -88,18 +88,18 @@ async function demoKey() {
 }
 $("#tno").textContent = TABLE;
 try { const b = store.get("dees-brand"); if (b && b.name) $("#title").textContent = `${b.name} · live demo`; } catch {}
-// The demo stage runs the staff screens on this device, so it needs the owner's or a manager's
-// Google sign-in. The simulated diners each get their own quiet sign-in inside their frame.
+// The demo stage is a sales tool for the company: it runs the staff screens on this device and
+// opens only with a company team Google sign-in. The simulated diners each get their own quiet sign-in inside their frame.
 $("#stage").innerHTML = `<p style="color:var(--muted)">Connecting…</p>`;
 async function begin() {
-  if (!RID) { $("#stage").innerHTML = `<p style="color:var(--muted)">Open the demo from your restaurant's Setup page.</p>`; return; }
+  if (!RID) { $("#stage").innerHTML = `<p style="color:var(--muted)">Open the demo from the company page.</p>`; return; }
   const u = await authReady();
-  // Owner (on the account), manager, or the company team.
-  const has = (ref, f) => getDoc(ref).then((s) => s.exists() && (!f || f(s.data())), () => false);
-  const role = isAccount(u) && u.email && ((await has(doc(db, "accounts", RID), (a) => a.ownerEmail === u.email)) || (await has(doc(db, "restaurants", RID, "admins", u.email))) || (await has(doc(db, "company", u.email))));
+  // Company team only.
+  const has = (ref) => getDoc(ref).then((s) => s.exists(), () => false);
+  const role = isAccount(u) && u.email && (await has(doc(db, "company", u.email.toLowerCase())));
   if (!role) {
-    $("#stage").innerHTML = `<div style="max-width:420px"><p>The demo stage shows staff screens, so it opens with the owner's or a manager's Google account.</p>
-      <button class="btn primary" id="signin">Sign in with Google</button>${isAccount(u) ? `<p style="color:var(--muted)">${u.email || "This account"} isn't an owner or manager here.</p>` : ""}</div>`;
+    $("#stage").innerHTML = `<div style="max-width:420px"><p>The demo stage is for the Order App company team. Sign in with a company Google account.</p>
+      <button class="btn primary" id="signin">Sign in with Google</button>${isAccount(u) ? `<p style="color:var(--muted)">${u.email || "This account"} isn't on the company team.</p>` : ""}</div>`;
     $("#signin").addEventListener("click", async () => { try { await googleSignIn(); } catch (e) { console.error(e); } begin(); });
     return;
   }
