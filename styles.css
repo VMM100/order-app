@@ -315,9 +315,9 @@ button.mitem:hover,a.mitem:hover,button.mitem:focus-visible,a.mitem:focus-visibl
 .hello-name{display:block;max-width:80vw;background:var(--accent);color:var(--accent-ink);font-family:var(--display);text-transform:var(--dcase,uppercase);
   font-weight:700;font-size:40px;line-height:1.05;text-align:center;padding:22px 28px;border-radius:24px;border:8px solid #fff;box-shadow:0 10px 24px rgba(0,0,0,.25)}
 .hello-tap{margin-top:30px;margin-bottom:auto;color:#f6f4ee;font-size:16px;font-weight:600;letter-spacing:.01em}
-/* "Powered by Wasabi": one die-cut sticker image (img/brand/powered-by-wasabi.png); its white edge hugs the leaf, the word and "Powered by". */
+/* "Powered by Wasabi": a wasabi-green badge (img/brand/powered-by-wasabi.svg), leaf and word in ink. */
 .hello-by{display:block;animation:hello-pop .35s .12s cubic-bezier(.2,.9,.3,1.25) both}
-.hello-wasabi{display:block;height:68px;width:auto;filter:drop-shadow(0 4px 8px rgba(0,0,0,.22))}
+.hello-wasabi{display:block;height:60px;width:auto;filter:drop-shadow(0 4px 10px rgba(0,0,0,.28))}
 body.hello-on{overflow:hidden}
 @keyframes hello-in{from{opacity:0}}
 @keyframes hello-pop{from{opacity:0;transform:scale(.85)}}
