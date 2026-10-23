@@ -30,7 +30,7 @@
 </head>
 <body>
 <div class="wrap" id="wrap">
-  <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><h1 id="brandname">Crafty Dee's</h1></div><div class="hright"><span class="sub" id="sub"></span><button class="logoutbtn" id="logoutbtn" type="button" hidden>Log out</button><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
+  <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><h1 id="brandname"></h1></div><div class="hright"><span class="sub" id="sub"></span><button class="logoutbtn" id="logoutbtn" type="button" hidden>Log out</button><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
     <nav class="drawer" id="drawer" hidden></nav></header>
   <main id="view"><p class="empty">Loading…</p></main>
 </div>
@@ -247,6 +247,13 @@
 
 <script>
   if (IS_APP) {
+    // Header name before the app loads: Wasabi's own pages (no restaurant in the link) show the Wasabi
+    // logo straight away; a restaurant's pages stay blank until its own name and logo arrive, so no
+    // other restaurant's name ever flashes up first.
+    if (!new URLSearchParams(location.search).get("r")) {
+      const h = document.getElementById("brandname");
+      if (h && !h.innerHTML) h.innerHTML = '<picture><source srcset="img/brand/wasabi-lockup-reverse.svg" media="(prefers-color-scheme: dark)"><img src="img/brand/wasabi-lockup.svg" alt="Wasabi" style="height:26px;width:auto;display:block"></picture>';
+    }
     // Back button in the header, on every app screen (not inside the demo stage's phones). If this tab
     // has already been somewhere on Wasabi it goes back there; otherwise it goes up a level:
     // Tables & QR → owner page, everything else → the Wasabi front page.

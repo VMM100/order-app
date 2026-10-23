@@ -232,7 +232,9 @@ function applyBrand() {
   const fresh = !BRAND.c1 && RID && RID !== RESTAURANT_ID;
   el.textContent = brandCss(fresh ? "#9cc43c" : BRAND.c1, fresh ? "#4a6716" : BRAND.c2) + fontCss(BRAND.font);
   if (BRAND.font && BRAND.font !== "brew" && FONTS[BRAND.font]) loadFonts("brandfont", [BRAND.font]);
-  const h = $("#brandname"); if (h) h.textContent = BRAND.name || RESTAURANT;
+  // Wasabi's own pages (no restaurant) keep the Wasabi logo; a restaurant shows its saved name, never
+  // the demo restaurant's name as a stand-in.
+  const h = $("#brandname"); if (h && RID) h.textContent = BRAND.name || (RID === RESTAURANT_ID ? RESTAURANT : h.textContent);
   const lg = $("#brandlogo"); if (lg) { if (BRAND.logo) { lg.dataset.photo = BRAND.logo; lg.hidden = false; delete lg.dataset.phDone; hydratePhotos(); } else { lg.hidden = true; lg.removeAttribute("src"); } }
   document.title = (document.title.includes("·") ? document.title.split("·")[0] + "· " : "") + (BRAND.name || RESTAURANT);
 }
