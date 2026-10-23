@@ -486,12 +486,16 @@ async function adminRole(u) {
 }
 // Restaurants this Google account owns or manages (including ones still waiting for approval).
 async function myRestaurants(u) {
-  const out = [], em = u.email.toLowerCase();
-  try { (await getDocs(query(collection(db, "accounts"), where("ownerEmail", "==", em)))).docs.forEach((d) => out.push({ rid: d.id, name: d.data().name, role: "owner", acct: d.data() })); } catch {}
-  try { for (const d of (await getDocs(query(collectionGroup(db, "admins"), where("email", "==", em)))).docs) {
-      const rid = d.ref.parent.parent.id; if (out.some((x) => x.rid === rid)) continue;
-      let name = rid; try { const r = await getDoc(doc(db, "restaurants", rid)); if (r.exists() && r.data().brand) name = r.data().brand.name || rid; } catch {}
-      out.push({ rid, name, role: "manager" }); } } catch {}
+  const em = u.email.toLowerCase();
+  // Both lookups at once, and every restaurant name at once: each trip to the database costs time.
+  const [own, adm] = await Promise.all([
+    getDocs(query(collection(db, "accounts"), where("ownerEmail", "==", em))).catch(() => null),
+    getDocs(query(collectionGroup(db, "admins"), where("email", "==", em))).catch(() => null)]);
+  const out = own ? own.docs.map((d) => ({ rid: d.id, name: d.data().name, role: "owner", acct: d.data() })) : [];
+  const rids = adm ? [...new Set(adm.docs.map((d) => d.ref.parent.parent.id))].filter((rid) => !out.some((x) => x.rid === rid)) : [];
+  out.push(...(await Promise.all(rids.map(async (rid) => {
+    let name = rid; try { const r = await getDoc(doc(db, "restaurants", rid)); if (r.exists() && r.data().brand) name = r.data().brand.name || rid; } catch {}
+    return { rid, name, role: "manager" }; }))));
   return out;
 }
 // Waiter, kitchen, bar and grill phones open the staff link from Setup (?r=…&s=…). The phone keeps the
@@ -1982,11 +1986,21 @@ function accountScreen() {
   onUser(async (u) => {
     if (u && !isAccount(u)) u = null;   // the quiet sign-in every phone has isn't an account
     S.user = u || null; S.loading = !!u; S.step = ""; S.busy = false; S.roles = []; S.co = false; S.guest = false;
-    if (u) { render();
-      try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null; S.visits = await myVisits(u.uid); } catch (e) { S.err = "Couldn't load your visits. Check your connection."; }
-      // Is this account an owner or manager anywhere, or on the Wasabi team? (Google accounts only.)
-      if (u.email) { try { S.roles = await myRestaurants(u); } catch {} try { S.co = await isCompanyUser(u); } catch {} }
+    if (u) {
       try { S.guest = sessionStorage.getItem(guestKey()) === "1"; } catch {}
+      // Show what this phone knew last time straight away (where this account can go), then check.
+      const memo = "wasabi-acct-" + u.uid;
+      try { const c = JSON.parse(localStorage.getItem(memo) || "null"); if (c && ((c.roles || []).length || c.co) && !S.guest) { S.roles = c.roles || []; S.co = !!c.co; S.loading = false; } } catch {}
+      render();
+      // Everything at once: profile, visits, restaurants run and company membership.
+      const [p, visits, roles, co] = await Promise.all([
+        getDoc(dinerRef(u.uid)).catch(() => null), myVisits(u.uid).catch(() => null),
+        u.email ? myRestaurants(u).catch(() => []) : [], u.email ? isCompanyUser(u).catch(() => false) : false]);
+      if (S.user !== u) return;   // signed out or switched while loading
+      S.profile = p && p.exists() ? p.data() : null; S.visits = visits || [];
+      S.err = visits ? "" : "Couldn't load your visits. Check your connection.";
+      S.roles = roles; S.co = co;
+      try { localStorage.setItem(memo, JSON.stringify({ roles: roles.map(({ rid, name, role }) => ({ rid, name, role })), co })); } catch {}
     }
     S.loading = false; render();
   });
@@ -2023,7 +2037,7 @@ function accountScreen() {
         ${S.roles.map((m) => `<a class="pick" href="${BASE}?r=${encodeURIComponent(m.rid)}#${m.role === "manager" ? "manager" : "owner"}"><span class="avatar">${ini(m.name)}</span>
           <span><b>${esc(m.name)}</b><span class="note">${m.role === "owner" ? "Owner" : "Manager"}${state(m)}</span></span></a>`).join("")}
         ${S.co ? `<a class="pick" href="${BASE}#company"><span class="avatar">${wasabiLeaf("wleaf", "#4a6716")}</span>
-          <span><b>${esc(COMPANY.name)} company page</b><span class="note">Restaurants, approvals and payments</span></span></a>`
+          <span><b>${esc(COMPANY.name)} company page</b><span class="note">Restaurants, approvals and payments</span></span></a>
         <a class="pick" href="${BASE}demo/"><span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20v.01M17 20h4v-3"/></svg></span>
           <span><b>Launch a live demo</b><span class="note">One QR code for the room; everyone picks a role</span></span></a>` : ""}
       </div>
