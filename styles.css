@@ -348,3 +348,31 @@ body.wasabi{--accent:#9cc43c;--accent-ink:#1a2117;--accent-soft:#e8f0d2;--hop:#4
 @media (prefers-color-scheme:dark){body.wasabi{--accent:#a9d14a;--accent-ink:#121610;--accent-soft:#2a3a1c;--hop:#b8db6c;--hop-ink:#121610;--hop-soft:#2a3a1c}}
 body.wasabi header.top h1{font-weight:800;letter-spacing:-.01em}
 body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+/* Waiter sign-in: a standard sign-in card (who are you, then PIN) in the restaurant's colours and fonts */
+.wsign{display:flex;flex-direction:column;align-items:center;padding-top:28px}
+.wsign-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px 20px 22px;text-align:center;box-shadow:0 1px 2px rgb(0 0 0/.04),0 10px 28px rgb(0 0 0/.07)}
+.wsign-logo{width:76px;height:76px;object-fit:contain;display:block;margin:0 auto 10px}
+.wsign-mono{width:64px;height:64px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;margin:0 auto 10px;font-family:var(--display);font-weight:700;font-size:30px}
+.wsign-rname{font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:.02em;text-transform:var(--dcase,uppercase);line-height:1.1}
+.wsign-title{color:var(--muted);font-size:13px;font-weight:600;margin-top:4px}
+.wsign-step{margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+.wsign-q{font-weight:600;margin:0 0 14px}
+.wnames{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.wname{display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:56px;border:1px solid var(--line);border-radius:12px;background:var(--bg);text-align:left;font-weight:600;overflow:hidden}
+.wname span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wname:hover{border-color:var(--accent)}
+.wav{flex:none;width:34px;height:34px;border-radius:50%;background:var(--hop-soft);color:var(--hop);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:17px}
+.wav.big{width:56px;height:56px;font-size:26px;margin:0 auto 10px}
+.pindots{display:flex;justify-content:center;gap:16px;margin:4px 0 8px}
+.pindots span{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);transition:background .1s}
+.pindots span.on{background:var(--accent);border-color:var(--accent)}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:280px;margin:16px auto 0}
+.keypad button{height:58px;border-radius:14px;border:1px solid var(--line);background:var(--bg);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.keypad button:active{background:var(--accent-soft);border-color:var(--accent)}
+.keypad button:disabled{opacity:.5}
+.keypad .kfn{font-size:12px;font-weight:600;color:var(--muted);background:transparent;border-color:transparent;line-height:1.2}
+.keypad .kfn[data-key]{font-size:22px}
+.wsign .err{margin:8px 0 0;font-size:13px;padding:10px 12px}
+.wsign-foot{max-width:380px;text-align:center;margin-top:14px}
+@media (prefers-reduced-motion:no-preference){.pindots.shake{animation:pinshake .35s}@keyframes pinshake{25%{transform:translateX(-8px)}50%{transform:translateX(8px)}75%{transform:translateX(-4px)}}}

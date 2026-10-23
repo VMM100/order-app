@@ -1046,7 +1046,7 @@ const SHIFT_MS = 16 * 3600e3;
 function waiterScreen(boss) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Waiter"; document.title = "Waiter · " + rname();
   const S = { me: boss ? store.get("dees-waiter-" + RID) : null, since: null, picking: null, pinErr: "", busy: false, endArmed: false,
-    groups: [], lines: [], alerts: [], open: null, confirm: null };
+    groups: [], lines: [], alerts: [], open: null, confirm: null, pin: "", shake: false };
   const myRef = () => rdoc("staff", auth.currentUser.uid);
   async function loadShift() {
     if (boss) return;
@@ -1092,15 +1092,10 @@ function waiterScreen(boss) {
       pick = `<div class="label" style="margin-top:0">Working as</div><div class="row">${WAITERS.map((w) => `<button class="chip" aria-pressed="${w.id === S.me}" data-me="${w.id}">${esc(w.name)}</button>`).join("")}</div>`;
       if (!S.me) return paint(`<section>${pick}<p class="note">Owners and managers can work as any waiter.</p></section>`);
     } else if (!S.me) {
-      const w = S.picking && WAITERS.find((x) => x.id === S.picking);
-      return paint(`<section><div class="label" style="margin-top:0">Start your shift</div>
-        ${w ? `<p style="margin-top:0">Hi <b>${esc(w.name)}</b>. Enter your 4-digit PIN.</p>
-          <form id="pinform" class="grid" style="max-width:320px"><input class="field num" id="pinin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="Your PIN">
-          <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Starting…" : "Start shift"}</button></form>
-          ${S.pinErr ? `<p class="err">${esc(S.pinErr)}</p>` : ""}<button class="btn ghost" data-act="notme">Not ${esc(w.name)}?</button>`
-        : `<p style="margin-top:0">Tap your name.</p><div class="row">${WAITERS.map((x) => `<button class="chip" data-pickme="${x.id}">${esc(x.name)}</button>`).join("")}</div>
-          ${WAITERS.length ? "" : `<p class="note">No waiters yet. The owner adds them under Owner → Staff.</p>`}`}
-        <p class="note">Your PIN comes from the owner or manager. Your shift ends when you tap End shift, or after 16 hours.</p></section>`);
+      $("#sub").textContent = "Waiter"; setMenu([]);
+      paint(waiterSignIn(S.picking && WAITERS.find((x) => x.id === S.picking)));
+      if (S.shake) { S.shake = false; const dots = $(".pindots"); if (dots) { dots.classList.add("shake"); } }
+      return;
     } else pick = "";
     // ☰: the shift, sound test and other waiters' tables. Table cards and their buttons stay on the page.
     const othersList = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
@@ -1142,6 +1137,43 @@ function waiterScreen(boss) {
       <div class="label">My tables</div>${mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
     </section>`);
   }
+  // The sign-in card: a standard two-step sign-in (who are you, then PIN) in the restaurant's look.
+  function waiterSignIn(w) {
+    const initial = (n) => esc((String(n).trim()[0] || "?").toUpperCase());
+    const head = `<div class="wsign-head">${BRAND.logo ? `<img class="wsign-logo" ${isFileLogo(BRAND.logo) ? `src="${esc(BRAND.logo)}"` : `data-photo="${esc(BRAND.logo)}"`} alt="">`
+      : `<div class="wsign-mono" aria-hidden="true">${initial(rname())}</div>`}<div class="wsign-rname">${esc(rname())}</div><div class="wsign-title">Waiter sign-in</div></div>`;
+    const step = w ? `<div class="wsign-step"><div class="wav big" aria-hidden="true">${initial(w.name)}</div>
+        <p class="wsign-q">Hi ${esc(w.name)}, enter your PIN</p>
+        <div class="pindots" role="status" aria-label="${S.pin.length} of 4 digits entered">${[0, 1, 2, 3].map((i) => `<span class="${i < S.pin.length ? "on" : ""}"></span>`).join("")}</div>
+        ${S.busy ? `<p class="note" style="margin:6px 0 0">Starting your shift…</p>` : S.pinErr ? `<p class="err" role="alert">${esc(S.pinErr)}</p>` : ""}
+        <div class="keypad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => `<button type="button" data-key="${k}" ${S.busy ? "disabled" : ""}>${k}</button>`).join("")}
+          <button type="button" class="kfn" data-act="notme">Not ${esc(w.name)}?</button><button type="button" data-key="0" ${S.busy ? "disabled" : ""}>0</button>
+          <button type="button" class="kfn" data-key="del" aria-label="Delete last digit" ${S.busy ? "disabled" : ""}>⌫</button></div></div>`
+      : `<div class="wsign-step"><p class="wsign-q">Who's working today?</p>
+        ${WAITERS.length ? `<div class="wnames">${WAITERS.map((x) => `<button type="button" class="wname" data-pickme="${x.id}"><span class="wav" aria-hidden="true">${initial(x.name)}</span><span>${esc(x.name)}</span></button>`).join("")}</div>`
+          : `<p class="note">No waiters yet. The owner or manager adds them under Staff.</p>`}</div>`;
+    return `<section class="wsign"><div class="wsign-card">${head}${step}</div>
+      <p class="note wsign-foot">Your PIN comes from the owner or manager. Your shift ends when you tap End shift, or after 16 hours.</p></section>`;
+  }
+  async function startShift() {
+    const pin = S.pin, w = S.picking; if (!w || S.busy || !/^\d{4}$/.test(pin)) return;
+    S.busy = true; S.pinErr = ""; render();
+    try { const now = Date.now(); await setDoc(myRef(), { token: store.get("dees-staff-" + RID), t: now, waiter: w, pin, shift: now });
+      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}!`); update(); return; }
+    catch (err) { S.pinErr = denied(err) ? "That PIN didn't work. Try again, or ask the owner or manager." : "Couldn't connect. Try again."; S.pin = ""; S.shake = true; }
+    S.busy = false; render();
+  }
+  function pinKey(k) {
+    if (S.me || !S.picking || S.busy) return;
+    if (k === "del") S.pin = S.pin.slice(0, -1); else if (S.pin.length < 4) S.pin += k;
+    if (S.pin.length) S.pinErr = "";
+    render(); if (S.pin.length === 4) startShift();
+  }
+  document.addEventListener("keydown", (e) => {
+    if (S.me || !S.picking || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/^\d$/.test(e.key)) { e.preventDefault(); pinKey(e.key); } else if (e.key === "Backspace") { e.preventDefault(); pinKey("del"); }
+    else if (e.key === "Escape") { S.picking = null; S.pin = ""; S.pinErr = ""; render(); }
+  });
   const find = (sid) => S.groups.find((g) => g.session === sid);
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
@@ -1149,8 +1181,9 @@ function waiterScreen(boss) {
       if (d.act === "sound") { await enableSound(); render(); }
       else if (d.act === "testsound") beep();
       else if (d.me && boss) { S.me = d.me; store.set("dees-waiter-" + RID, d.me); update(); }
-      else if (d.pickme) { S.picking = d.pickme; S.pinErr = ""; render(); }
-      else if (d.act === "notme") { S.picking = null; S.pinErr = ""; render(); }
+      else if (d.pickme) { S.picking = d.pickme; S.pin = ""; S.pinErr = ""; render(); }
+      else if (d.key && !boss) pinKey(d.key);
+      else if (d.act === "notme") { S.picking = null; S.pin = ""; S.pinErr = ""; render(); }
       else if (d.act === "endshift") { if (!S.endArmed) { S.endArmed = true; render(); setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); return; }
         const mine = S.groups.filter((g) => g.waiter === S.me).length;
         await endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); }
@@ -1170,16 +1203,6 @@ function waiterScreen(boss) {
       else if (denied(err) && !boss) await endShift("Your shift has ended (your PIN may have changed). Start it again with your PIN.");
       else fail(err);
     }
-  });
-  document.addEventListener("submit", async (e) => {
-    if (e.target.id !== "pinform") return; e.preventDefault();
-    const pin = $("#pinin").value.trim(), w = S.picking; if (!w || S.busy) return;
-    if (!/^\d{4}$/.test(pin)) { S.pinErr = "PINs are 4 digits."; return render(); }
-    S.busy = true; S.pinErr = ""; render();
-    try { const now = Date.now(); await setDoc(myRef(), { token: store.get("dees-staff-" + RID), t: now, waiter: w, pin, shift: now });
-      S.me = w; S.since = now; S.picking = null; toast(`Shift started. Welcome, ${wname(w)}!`); update(); }
-    catch (err) { S.pinErr = denied(err) ? "That PIN didn't work. Check it, or ask the owner or manager to set your PIN." : "Couldn't connect. Try again."; }
-    S.busy = false; render();
   });
   loadShift();
   async function closeGroup(sid) {
@@ -1337,11 +1360,20 @@ function ownerScreen(role) {
   const myEmail = auth.currentUser && auth.currentUser.email;
   const TABS = ownerTabs(owner ? "owner" : "manager");
   let startTab = null; try { startTab = sessionStorage.getItem("dees-otab"); sessionStorage.removeItem("dees-otab"); } catch {}
-  const S = { tab: TABS.some(([k]) => k === startTab) ? startTab : TABS[0][0], edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "", admins: null, pins: null };
+  const S = { tab: TABS.some(([k]) => k === startTab) ? startTab : TABS[0][0], edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "", admins: null, pins: null, wtok: null, wqr: false };
   // Who can sign in: the owner (set on the account by the company) and the managers the owner adds.
   // Waiter PINs live in restaurants/{RID}/secrets/waiters, readable only by the owner and managers.
   const pinsRef = () => rdoc("secrets", "waiters");
   async function loadPins() { try { const d = await getDoc(pinsRef()); S.pins = (d.exists() && d.data().pins) || {}; } catch { S.pins = {}; } render(); }
+  // The waiter sign-in link is the staff link (secrets/staff) opening the waiter screen. Making new staff
+  // codes on Tables & QR replaces it.
+  async function loadWLink() {
+    try { const ref = rdoc("secrets", "staff"), d = await getDoc(ref); let t = d.exists() && d.data().token;
+      if (!t) { t = newKey() + newKey(); await setDoc(ref, { token: t, t: Date.now() }); } S.wtok = t; }
+    catch { S.wtok = ""; }
+    render();
+  }
+  const waiterLink = () => `${BASE}?r=${RID}&s=${S.wtok}#waiter`;
   async function savePins(msg) { try { await setDoc(pinsRef(), { pins: S.pins, t: Date.now() }); toast(msg); } catch (e) { fail(e); } render(); }
   async function loadAdmins() {
     let list = [];
@@ -1363,6 +1395,9 @@ function ownerScreen(role) {
     if (!TABS.some(([k]) => k === S.tab)) S.tab = TABS[0][0];
     paint(subBanner() + tabBar(TABS, S.tab) + `
       ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
+    const qr = document.getElementById("wlqr");
+    if (qr && S.wtok) { const draw = () => { if (!qr.childNodes.length) new QRCode(qr, { text: waiterLink(), width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); };
+      if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true }); }
   }
 
   // ----- menu editor -----
@@ -1438,7 +1473,16 @@ function ownerScreen(role) {
 
   // ----- staff -----
   function staffTab() {
-    return `<section><div class="label" style="margin-top:0">Waiters</div>
+    const wl = S.wtok == null ? (loadWLink(), `<p class="note">Loading…</p>`)
+      : !S.wtok ? `<p class="note">Couldn't load the link. Check the connection and open this tab again.</p>`
+      : `<div class="vrow"><input class="field" id="wlinkin" readonly value="${esc(waiterLink())}" aria-label="Waiter sign-in link"><button class="btn" data-act="wlcopy">Copy</button></div>
+        <div class="row" style="margin-top:8px"><button class="btn primary" data-act="wlshare">Send to a waiter</button><button class="btn ghost" data-act="wlqr">${S.wqr ? "Hide QR code" : "Show QR code"}</button></div>
+        ${S.wqr ? `<div class="qrs" style="margin-top:10px"><div class="qr"><div class="box" id="wlqr"></div><b>Waiter sign-in</b></div></div>` : ""}`;
+    return `<section><div class="label" style="margin-top:0">Waiter sign-in link</div>
+      <p class="note" style="margin-top:0">Send this to each waiter, on WhatsApp for example. They open it once on their own phone, then sign in with their name and PIN at the start of every shift.</p>
+      ${wl}
+      <p class="note">Share it with staff only. The link alone can't take tables (that needs a waiter's PIN), but it does open staff screens. If it reaches the wrong person, tap <b>Make new staff codes</b> on Tables &amp; QR; every staff phone then needs the new link.</p>
+      <div class="label">Waiters</div>
       <p class="note" style="margin-top:0">These names appear on the waiter phones${owner ? " and the dashboard" : ""}.</p>
       ${S.pins == null ? (loadPins(), "") : ""}
       <div class="grid" style="max-width:640px">${WAITERS.map((w, i) => `<div class="wrow"><div class="vrow"><input class="field" id="wn-${i}" data-f="wname" data-i="${i}" value="${esc(w.name)}" aria-label="Waiter name">
@@ -1588,6 +1632,13 @@ function ownerScreen(role) {
     const ix = (s) => s.split(".").map(Number);
     if (!owner && (d.font || d.preset || d.period || ["resetcolors", "rmlogo", "sample", "unsample", "reload"].includes(d.act))) return;
     if (d.otab === "tables") { location.href = `${BASE}?r=${RID}#setup`; return; }
+    if (d.act === "wlqr") { S.wqr = !S.wqr; render(); return; }
+    if (d.act === "wlcopy" || d.act === "wlshare") {
+      if (!S.wtok) return; const link = waiterLink();
+      if (d.act === "wlshare" && navigator.share) { try { await navigator.share({ title: `Waiter sign-in · ${rname()}`, text: `Your waiter sign-in link for ${rname()}. Open it on your phone, then sign in with your name and PIN:`, url: link }); } catch {} return; }
+      try { await navigator.clipboard.writeText(link); toast("Link copied. Paste it in WhatsApp."); }
+      catch { const i = $("#wlinkin"); if (i) { i.focus(); i.select(); } toast("Select the link and copy it."); }
+      return; }
     if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; render(); }
     else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii]; it.out = !it.out; render(); save(it.out ? `${it.n} marked sold out` : `${it.n} back on the menu`); }
     else if (d.edit !== undefined) { S.edit = d.edit || null; render(); }
