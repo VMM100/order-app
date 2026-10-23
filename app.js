@@ -550,14 +550,83 @@ function welcomeSplash() {
     <span class="hello-tap">Tap to start ordering</span>
     <span class="hello-by"><img class="hello-wasabi" src="img/brand/powered-by-wasabi.png" alt="Spiced by Wasabi"></span></button>`;
   document.body.appendChild(el); document.body.classList.add("hello-on"); hydratePhotos();
-  const btn = el.querySelector("button");
+  const btn = el.querySelector("button"), still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const peel = stickerPeel(el.querySelector("#hellostick"), still);
   // The restaurant's look can arrive a moment later: swap the sticker if the logo changed.
-  const refresh = () => { const st = document.getElementById("hellostick"); if (st && !st.querySelector(`[src="${BRAND.logo}"],[data-photo="${BRAND.logo}"]`)) { st.innerHTML = welcomeSticker(); hydratePhotos(); } };
+  const refresh = () => { const st = document.getElementById("hellostick"); if (st && !st.querySelector(`[src="${BRAND.logo}"],[data-photo="${BRAND.logo}"]`)) { st.innerHTML = welcomeSticker(); hydratePhotos(); peel.reset(); } };
   cfgListeners.add(refresh);
-  const close = () => { cfgListeners.delete(refresh); document.removeEventListener("keydown", onKey); el.classList.add("out"); document.body.classList.remove("hello-on");
-    setTimeout(() => el.remove(), matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220); };
+  let closing = false;
+  const close = async () => { if (closing) return; closing = true; cfgListeners.delete(refresh); document.removeEventListener("keydown", onKey);
+    await peel.off(); el.classList.add("out"); document.body.classList.remove("hello-on");
+    setTimeout(() => el.remove(), still ? 0 : 220); };
   const onKey = (e) => { if (e.key === "Escape") close(); };
   btn.addEventListener("click", close); document.addEventListener("keydown", onKey);
+}
+// The sticker peels like a real one. Its top-right corner lifts a little while it waits; a tap peels it
+// off along the diagonal, showing the plain back of the sticker as it folds over, then it lifts away.
+// How: the fold is a 45° line. The front is clipped to the part still stuck down; a copy styled as the
+// sticker's back is clipped to the peeled part and mirrored across the fold line, squashed (FORE) so the
+// flap looks lifted towards you rather than lying flat. k is how far the fold has moved in from the corner.
+const FORE = 0.55;
+function stickerPeel(box, still) {
+  let k = 0, front = null, flap = null, idle = 0, W = 0, H = 0, t0 = 0, kmin = 0, kmax = 0;
+  const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2);
+  function build() {
+    front = box.firstElementChild; if (!front) return false;
+    if (front.tagName === "IMG" && !(front.complete && front.naturalWidth)) { front.addEventListener("load", () => { if (!flap) start(); }, { once: true }); return false; }
+    W = front.offsetWidth; H = front.offsetHeight; if (!W || !H) return false;
+    flap = front.cloneNode(true); flap.removeAttribute("data-photo"); flap.removeAttribute("id"); flap.setAttribute("aria-hidden", "true"); flap.alt = "";
+    if (front.tagName === "IMG") flap.src = front.currentSrc || front.src;
+    flap.classList.add("hello-back"); flap.style.width = W + "px"; flap.style.height = H + "px";
+    reach();
+    box.classList.add("peeling"); box.appendChild(flap); set(k); return true;
+  }
+  // Where the sticker itself starts and ends along the diagonal: a round or odd-shaped logo has empty
+  // corners, and peeling empty space shows nothing. Read from the logo's see-through pixels.
+  function reach() {
+    kmin = 0; kmax = W + H;
+    if (front.tagName !== "IMG") return;
+    try {
+      const nw = front.naturalWidth, nh = front.naturalHeight, f = Math.min(W / nw, H / nh), dw = nw * f, dh = nh * f, ox = (W - dw) / 2, oy = (H - dh) / 2;
+      const cv = document.createElement("canvas"); cv.width = Math.round(W); cv.height = Math.round(H);
+      const g = cv.getContext("2d", { willReadFrequently: true }); g.drawImage(front, ox, oy, dw, dh);
+      const px = g.getImageData(0, 0, cv.width, cv.height).data; let lo = Infinity, hi = -Infinity;
+      for (let y = 0; y < cv.height; y += 3) for (let x = 0; x < cv.width; x += 3) if (px[(y * cv.width + x) * 4 + 3] > 60) { const v = W - x + y; if (v < lo) lo = v; if (v > hi) hi = v; }
+      if (lo < hi) { kmin = Math.max(0, lo - 8); kmax = hi + 8; }   // 8: the white die-cut edge
+    } catch {}
+  }
+  function set(v) {
+    k = v; if (!front || !flap) return;
+    const c = k - W, L = 4 * (W + H), gg = 1 + FORE;
+    // Still stuck down: everything below-left of the fold line y = x + c. Peeled: above-right of it.
+    front.style.clipPath = `polygon(${-L}px ${-L + c}px, ${L}px ${L + c}px, ${-L}px ${L + c}px)`;
+    flap.style.clipPath = `polygon(${-L}px ${-L + c}px, ${L}px ${L + c}px, ${L}px ${-L + c}px)`;
+    flap.style.transform = `matrix(${1 - gg / 2},${gg / 2},${gg / 2},${1 - gg / 2},${(gg * (W - k)) / 2},${(gg * (k - W)) / 2})`;
+  }
+  // While waiting: the corner lifts, then breathes a little, inviting a tap.
+  function start() {
+    if (still || !build()) return;
+    const lift = 0.13 * Math.min(W, H); t0 = performance.now() + 450;
+    const tick = (now) => { const t = now - t0;
+      set(kmin + (t < 0 ? 0 : t < 500 ? lift * ease(t / 500) : lift * (1 + 0.2 * Math.sin((t - 500) / 380))));
+      idle = requestAnimationFrame(tick); };
+    idle = requestAnimationFrame(tick);
+  }
+  function reset() { cancelAnimationFrame(idle); flap?.remove(); flap = null; k = 0; box.classList.remove("peeling", "gone"); setTimeout(start, 0); }
+  // Peel it right off, then lift it away. Resolves when the sticker has gone.
+  function off() {
+    cancelAnimationFrame(idle);
+    if (still || (!flap && !build())) return Promise.resolve();
+    const from = Math.max(k, kmin), to = kmin + 0.5 * (kmax - kmin), start = performance.now(), dur = 380;
+    return new Promise((done) => {
+      const tick = (now) => { const p = Math.min(1, (now - start) / dur); set(from + (to - from) * ease(p));
+        if (p < 1) return requestAnimationFrame(tick);
+        box.classList.add("gone"); setTimeout(done, 240); };
+      requestAnimationFrame(tick);
+    });
+  }
+  setTimeout(start, 0);
+  return { off, reset };
 }
 
 function dinerScreen() {
