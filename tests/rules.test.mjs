@@ -495,3 +495,36 @@ test("a diner logs consent to offers; nobody can change or read someone else's l
   await assertFails(owner().doc("diners/p1/consents/c1").get());
   await assertSucceeds(db.doc("diners/p1/consents/c1").delete());
 });
+
+// ---------- live demo rooms (demo/ folder of the site) ----------
+const room = (created = Date.now()) => ({ created, sections: [], waiters: [{ id: "w1", name: "Grace" }], shared: [], brand: { name: "Crafty Dee's" }, prices: PRICES, tables: 10, updated: created });
+test("demo: the presenter makes a room with its table key in one go (anonymous, no account)", async () => {
+  const db = diner("p1"), b = db.batch();
+  b.set(db.doc("demo/room1"), room());
+  b.set(db.doc("demo/room1/tablekeys/8"), { k: "K", t: 1 });
+  await assertSucceeds(b.commit());
+  await assertSucceeds(db.doc("demo/room1").get());
+});
+test("demo: anyone in the room can order, serve and edit the menu; created can't change", async () => {
+  await assertSucceeds(diner("p1").doc("demo/room2").set(room()));
+  const d = diner("d1");
+  await assertSucceeds(d.doc("demo/room2/passes/d1").set({ table: 8, via: "key", k: "K", t: 1 }));
+  await assertSucceeds(d.doc("demo/room2/groups/8-a").set(newGroup("8-a", 8, "4321")));
+  await assertSucceeds(d.doc("demo/room2/lines/l1").set({ table: 8, session: "8-a", n: "Pilsner", v: "Full 400ml", pr: 10000, st: "bar", s: "new", t: 1 }));
+  await assertSucceeds(diner("w").doc("demo/room2/staff/w").set({ token: "demo", waiter: "w1", pin: "0000", shift: Date.now(), t: 1 }));
+  await assertSucceeds(diner("o").doc("demo/room2").set({ sections: [], updated: 2 }, { merge: true }));
+  await assertFails(diner("o").doc("demo/room2").update({ created: 1 }));
+});
+test("demo: needs the quiet sign-in, and goes read-only after 12 hours", async () => {
+  await assertFails(env.unauthenticatedContext().firestore().doc("demo/room3").set(room()));
+  await assertFails(diner("p1").doc("demo/room3").set(room(Date.now() - 2 * DAY)));   // can't backdate a room
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc("demo/old").set(room(Date.now() - 13 * 3600e3)));
+  await assertSucceeds(diner("d1").doc("demo/old").get());
+  await assertFails(diner("d1").doc("demo/old/lines/l1").set({ table: 8 }));
+  await assertFails(diner("d1").doc("demo/old").set({ updated: 3 }, { merge: true }));
+});
+test("demo: a room can't reach real restaurants", async () => {
+  await assertSucceeds(diner("p1").doc("demo/room4").set(room()));
+  await assertFails(diner("p1").doc(`${R}/lines/x`).set({ table: 4 }));
+  await assertFails(diner("p1").doc(`${R}/secrets/staff`).get());
+});
