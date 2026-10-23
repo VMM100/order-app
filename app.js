@@ -1936,7 +1936,7 @@ function accountScreen() {
     return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Sign in</div>
         <div class="wsign-title">For diners, restaurant owners and managers</div></div>
       <div class="wsign-step">${step}${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}</div></div>
-      <p class="note wsign-foot">Diners don't need to sign in to order. Signing in keeps your visits and offers in one place.</p>
+      <p class="note wsign-foot">Diners don't need to sign in to order. Signing in keeps your visits and offers in one place. <a href="privacy.html">Privacy policy</a></p>
       <div style="text-align:center;margin-top:12px">${back()}</div></section>`;
   }
   function chooserHtml(who) {
