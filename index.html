@@ -3,14 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Wasabi</title>
+<title>Wasabi · Order at the table, split the bill</title>
+<meta name="description" content="Wasabi lets diners scan, order and split the bill from their own phones. Orders go straight to your kitchen and bar. Made in Dar es Salaam for restaurants and bars in Tanzania.">
+<meta property="og:title" content="Wasabi · Order at the table, split the bill">
+<meta property="og:description" content="Diners scan, order and split the bill from their own phones. Orders go straight to your kitchen and bar.">
+<meta property="og:image" content="https://wasabi.co.tz/img/brand/icon-512.png">
 <meta name="theme-color" content="#1a2117">
 <link rel="icon" href="img/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="img/brand/icon-180.png" type="image/png" sizes="180x180">
 <link rel="apple-touch-icon" href="img/brand/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css">
+<script>
+  // One address, two things: a link with a restaurant or screen in it (?r=…, #owner, #company…) opens the
+  // app; the bare address (wasabi.co.tz) shows the landing page. Each loads only its own styles and code.
+  window.IS_APP = !!(location.search.length > 1 || location.hash.length > 1);
+  document.documentElement.className = IS_APP ? "is-app" : "is-home";
+  document.write(IS_APP
+    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css">'
+    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css">');
+  // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
+  if (!IS_APP) addEventListener("hashchange", () => { if (location.hash.length > 1) location.reload(); });
+</script>
+<style>html.is-home #wrap,html.is-home #cart,html.is-home #toast,html.is-home #recaptcha{display:none!important}html.is-app #home{display:none!important}</style>
 </head>
 <body>
 <div class="wrap" id="wrap">
@@ -21,7 +35,200 @@
 <div class="cart" id="cart" hidden></div>
 <div class="toast" id="toast" hidden></div>
 <div id="recaptcha"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
-<script type="module" src="app.js"></script>
+
+<!-- ================= LANDING PAGE ================= -->
+<div id="home">
+  <header class="bar">
+    <div class="in">
+      <a class="logo" href="./" aria-label="Wasabi home"><img src="img/brand/wasabi-lockup-reverse.svg" alt="Wasabi" width="141" height="28"></a>
+      <nav class="nav" aria-label="Main">
+        <a class="hide-s" href="#how-it-works" data-scroll>How it works</a>
+        <a class="hide-s" href="#pricing" data-scroll>Pricing</a>
+        <a href="#owner">Sign in</a>
+        <a class="btn btn-go" href="#signup">Start free trial</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="in">
+        <div>
+          <span class="eyebrow">Table ordering for restaurants and bars</span>
+          <h1>Your menu on every table. <em>The bill splits itself.</em></h1>
+          <p class="lede">Diners scan a code, order from their own phones and split the bill however they like. Orders go straight to your kitchen and bar, so your waiters spend their time on service, not trips back and forth.</p>
+          <div class="ctas">
+            <a class="btn btn-go" href="#signup">Start your free 30-day trial</a>
+            <a class="btn btn-line" href="https://wa.me/255748227000?text=Hi%2C%20I%27d%20like%20a%20Wasabi%20demo%20for%20my%20restaurant" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.6-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3Z"/></svg>
+              Book a demo</a>
+          </div>
+          <p class="fine">No app to download. Works on the phones your team already has.</p>
+        </div>
+
+        <div class="stage" aria-hidden="true">
+          <div class="phone"><div class="screen">
+            <div class="notch"></div>
+            <div class="s-head"><b>Your Restaurant</b><span>Table 4</span></div>
+            <div class="s-table"><div><b>Table 4</b><small>3 friends · join with code</small></div><span class="s-code">4821</span></div>
+            <div class="s-chips"><span class="on">Drinks</span><span>Mains</span><span>Sides</span><span>Dessert</span></div>
+            <div class="s-items">
+              <div class="s-item"><img src="img/golden-beer.jpg" alt=""><div><b>Blonde Ale</b><small>TSh 10,000</small></div><span class="s-add n">✓</span></div>
+              <div class="s-item"><img src="img/mojito.jpg" alt=""><div><b>Mojito</b><small>TSh 15,000</small></div><span class="s-add">+</span></div>
+              <div class="s-item"><img src="img/burger.jpg" alt=""><div><b>Classic Burger</b><small>TSh 22,000</small></div><span class="s-add">+</span></div>
+              <div class="s-item"><img src="img/fish-chips.jpg" alt=""><div><b>Fish &amp; Chips</b><small>TSh 25,000</small></div><span class="s-add">+</span></div>
+            </div>
+            <div class="s-cart"><span>Place order · 2 items</span><span>TSh 20,000</span></div>
+          </div></div>
+          <div class="float f1"><i>🍺</i><div><b>Bar: 2 × Blonde Ale</b><small>Table 4 · just now</small></div></div>
+          <div class="float f2"><i>÷</i><div><b>Split 3 ways</b><small>TSh 19,000 each</small></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="how-it-works">
+      <div class="in">
+        <div class="sec-h">
+          <span class="eyebrow">How it works</span>
+          <h2>Scan, order, split. That's the whole night.</h2>
+          <p>No app to install and no account needed. The phone camera opens your menu in the browser.</p>
+        </div>
+        <div class="steps">
+          <div class="step"><h3>Scan the table code</h3><p>Each table has its own QR card. Diners see your menu with photos, prices and what's sold out tonight.</p></div>
+          <div class="step"><h3>Everyone orders</h3><p>Friends join the table with a 4-digit code and order from their own phones. Drinks go to the bar, food to the kitchen.</p></div>
+          <div class="step"><h3>Split the bill</h3><p>Split equally or by what each person ordered. Diners see their share, call the waiter and pay as they do today.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec alt" id="features">
+      <div class="in">
+        <div class="sec-h">
+          <span class="eyebrow">For your restaurant</span>
+          <h2>Built for a busy Friday night.</h2>
+          <p>Everything your team needs runs on ordinary phones and tablets. No tills or special hardware to buy.</p>
+        </div>
+        <div class="feats">
+          <div class="feat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 9h5M7 12h8"/></svg>
+            <h3>Kitchen, bar and grill screens</h3><p>Each station sees only its own orders, marks them preparing and ready, and the waiter knows when to pick up.</p></div>
+          <div class="feat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <h3>Waiters on their own phones</h3><p>Waiters take tables and get that table's "Call waiter" and "Bill please" alerts. Diners see when help is on the way.</p></div>
+          <div class="feat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+            <h3>A live dashboard</h3><p>Sales by hour and by item, how long orders take, and how each waiter and station is doing.</p></div>
+          <div class="feat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            <h3>Change the menu in seconds</h3><p>Edit prices, add specials or mark something sold out, and every table sees it straight away. No reprinting.</p></div>
+          <div class="feat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 0 0 0 20c1 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2A5.6 5.6 0 0 0 22 11c0-5-4.5-9-10-9Z"/></svg>
+            <h3>Your look, not ours</h3><p>Your logo, colours and fonts on every screen diners see. Wasabi stays in the background.</p></div>
+          <div class="feat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            <h3>Safe from pranks</h3><p>Every table code carries a secret key, so nobody can order from outside. Waiters start each shift with a PIN.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="pricing">
+      <div class="in">
+        <div class="sec-h">
+          <span class="eyebrow">Pricing</span>
+          <h2>One simple price. Every table included.</h2>
+          <p>Try everything free for 30 days. After that, one subscription covers the whole restaurant.</p>
+        </div>
+        <div class="price-wrap">
+          <div class="plan">
+            <div class="tabs" role="group" aria-label="Billing period">
+              <button type="button" aria-pressed="true" data-plan="m">Monthly</button>
+              <button type="button" aria-pressed="false" data-plan="y">Yearly</button>
+            </div>
+            <div class="amount" aria-live="polite"><b id="amt">TSh 130,000</b><span id="per">a month</span></div>
+            <span class="save" id="save">&nbsp;</span>
+            <ul>
+              <li>All your tables, QR cards and staff phones</li>
+              <li>Kitchen, bar and grill screens</li>
+              <li>Bill splitting, waiter alerts and the dashboard</li>
+              <li>Your logo, colours and fonts</li>
+              <li>Help setting up your menu, from us</li>
+            </ul>
+            <a class="btn btn-go" href="#signup">Start your free 30-day trial</a>
+            <p class="fine">No card needed to start.</p>
+          </div>
+          <div class="trial">
+            <div><h3>How the trial works</h3><p>Register with your Google account. We switch you on with a 30-day trial and help you add your menu, tables and staff.</p></div>
+            <div><h3>Paying for Wasabi</h3><p>When the trial ends, pay monthly or yearly. If a payment is late, you get a week's grace before ordering pauses.</p></div>
+            <div><h3>Diners pay as usual</h3><p>Wasabi shows each diner what they owe. They pay your waiter by cash, card or mobile money, as they do today.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec alt" id="questions">
+      <div class="in">
+        <div class="sec-h">
+          <span class="eyebrow">Questions</span>
+          <h2>Good to know.</h2>
+        </div>
+        <div class="faq">
+          <details><summary>Do diners need to download an app?</summary><p>No. They point their phone camera at the table card and your menu opens in the browser. Signing in is optional; it lets regulars see past visits and offers.</p></details>
+          <details><summary>What do we need to buy?</summary><p>Nothing special. Your team uses phones or tablets you already have, and you print the table cards from Wasabi on any printer.</p></details>
+          <details><summary>Does it replace our waiters?</summary><p>No. Waiters still welcome guests, serve and take payment. They just stop running back and forth with orders, so each one can look after more tables.</p></details>
+          <details><summary>Can diners pay inside the app?</summary><p>Not yet. Today diners see their share and pay your waiter. Payment in the app is on our roadmap.</p></details>
+          <details><summary>How long does setup take?</summary><p>Most restaurants are ready in an afternoon: add your menu, set your tables, print the cards and give each waiter a PIN. We help with all of it.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="close" id="contact">
+      <div class="in">
+        <div>
+          <h2>See it on your own tables.</h2>
+          <p>We can come to your restaurant and run a live demo on a few phones, so you and your team can try it before you decide.</p>
+          <div class="ctas"><a class="btn btn-go" href="#signup">Start your free 30-day trial</a></div>
+        </div>
+        <div class="contact">
+          <a href="https://wa.me/255748227000?text=Hi%2C%20I%27d%20like%20a%20Wasabi%20demo%20for%20my%20restaurant" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.6-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3Z"/></svg>
+            <span><b>WhatsApp</b><small>0748 227 000</small></span></a>
+          <a href="tel:+255748227000">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>
+            <span><b>Call Vandan</b><small>0748 227 000</small></span></a>
+          <a href="mailto:vandanmamlani@gmail.com?subject=Wasabi%20for%20my%20restaurant">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+            <span><b>Email</b><small>vandanmamlani@gmail.com</small></span></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="in">
+      <img src="img/brand/wasabi-lockup.svg" alt="Wasabi" width="111" height="22">
+      <nav aria-label="Footer">
+        <a href="#signup">Register a restaurant</a>
+        <a href="#owner">Owner sign-in</a>
+        <a href="#account">Diner account</a>
+      </nav>
+      <span>© 2026 Wasabi · Dar es Salaam</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+  if (IS_APP) {
+    // The app: QR code library, then the app itself.
+    const q = document.createElement("script"); q.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"; q.defer = true; document.body.appendChild(q);
+    const a = document.createElement("script"); a.type = "module"; a.src = "app.js"; document.body.appendChild(a);
+  } else {
+    document.getElementById("home").hidden = false;
+    // In-page links scroll without adding a hash, since a hash in the address means an app screen.
+    document.querySelectorAll("a[data-scroll]").forEach((l) => l.addEventListener("click", (e) => {
+      e.preventDefault(); document.querySelector(l.getAttribute("href")).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }));
+    // Pricing: monthly or yearly.
+    const P = { m: ["TSh 130,000", "a month", " "], y: ["TSh 1,300,000", "a year", "Two months free compared with paying monthly"] };
+    document.querySelectorAll("[data-plan]").forEach((b) => b.addEventListener("click", () => {
+      document.querySelectorAll("[data-plan]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+      const [amt, per, save] = P[b.dataset.plan];
+      document.getElementById("amt").textContent = amt; document.getElementById("per").textContent = per; document.getElementById("save").textContent = save;
+    }));
+  }
+</script>
 </body>
 </html>
