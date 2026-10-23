@@ -51,8 +51,9 @@ function fit() {
     const w = 410, h = 800, narrow = innerWidth <= 700;
     const k = narrow ? box.clientWidth / w : Math.min(box.clientWidth / w, box.clientHeight / h, 1.15);
     phone.style.transform = `scale(${Math.max(0.3, k)})`;
-    if (narrow) box.style.height = h * k + "px"; else box.style.height = "";
-    phone.style.marginBottom = `${-(1 - k) * h}px`;
+    // Narrow screens: the box is exactly the scaled phone's height, so phones never overlap what's below.
+    if (narrow) { box.style.height = h * k + "px"; phone.style.marginBottom = ""; }
+    else { box.style.height = ""; phone.style.marginBottom = `${-(1 - k) * h}px`; }
   });
 }
 addEventListener("resize", () => requestAnimationFrame(fit));

@@ -41,7 +41,7 @@ button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outlin
 .slot select{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;max-width:100%}
 .frameBox{flex:1;min-height:0;width:100%;display:flex;justify-content:center;align-items:flex-start;overflow:hidden}
 .phone{position:relative;background:var(--bezel);border-radius:34px;padding:10px;box-shadow:0 0 0 1px #2a2d24,0 20px 40px rgb(0 0 0 / .45);transform-origin:top center}
-.phone::before{content:"";position:absolute;top:16px;left:50%;width:74px;height:18px;margin-left:-37px;background:var(--bezel);border-radius:10px;z-index:2}
+.phone::before{content:"";position:absolute;top:13px;left:50%;width:56px;height:10px;margin-left:-28px;background:var(--bezel);border-radius:10px;z-index:2}
 .phone iframe{display:block;width:390px;height:780px;border:0;border-radius:26px;background:#f6f4ee}
 .qrbox{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 10px 6px 6px}
 .qrbox .q{background:#fff;border-radius:6px;padding:4px;line-height:0}
@@ -49,7 +49,20 @@ button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outlin
 .qrbox small{display:block;color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--stage);padding:8px 14px;border-radius:8px;font-size:13px;z-index:9}
 [hidden]{display:none!important}
-@media (max-width:700px){.stage{grid-template-columns:repeat(2,minmax(0,1fr))}.slot{height:auto}.frameBox{height:auto}}
+.slotbar{width:100%;justify-content:center}
+.slotbar select{flex:0 1 auto;min-width:0}
+.swipehint{display:none;margin:0;color:var(--muted);font-size:12px}
+/* Phones and small tablets: one phone at a time, full width, swipe sideways to the next (no overlapping). */
+@media (max-width:700px){
+  .stage{display:flex;grid-template-columns:none;overflow-x:auto;overflow-y:visible;scroll-snap-type:x mandatory;gap:12px;
+    margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:0 max(16px,env(safe-area-inset-left,0px)) 8px;scrollbar-width:none;flex:none}
+  .stage::-webkit-scrollbar{display:none}
+  .slot{flex:0 0 min(86%,420px);height:auto;scroll-snap-align:center}
+  .slotbar select{flex:1}
+  .frameBox{flex:none;height:auto}
+  .swipehint{display:block}
+  .steps{font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -68,6 +81,7 @@ button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outlin
   <span>Both diners join table</span><span>Order a beer and wings</span><span>Bar &amp; kitchen get their part</span>
   <span>Waiter accepts, serves</span><span>"Bill please" → On my way</span><span>Split the bill</span><span>Show the dashboard</span>
 </div>
+<p class="swipehint" id="swipehint">Swipe sideways to see each phone</p>
 <main class="stage" id="stage"></main>
 <div class="toast" id="toast" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
