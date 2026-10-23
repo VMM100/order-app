@@ -391,3 +391,14 @@ body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);bo
 .pick .avatar{width:46px;height:46px;font-size:20px}
 .pick .avatar .wleaf{width:26px;height:26px}
 .wsign label{display:block;text-align:left}
+
+/* Log out: header button, and the "are you sure" box */
+.logoutbtn{flex:none;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;min-height:36px}
+.logoutbtn:hover{border-color:var(--crit);color:var(--crit)}
+@media (max-width:420px){header.top:has(#logoutbtn:not([hidden])) .sub{display:none}}
+.ask{position:fixed;inset:0;z-index:60;background:rgb(0 0 0/.45);display:grid;place-items:center;padding:16px}
+.ask-box{width:100%;max-width:360px;background:var(--surface);color:var(--fg);border-radius:18px;padding:24px 20px 20px;box-shadow:0 20px 50px rgb(0 0 0/.3)}
+.ask-box h2{margin:0;font-family:var(--display);font-size:24px;text-transform:var(--dcase,uppercase)}
+.ask-box p{margin:8px 0 0;color:var(--muted)}
+.ask-acts{display:grid;gap:10px;margin-top:20px}
+@media (prefers-reduced-motion:no-preference){.ask-box{animation:askin .18s ease-out}@keyframes askin{from{transform:translateY(8px);opacity:0}}}

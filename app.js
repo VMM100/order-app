@@ -385,6 +385,41 @@ setTimeout(() => { try { sessionStorage.removeItem("dees-autoreload"); } catch {
 
 // ---------- router ----------
 const view = location.hash.slice(1);
+
+// ---------- logging out (every page you reach after signing in) ----------
+// A Log out button sits in the header while a real account (Google or phone) is signed in on the
+// Sign in, owner, manager, Tables & QR and company pages. It goes back to the sign-in options. On those
+// pages (except Tables & QR, whose back goes to the owner page) the back arrow asks first, then logs out.
+const LOGIN_PAGES = ["account", "owner", "manager", "setup", "company"];
+let SIGNED_IN = false;
+async function logOut() {
+  try { await signOutUser(); } catch {}
+  toast("Logged out");
+  if (view !== "account") location.replace(`${BASE}#account`);
+}
+function askLogOut() {
+  return new Promise((done) => {
+    const back = document.activeElement, d = document.createElement("div"); d.className = "ask";
+    d.innerHTML = `<div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-t" aria-describedby="ask-d">
+      <h2 id="ask-t">Log out?</h2><p id="ask-d">Are you sure you want to log out? You'll need to sign in again to get back here.</p>
+      <div class="ask-acts"><button type="button" class="btn big" data-no>Stay signed in</button><button type="button" class="btn danger big" data-yes>Log out</button></div></div>`;
+    document.body.appendChild(d); d.querySelector("[data-no]").focus();
+    const end = (yes) => { d.remove(); removeEventListener("keydown", key); if (back && back.focus) back.focus(); done(yes); };
+    const key = (e) => { if (e.key === "Escape") end(false); };
+    addEventListener("keydown", key);
+    d.addEventListener("click", (e) => { if (e.target.closest("[data-yes]")) end(true); else if (e.target.closest("[data-no]") || e.target === d) end(false); });
+  });
+}
+if (LOGIN_PAGES.includes(view)) {
+  const lb = $("#logoutbtn");
+  onUser((u) => { SIGNED_IN = isAccount(u); if (lb) lb.hidden = !SIGNED_IN; });
+  if (lb) lb.addEventListener("click", async () => { if (await askLogOut()) logOut(); });
+  window.wasabiBack = () => {
+    if (!SIGNED_IN || view === "setup") return false;
+    askLogOut().then((yes) => { if (yes) logOut(); });
+    return true;
+  };
+}
 window.addEventListener("hashchange", () => location.reload());
 const params = new URLSearchParams(location.search);
 if (view === "company") companyScreen();
@@ -1245,7 +1280,7 @@ function bossMenu(role, extra = []) {
     ...(IS_CO ? [{ label: "Demo stage", sub: "Company only · several phones on one iPad or laptop", href: `${BASE}demo.html?r=${RID}` }] : []),
     ...extra,
     { html: `<b>Help from ${esc(COMPANY.name)}</b><br>${contactLine()}` },
-    { label: "Sign out", danger: true, run: async () => { try { await signOutUser(); } catch {} location.reload(); } },
+    { label: "Log out", danger: true, run: async () => { if (await askLogOut()) logOut(); } },
   ]);
 }
 const tabBar = (tabs, cur) => `<div class="seg tabs" role="tablist" style="max-width:640px">${tabs.map(([k, l]) => `<button aria-pressed="${cur === k}" data-otab="${k}">${l}</button>`).join("")}</div>`;
@@ -1982,7 +2017,7 @@ function accountScreen() {
           <p class="note">Each restaurant can only message you if its box is ticked. Every change is saved with the date.</p>` : `<p class="note" style="margin-top:0">Restaurants you visit will appear here. You choose for each one.</p>`; })()}
       <div class="label">Settings</div>
       <div class="grid" style="margin-top:20px">${back()}
-        <button class="btn" data-act="signout">Sign out</button>
+        <button class="btn" data-act="signout">Log out</button>
         <button class="btn danger" data-act="delete">${S.armed ? "Tap again to delete everything" : "Delete my account and data"}</button></div>
       <p class="note">Each restaurant only sees your visits to it, never your visits elsewhere.</p></section>`);
   }

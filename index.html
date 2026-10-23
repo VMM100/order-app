@@ -20,7 +20,7 @@
   window.addEventListener("pagehide", () => { try { sessionStorage.setItem("wasabi-been", "1"); } catch {} });
   document.documentElement.className = IS_APP ? "is-app" : "is-home";
   document.write(IS_APP
-    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=3">'
+    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=4">'
     : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=4">');
   // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
   // Going back from an app screen to the bare address shows the landing page again, and the other way round.
@@ -30,7 +30,7 @@
 </head>
 <body>
 <div class="wrap" id="wrap">
-  <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><h1 id="brandname">Crafty Dee's</h1></div><div class="hright"><span class="sub" id="sub"></span><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
+  <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><h1 id="brandname">Crafty Dee's</h1></div><div class="hright"><span class="sub" id="sub"></span><button class="logoutbtn" id="logoutbtn" type="button" hidden>Log out</button><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
     <nav class="drawer" id="drawer" hidden></nav></header>
   <main id="view"><p class="empty">Loading…</p></main>
 </div>
@@ -256,7 +256,8 @@
       const rid = new URLSearchParams(location.search).get("r"), base = location.origin + location.pathname;
       const up = location.hash === "#setup" && rid ? `${base}?r=${encodeURIComponent(rid)}#owner` : base;
       b.hidden = false;
-      b.addEventListener("click", () => { if (been && history.length > 1) history.back(); else location.href = up; });
+      // A signed-in page can take over the back button first (it asks before logging out: see app.js).
+      b.addEventListener("click", () => { if (window.wasabiBack && window.wasabiBack()) return; if (been && history.length > 1) history.back(); else location.href = up; });
     })();
     // The app: QR code library, then the app itself.
     const q = document.createElement("script"); q.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"; q.defer = true; document.body.appendChild(q);
