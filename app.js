@@ -233,7 +233,7 @@ function applyBrand() {
   el.textContent = brandCss(fresh ? "#9cc43c" : BRAND.c1, fresh ? "#4a6716" : BRAND.c2) + fontCss(BRAND.font);
   if (BRAND.font && BRAND.font !== "brew" && FONTS[BRAND.font]) loadFonts("brandfont", [BRAND.font]);
   const h = $("#brandname"); if (h) h.textContent = BRAND.name || RESTAURANT;
-  const lg = $("#brandlogo"); if (lg) { if (BRAND.logo) { lg.dataset.photo = BRAND.logo; lg.hidden = false; delete lg.dataset.done; hydratePhotos(); } else { lg.hidden = true; lg.removeAttribute("src"); } }
+  const lg = $("#brandlogo"); if (lg) { if (BRAND.logo) { lg.dataset.photo = BRAND.logo; lg.hidden = false; delete lg.dataset.phDone; hydratePhotos(); } else { lg.hidden = true; lg.removeAttribute("src"); } }
   document.title = (document.title.includes("·") ? document.title.split("·")[0] + "· " : "") + (BRAND.name || RESTAURANT);
 }
 const rname = () => BRAND.name || RESTAURANT;
@@ -269,8 +269,8 @@ function loadFonts(id, keys) {
 const photoCache = new Map();
 function hydratePhotos() {
   document.querySelectorAll("img[data-photo]").forEach(async (img) => {
-    const id = img.dataset.photo; if (!id || img.dataset.done === id) return;
-    img.dataset.done = id;
+    const id = img.dataset.photo; if (!id || img.dataset.phDone === id) return;
+    img.dataset.phDone = id;
     if (isFileLogo(id)) { img.src = id; img.closest(".ph")?.classList.add("loaded"); return; }
     if (!photoCache.has(id)) photoCache.set(id, getDoc(rdoc("photos", id)).then((s) => (s.exists() ? s.data().data : null)).catch(() => null));
     const src = await photoCache.get(id);
@@ -550,7 +550,7 @@ function welcomeSplash() {
     <span class="hello-tap">Tap to start ordering</span>
     <span class="hello-by"><img class="hello-wasabi" src="img/brand/powered-by-wasabi.png" alt="Spiced by Wasabi"></span></button>`;
   document.body.appendChild(el); document.body.classList.add("hello-on"); hydratePhotos();
-  const btn = el.querySelector("button"), still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const btn = el.querySelector("button"), still = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const peel = stickerPeel(el.querySelector("#hellostick"), still);
   // The restaurant's look can arrive a moment later: swap the sticker if the logo changed.
   const refresh = () => { const st = document.getElementById("hellostick"); if (st && !st.querySelector(`[src="${BRAND.logo}"],[data-photo="${BRAND.logo}"]`)) { st.innerHTML = welcomeSticker(); hydratePhotos(); peel.reset(); } };
