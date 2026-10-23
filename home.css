@@ -215,3 +215,14 @@ body.scan-on{overflow:hidden}
 .scan.err{background:var(--ink)}
 .scan.err video,.scan.err .scan-frame{display:none}
 .scan.err .scan-bottom{inset:auto 0 50%;transform:translateY(50%)}
+
+/* Phone menu: ☰ next to Scan table QR; the links that don't fit in the bar */
+.hburger{display:none;width:44px;height:44px;border-radius:12px;border:1px solid rgb(255 255 255/.18);background:transparent;color:var(--on-ink);place-items:center;cursor:pointer;padding:0}
+.hburger:focus-visible{outline:3px solid var(--wasabi);outline-offset:2px}
+@media (max-width:760px){.hburger{display:grid}.nav{gap:10px}}
+.hmenu{border-top:1px solid rgb(255 255 255/.08);padding:8px var(--gut) 14px;display:grid}
+.hmenu a{color:var(--on-ink);text-decoration:none;font-weight:600;font-size:17px;padding:13px 4px;border-bottom:1px solid rgb(255 255 255/.06)}
+.hmenu a:last-child{border-bottom:0}
+.hmenu a:first-child{color:var(--wasabi)}
+.hmenu a:focus-visible{outline:3px solid var(--wasabi);outline-offset:-3px;border-radius:8px}
+@media (min-width:761px){.hmenu{display:none!important}}
