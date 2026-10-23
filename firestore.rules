@@ -39,7 +39,8 @@ service cloud.firestore {
       allow create: if isCompany() && room.size() <= 12 && request.resource.data.created is int
         && request.resource.data.created > request.time.toMillis() - 60000 && request.resource.data.created < request.time.toMillis() + 60000;
       allow update: if demoOpen(room) && request.resource.data.created == resource.data.created;
-      match /{rest=**} {
+      // {sub}/ first: a bare {rest=**} would also match the room itself and skip the create check.
+      match /{sub}/{rest=**} {
         allow read: if signedIn();
         allow write: if demoOpen(room);
       }
