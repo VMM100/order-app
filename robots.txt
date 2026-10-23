@@ -1,0 +1,8 @@
+# wasabi.co.tz
+User-agent: *
+Allow: /
+# The live demo and app screens aren't pages for search results
+Disallow: /demo/
+Disallow: /demo.html
+
+Sitemap: https://wasabi.co.tz/sitemap.xml

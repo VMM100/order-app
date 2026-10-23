@@ -25,7 +25,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .num{font-variant-numeric:tabular-nums}
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 10px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-header.top h1{font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:.02em;text-transform:var(--dcase,uppercase);margin:0;line-height:1}
+header.top .bname{font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:.02em;text-transform:var(--dcase,uppercase);margin:0;line-height:1}
 header.top .sub{color:var(--muted);font-size:13px;font-weight:600}
 .note{font-size:12px;color:var(--muted);margin:10px 0 0}
 section{padding-top:16px}
@@ -346,7 +346,7 @@ body.hello-on{overflow:hidden}
 body.wasabi{--accent:#9cc43c;--accent-ink:#1a2117;--accent-soft:#e8f0d2;--hop:#4a6716;--hop-ink:#ffffff;--hop-soft:#e8f0d2;
   --display:"Bricolage Grotesque","Work Sans",system-ui,sans-serif;--dcase:none}
 @media (prefers-color-scheme:dark){body.wasabi{--accent:#a9d14a;--accent-ink:#121610;--accent-soft:#2a3a1c;--hop:#b8db6c;--hop-ink:#121610;--hop-soft:#2a3a1c}}
-body.wasabi header.top h1{font-weight:800;letter-spacing:-.01em}
+body.wasabi header.top .bname{font-weight:800;letter-spacing:-.01em}
 body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 
 /* Waiter sign-in: a standard sign-in card (who are you, then PIN) in the restaurant's colours and fonts */

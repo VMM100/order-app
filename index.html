@@ -7,7 +7,27 @@
 <meta name="description" content="Wasabi lets diners scan, order and split the bill from their own phones. Orders go straight to your kitchen and bar. Made in Dar es Salaam for bars, cafés and restaurants in Tanzania.">
 <meta property="og:title" content="Wasabi · Order at the table, split the bill">
 <meta property="og:description" content="Diners scan, order and split the bill from their own phones. Orders go straight to your kitchen and bar.">
-<meta property="og:image" content="https://wasabi.co.tz/img/brand/icon-512.png">
+<meta property="og:image" content="https://wasabi.co.tz/img/brand/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Wasabi: order from your table, split the bill in a tap">
+<meta property="og:url" content="https://wasabi.co.tz/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Wasabi">
+<meta property="og:locale" content="en_TZ">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://wasabi.co.tz/">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"Organization","@id":"https://wasabi.co.tz/#org","name":"Wasabi","url":"https://wasabi.co.tz/","logo":"https://wasabi.co.tz/img/brand/icon-512.png",
+  "email":"vandanmamlani@gmail.com","telephone":"+255748227000","address":{"@type":"PostalAddress","addressLocality":"Dar es Salaam","addressCountry":"TZ"},
+  "contactPoint":{"@type":"ContactPoint","contactType":"sales","telephone":"+255748227000","email":"vandanmamlani@gmail.com","areaServed":"TZ","availableLanguage":"en"}},
+ {"@type":"WebSite","@id":"https://wasabi.co.tz/#site","url":"https://wasabi.co.tz/","name":"Wasabi","publisher":{"@id":"https://wasabi.co.tz/#org"},"inLanguage":"en"},
+ {"@type":"SoftwareApplication","name":"Wasabi","applicationCategory":"BusinessApplication","operatingSystem":"Web browser (any phone or tablet)",
+  "description":"QR table ordering for bars, cafés and restaurants: diners scan, order from their own phones and split the bill; orders go straight to the kitchen and bar.",
+  "offers":{"@type":"Offer","price":"130000","priceCurrency":"TZS","description":"Per month, after a free 30-day trial"},"publisher":{"@id":"https://wasabi.co.tz/#org"}}
+]}
+</script>
 <meta name="theme-color" content="#1a2117">
 <link rel="icon" href="img/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="img/brand/icon-180.png" type="image/png" sizes="180x180">
@@ -19,8 +39,10 @@
   window.IS_APP = !!(location.search.length > 1 || location.hash.length > 1);
   window.addEventListener("pagehide", () => { try { sessionStorage.setItem("wasabi-been", "1"); } catch {} });
   document.documentElement.className = IS_APP ? "is-app" : "is-home";
+  // App screens (tables, staff, owner pages) aren't pages for search results.
+  if (IS_APP) { const m = document.createElement("meta"); m.name = "robots"; m.content = "noindex"; document.head.appendChild(m); }
   document.write(IS_APP
-    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=5">'
+    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=6">'
     : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=6">');
   // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
   // Going back from an app screen to the bare address shows the landing page again, and the other way round.
@@ -30,7 +52,7 @@
 </head>
 <body>
 <div class="wrap" id="wrap">
-  <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><h1 id="brandname"></h1></div><div class="hright"><span class="sub" id="sub"></span><button class="logoutbtn" id="logoutbtn" type="button" hidden>Log out</button><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
+  <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><div class="bname" id="brandname" role="heading" aria-level="1"></div></div><div class="hright"><span class="sub" id="sub"></span><button class="logoutbtn" id="logoutbtn" type="button" hidden>Log out</button><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
     <nav class="drawer" id="drawer" hidden></nav></header>
   <main id="view"><p class="empty">Loading…</p></main>
 </div>
@@ -82,10 +104,10 @@
             <div class="s-table"><div><b>Table 4</b><small>3 friends · join with code</small></div><span class="s-code">4821</span></div>
             <div class="s-chips"><span class="on">Drinks</span><span>Mains</span><span>Sides</span><span>Dessert</span></div>
             <div class="s-items">
-              <div class="s-item"><img src="img/golden-beer.jpg" alt=""><div><b>Blonde Ale</b><small>TSh 10,000</small></div><span class="s-add n">✓</span></div>
-              <div class="s-item"><img src="img/mojito.jpg" alt=""><div><b>Mojito</b><small>TSh 15,000</small></div><span class="s-add">+</span></div>
-              <div class="s-item"><img src="img/burger.jpg" alt=""><div><b>Classic Burger</b><small>TSh 22,000</small></div><span class="s-add">+</span></div>
-              <div class="s-item"><img src="img/fish-chips.jpg" alt=""><div><b>Fish &amp; Chips</b><small>TSh 25,000</small></div><span class="s-add">+</span></div>
+              <div class="s-item"><picture><source srcset="img/golden-beer.webp" type="image/webp"><img src="img/golden-beer.jpg" alt="Blonde Ale" width="46" height="46"></picture><div><b>Blonde Ale</b><small>TSh 10,000</small></div><span class="s-add n">✓</span></div>
+              <div class="s-item"><picture><source srcset="img/mojito.webp" type="image/webp"><img src="img/mojito.jpg" alt="Mojito" width="46" height="46"></picture><div><b>Mojito</b><small>TSh 15,000</small></div><span class="s-add">+</span></div>
+              <div class="s-item"><picture><source srcset="img/burger.webp" type="image/webp"><img src="img/burger.jpg" alt="Classic Burger" width="46" height="46"></picture><div><b>Classic Burger</b><small>TSh 22,000</small></div><span class="s-add">+</span></div>
+              <div class="s-item"><picture><source srcset="img/fish-chips.webp" type="image/webp"><img src="img/fish-chips.jpg" alt="Fish and chips" width="46" height="46"></picture><div><b>Fish &amp; Chips</b><small>TSh 25,000</small></div><span class="s-add">+</span></div>
             </div>
             <div class="s-cart"><span>Place order · 2 items</span><span>TSh 20,000</span></div>
           </div></div>
@@ -243,7 +265,7 @@
 
   <footer class="foot">
     <div class="in">
-      <img src="img/brand/wasabi-lockup.svg" alt="Wasabi" width="111" height="22">
+      <img src="img/brand/wasabi-lockup.svg" alt="Wasabi" width="111" height="22" loading="lazy">
       <nav aria-label="Footer">
         <a href="#account">Sign in</a>
         <a href="#signup">Register your place</a>
