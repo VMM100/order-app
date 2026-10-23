@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Wasabi live demo: a separate copy of the app (files in demo/). Paths resolve from the site root. -->
+<base href="/">
+<title>Live demo · Wasabi</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#1a2117">
+<link rel="icon" href="img/brand/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/brand/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="demo/styles.css?v=1">
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><h1 id="brandname"></h1></div><div class="hright"><span class="sub" id="sub"></span><button class="logoutbtn" id="logoutbtn" type="button" hidden>Log out</button><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
+    <nav class="drawer" id="drawer" hidden></nav></header>
+  <main id="view"><p class="empty">Loading…</p></main>
+</div>
+<div class="cart" id="cart" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<div id="recaptcha"></div>
+<script>
+  // Before the app loads: the presenter page and role picker show the Wasabi logo; a room's screens
+  // stay blank until the room's name arrives.
+  (() => {
+    const q = new URLSearchParams(location.search), h = document.getElementById("brandname");
+    if (!q.get("r") || q.get("join")) h.innerHTML = '<picture><source srcset="img/brand/wasabi-lockup-reverse.svg" media="(prefers-color-scheme: dark)"><img src="img/brand/wasabi-lockup.svg" alt="Wasabi" style="height:26px;width:auto;display:block"></picture>';
+    // Back arrow: from any screen in a room, back to "Pick your role" for that room. Hidden on the presenter page.
+    const b = document.getElementById("backbtn"), r = q.get("r");
+    if (r && !q.get("join")) {
+      let join = null; try { join = JSON.parse(localStorage.getItem("wasabi-demo-join")); } catch {}
+      if (!join || !join.includes("r=" + r)) join = `${location.origin}${location.pathname}?r=${encodeURIComponent(r)}&join=1`;
+      b.hidden = false; b.addEventListener("click", () => (location.href = join));
+    }
+  })();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script type="module" src="demo/app.js?v=1"></script>
+<script src="demo/ptr.js?v=1" defer></script>
+</body>
+</html>

@@ -1284,7 +1284,7 @@ function bossMenu(role, extra = []) {
     ...(location.hash === "#setup" ? [{ label: role === "owner" ? "Owner page" : "Manager page", sub: "Dashboard, menu, staff", href: `${BASE}?r=${RID}#${page}` }] : []),
     ...(role === "owner" && ACCOUNT ? [{ html: `<b>Subscription</b><br>${ACCOUNT.status === "active" ? `Paid until ${day(ACCOUNT.paidUntil)}${st.kind === "grace" ? " · overdue" : ""}` : "Not active"}. ${price()}.` }] : []),
     { label: "My restaurants", sub: "Switch restaurant", href: `${BASE}#${page}` },
-    ...(IS_CO ? [{ label: "Demo stage", sub: "Company only · several phones on one iPad or laptop", href: `${BASE}demo.html?r=${RID}` }] : []),
+    ...(IS_CO ? [{ label: "Live demo", sub: "One QR code: everyone in the room picks a role. Separate from your restaurant", href: `${BASE}demo/` }] : []),
     ...extra,
     { html: `<b>Help from ${esc(COMPANY.name)}</b><br>${contactLine()}` },
     { label: "Log out", danger: true, run: async () => { if (await askLogOut()) logOut(); } },
@@ -1333,7 +1333,7 @@ function setupScreen(role) {
       <p class="note">If a phone is lost or someone leaves, make new staff codes: every staff phone is signed out and scans again.</p>
       <button class="btn" data-act="rotstaff">${rotStaff ? "Tap again: every staff phone must scan again" : "Make new staff codes"}</button>
       <div class="label">Owner and manager pages</div>
-      <div class="links">${IS_CO ? link(BASE + "demo.html?r=" + RID, "Demo stage (company only): several phones on one iPad or laptop") : ""}${link(BASE + "?r=" + RID + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "?r=" + RID + "#manager", "Manager (menu and staff)")}</div>
+      <div class="links">${IS_CO ? link(BASE + "demo/", "Live demo (company only): one QR code, everyone picks a role, separate from this restaurant") : ""}${link(BASE + "?r=" + RID + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "?r=" + RID + "#manager", "Manager (menu and staff)")}</div>
       <p class="note">These open with the owner's or a manager's Google sign-in. The owner adds managers under Owner → Staff.</p></section>`);
     const draw = () => { for (let i = 1; i <= TABLES; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length && keys[i]) new QRCode(el, { text: tableLink(i, keys[i]), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }
       screens.forEach(([k]) => { const el = document.getElementById("sqr-" + k); if (el && !el.childNodes.length && staffTok) new QRCode(el, { text: staffLink(k), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }); };
@@ -1806,7 +1806,7 @@ function companyScreen() {
         <button class="btn ${a.status === "suspended" ? "" : "danger"}" data-sus="${a.rid}">${a.status === "suspended" ? "Switch back on" : k("sus") ? "Tap again to pause" : "Pause"}</button>
         <button class="btn ghost" data-own="${a.rid}">Change owner</button>
         <a class="btn ghost" href="${BASE}?r=${esc(a.rid)}#owner">Open</a>
-        <a class="btn ghost" href="${BASE}demo.html?r=${esc(a.rid)}">Demo stage</a></div>
+        <a class="btn ghost" href="${BASE}demo/">Live demo</a></div>
       ${C.edit === a.rid ? `<form class="vrow ownform" data-rid="${a.rid}" style="margin-top:8px"><input class="field" type="email" id="own-${a.rid}" placeholder="New owner's Google email" value="${esc(a.ownerEmail)}"><button class="btn primary">Save owner</button></form>
         <p class="note">The new owner signs in with this Google account. The old owner loses access straight away. Managers stay.</p>` : ""}
       ${a.status === "suspended" && st.kind !== "suspended" ? "" : a.status === "active" && !st.live ? `<p class="note">Switched on but unpaid: record a payment to start it again.</p>` : ""}</article>`;
