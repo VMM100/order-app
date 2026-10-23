@@ -1899,27 +1899,74 @@ function signupScreen() {
 
 // ================= MY ACCOUNT (diners) =================
 // One account across every restaurant on the platform: visits are listed by restaurant.
+// Sign in (#account): one place for everyone. Diners sign in with Google or their phone number;
+// owners and managers with the Google account on their restaurant. After signing in, anyone who runs a
+// restaurant (or is on the Wasabi team) chooses how to continue: as a guest, or as owner/manager.
 function accountScreen() {
-  $("#sub").textContent = "My account"; document.title = "My account · " + COMPANY.name;
   wasabiPage();
-  const S = { user: null, profile: null, visits: [], loading: true, armed: false, err: "" };
+  const S = { user: null, profile: null, visits: [], loading: true, armed: false, err: "",
+    step: "", phone: "", phoneFull: "", busy: false, authErr: "", roles: [], co: false, guest: false };
+  const guestKey = () => "wasabi-guest-" + (S.user ? S.user.uid : "");
   onUser(async (u) => {
     if (u && !isAccount(u)) u = null;   // the quiet sign-in every phone has isn't an account
-    S.user = u || null; S.loading = !!u;
-    if (u) { try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null; S.visits = await myVisits(u.uid); } catch (e) { S.err = "Couldn't load your visits. Check your connection."; } }
+    S.user = u || null; S.loading = !!u; S.step = ""; S.busy = false; S.roles = []; S.co = false; S.guest = false;
+    if (u) { render();
+      try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null; S.visits = await myVisits(u.uid); } catch (e) { S.err = "Couldn't load your visits. Check your connection."; }
+      // Is this account an owner or manager anywhere, or on the Wasabi team? (Google accounts only.)
+      if (u.email) { try { S.roles = await myRestaurants(u); } catch {} try { S.co = await isCompanyUser(u); } catch {} }
+      try { S.guest = sessionStorage.getItem(guestKey()) === "1"; } catch {}
+    }
     S.loading = false; render();
   });
   const back = () => { const t = store.get("dees-lasttable"); return t ? `<a class="btn" href="${esc(t)}">Back to your table</a>` : ""; };
   const day = (t) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const runs = () => S.roles.length > 0 || S.co;
+  function signInHtml() {
+    const step = S.step === "phone" ? `<form id="acphone" class="grid"><label for="acphonein" style="font-weight:600">Your phone number</label>
+          <input class="field" id="acphonein" type="tel" inputmode="tel" autocomplete="tel" placeholder="0748 227 000" value="${esc(S.phone)}">
+          <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Sending…" : "Send code by SMS"}</button></form>
+          <button class="btn ghost" data-act="ac-back" style="margin-top:10px">Back</button>`
+      : S.step === "code" ? `<form id="acsms" class="grid"><label for="acsmsin">Enter the 6-digit code sent to <b>${esc(S.phoneFull)}</b></label>
+          <input class="field num" id="acsmsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+          <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Checking…" : "Sign in"}</button></form>
+          <button class="btn ghost" data-act="ac-phone" style="margin-top:10px">Use a different number</button>`
+      : `<div class="grid"><button class="btn primary big" data-act="ac-google" ${S.busy ? "disabled" : ""}>${S.busy ? "Signing in…" : "Continue with Google"}</button>
+          <button class="btn big" data-act="ac-phone">Continue with phone number</button></div>
+          <p class="note">Restaurant owners and managers: use the Google account registered for your restaurant.</p>`;
+    return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Sign in</div>
+        <div class="wsign-title">For diners, restaurant owners and managers</div></div>
+      <div class="wsign-step">${step}${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}</div></div>
+      <p class="note wsign-foot">Diners don't need to sign in to order. Signing in keeps your visits and offers in one place.</p>
+      <div style="text-align:center;margin-top:12px">${back()}</div></section>`;
+  }
+  function chooserHtml(who) {
+    const state = (m) => { if (!m.acct) return ""; const k = subState(m.acct).kind;
+      return k === "pending" ? " · waiting for approval" : k === "suspended" ? " · paused" : k === "expired" ? " · subscription ended" : ""; };
+    const ini = (n) => esc((String(n || "?").trim()[0] || "?").toUpperCase());
+    return `<section><div class="label" style="margin-top:0">How do you want to continue?</div>
+      <p style="margin-top:0">Signed in as <b>${esc(who)}</b></p>
+      <div class="picks">
+        <button class="pick" data-act="ac-guest"><span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+          <span><b>As a guest</b><span class="note">Your visits at every restaurant, and offers</span></span></button>
+        ${S.roles.map((m) => `<a class="pick" href="${BASE}?r=${encodeURIComponent(m.rid)}#${m.role === "manager" ? "manager" : "owner"}"><span class="avatar">${ini(m.name)}</span>
+          <span><b>${esc(m.name)}</b><span class="note">${m.role === "owner" ? "Owner" : "Manager"}${state(m)}</span></span></a>`).join("")}
+        ${S.co ? `<a class="pick" href="${BASE}#company"><span class="avatar">${wasabiLeaf("wleaf", "#4a6716")}</span>
+          <span><b>${esc(COMPANY.name)} company page</b><span class="note">Restaurants, approvals and payments</span></span></a>` : ""}
+      </div>
+      <button class="btn" data-act="signout" style="margin-top:18px">Use a different account</button></section>`;
+  }
   function render() {
+    $("#sub").textContent = S.user && !(runs() && !S.guest) ? "My account" : "Sign in";
+    document.title = $("#sub").textContent + " · " + COMPANY.name;
     if (S.loading) return paint(`<p class="empty">Loading…</p>`);
-    if (!S.user) return paint(`<section><div class="label" style="margin-top:0">My account</div>
-      <p>You're not signed in on this phone. Scan the QR code on a table and choose "Continue with phone number" or Google to sign in.</p>
-      ${back()}</section>`);
+    if (!S.user) return paint(signInHtml());
+    if (runs() && !S.guest) return paint(chooserHtml(S.user.email || S.user.phoneNumber || ""));
     const by = {}; S.visits.forEach((v) => { (by[v.rid] ||= { name: v.rname, list: [] }).list.push(v); });
     const groups = Object.values(by).sort((a, b) => b.list[0].date - a.list[0].date);
     const who = S.user.phoneNumber || S.user.email || "";
+    const also = [...S.roles.map((m) => m.name), ...(S.co ? [`the ${COMPANY.name} company page`] : [])];
     paint(`<section>
+      ${runs() ? `<div class="soundbar" style="margin-bottom:14px"><span>You also run ${esc(also.join(", "))}.</span><button class="btn" data-act="ac-choose">Switch</button></div>` : ""}
       <div class="acct"><div class="avatar">${esc(((S.profile && S.profile.name) || "?").slice(0, 1).toUpperCase())}</div>
         <div><b style="font-size:20px">${esc((S.profile && S.profile.name) || "Diner")}</b><div class="note" style="margin:0">${esc(who)}</div></div></div>
       ${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}
@@ -1949,8 +1996,26 @@ function accountScreen() {
       await b.commit(); S.profile = { ...(S.profile || {}), offers, offerNames }; toast(on ? `You'll get ${name}'s offers` : `No more offers from ${name}`);
     } catch (err) { e.target.checked = !on; fail(err); }
   });
+  document.addEventListener("submit", async (e) => {
+    if (e.target.id === "acphone") { e.preventDefault();
+      S.phone = $("#acphonein").value; const full = normalisePhone(S.phone);
+      if (!full) { S.authErr = "That doesn't look like a phone number. Try 0748 227 000."; return render(); }
+      S.phoneFull = full; S.busy = true; S.authErr = ""; render();
+      try { await phoneStart(full); S.step = "code"; } catch (err) { S.authErr = authMessage(err); }
+      S.busy = false; render(); }
+    if (e.target.id === "acsms") { e.preventDefault();
+      const code = $("#acsmsin").value.replace(/\D/g, ""); if (code.length !== 6) { S.authErr = "The code is 6 digits."; return render(); }
+      S.busy = true; S.authErr = ""; render();
+      try { await phoneConfirm(code); } catch (err) { S.authErr = authMessage(err); S.busy = false; render(); } }
+  });
   document.addEventListener("click", async (e) => {
-    const b = e.target.closest("button"); if (!b || !S.user) return; const d = b.dataset;
+    const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
+    if (d.act === "ac-google" && !S.busy) { S.busy = true; S.authErr = ""; render(); try { await googleSignIn(); } catch (err) { S.authErr = authMessage(err); S.busy = false; render(); } return; }
+    if (d.act === "ac-phone") { S.step = "phone"; S.authErr = ""; render(); const i = $("#acphonein"); if (i) i.focus(); return; }
+    if (d.act === "ac-back") { S.step = ""; S.authErr = ""; render(); return; }
+    if (!S.user) return;
+    if (d.act === "ac-guest") { S.guest = true; try { sessionStorage.setItem(guestKey(), "1"); } catch {} render(); return; }
+    if (d.act === "ac-choose") { S.guest = false; try { sessionStorage.removeItem(guestKey()); } catch {} render(); return; }
     if (d.act === "signout") { try { await signOutUser(); } catch {} toast("Signed out"); }
     if (d.act === "delete") {
       if (!S.armed) { S.armed = true; render(); setTimeout(() => { S.armed = false; render(); }, 4000); return; }

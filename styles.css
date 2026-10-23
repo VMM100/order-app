@@ -380,3 +380,14 @@ body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);bo
 /* Back button at the left of the header on every app screen */
 .backbtn{flex:none;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:grid;place-items:center;padding:0}
 .backbtn:hover{border-color:var(--accent)}
+
+/* Sign in: after signing in, owners and managers pick how to continue */
+.picks{display:grid;gap:10px;max-width:520px}
+.pick{display:flex;align-items:center;gap:14px;width:100%;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:inherit;text-decoration:none;text-align:left;font:inherit}
+.pick:hover{border-color:var(--accent)}
+.pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pick b{display:block;font-size:16px}
+.pick .note{display:block;margin:2px 0 0}
+.pick .avatar{width:46px;height:46px;font-size:20px}
+.pick .avatar .wleaf{width:26px;height:26px}
+.wsign label{display:block;text-align:left}
