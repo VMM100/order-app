@@ -39,6 +39,12 @@
   window.IS_APP = !!(location.search.length > 1 || location.hash.length > 1);
   window.addEventListener("pagehide", () => { try { sessionStorage.setItem("wasabi-been", "1"); } catch {} });
   document.documentElement.className = IS_APP ? "is-app" : "is-home";
+  // The staging copy (test site) says so on every page, so nobody mistakes it for the live site.
+  if (/staging/.test(location.hostname)) addEventListener("DOMContentLoaded", () => {
+    const b = document.createElement("div"); b.textContent = "Staging · test copy, not the live site";
+    b.style.cssText = "position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2000;pointer-events:none;background:#e0457b;color:#fff;font:600 12px/1 system-ui,sans-serif;padding:7px 12px;border-radius:999px;box-shadow:0 2px 8px rgb(0 0 0/.3);white-space:nowrap";
+    document.body.appendChild(b);
+  });
   // App screens (tables, staff, owner pages) aren't pages for search results.
   if (IS_APP) { const m = document.createElement("meta"); m.name = "robots"; m.content = "noindex"; document.head.appendChild(m); }
   document.write(IS_APP

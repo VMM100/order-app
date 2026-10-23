@@ -1,4 +1,16 @@
 {
   "firestore": { "rules": "firestore.rules" },
+  "hosting": [
+    {
+      "target": "staging",
+      "public": "_site",
+      "headers": [
+        { "source": "**", "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+          { "key": "Cache-Control", "value": "no-cache" }
+        ] }
+      ]
+    }
+  ],
   "emulators": { "firestore": { "host": "127.0.0.1", "port": 8080 }, "ui": { "enabled": false } }
 }

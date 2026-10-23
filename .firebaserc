@@ -1,0 +1,4 @@
+{
+  "projects": { "default": "order-app-47367" },
+  "targets": { "order-app-47367": { "hosting": { "staging": ["wasabi-tz-staging"] } } }
+}

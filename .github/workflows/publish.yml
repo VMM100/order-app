@@ -1,0 +1,120 @@
+# Check and publish Wasabi.
+#
+#   staging branch  →  checks  →  staging site (https://wasabi-tz-staging.web.app)
+#   main branch     →  checks  →  database rules → live site (https://wasabi.co.tz) → version tag live-…
+#   Run workflow    →  pick a version tag (e.g. live-2026-10-24-0930) to put an older version back live.
+#
+# Nothing is published unless every check passes: scripts parse, the main pages open in a real
+# browser without errors, and the database security tests pass.
+name: Check and publish
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Roll back: version tag to put live (e.g. live-2026-10-24-0930). Leave empty to republish the latest main."
+        required: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  REF: ${{ inputs.version || github.sha }}
+  PROJECT: order-app-47367
+
+jobs:
+  pages:
+    name: Pages open without errors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ env.REF }}" }
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - name: Every script parses
+        run: node tests/syntax.mjs
+      - name: Install a headless browser
+        run: npm install --no-save --no-audit --no-fund playwright@1 && npx playwright install --with-deps chromium
+      - name: Open the main pages
+        run: node tests/smoke.mjs
+
+  rules:
+    name: Database security tests
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: tests }
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ env.REF }}" }
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm install --no-save --no-audit --no-fund firebase-tools@15 @firebase/rules-unit-testing@6 firebase@13
+      - run: ./run.sh
+
+  staging:
+    name: Publish to staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    needs: [pages, rules]
+    runs-on: ubuntu-latest
+    concurrency: { group: staging, cancel-in-progress: true }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - name: Sign in to Firebase
+        env: { SA: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" }
+        run: |
+          if [ -z "$SA" ]; then echo "::error title=Staging not set up yet::Add the FIREBASE_SERVICE_ACCOUNT secret in GitHub (Settings → Secrets and variables → Actions)."; exit 1; fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"; echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+      - name: Build the site folder
+        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc ./ _site/
+      - name: Make the staging site (first time only)
+        run: npx --yes firebase-tools@15 hosting:sites:create wasabi-tz-staging --project "$PROJECT" --non-interactive || true
+      - name: Publish
+        run: npx --yes firebase-tools@15 deploy --only hosting:staging --project "$PROJECT" --non-interactive --message "${GITHUB_SHA::7}"
+      - run: echo "### Staging updated → https://wasabi-tz-staging.web.app" >> "$GITHUB_STEP_SUMMARY"
+
+  live:
+    name: Publish live
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: [pages, rules]
+    runs-on: ubuntu-latest
+    concurrency: { group: live, cancel-in-progress: false }
+    environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ env.REF }}", fetch-depth: 2 }
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      # Rules go first, so the live app never runs against rules older than it expects. Rules changes are
+      # kept backward compatible, so the app still live meanwhile keeps working. Rollbacks leave rules alone.
+      - name: Publish database rules
+        if: github.event_name == 'push'
+        env: { SA: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" }
+        run: |
+          if ! git diff --quiet HEAD~1 HEAD -- firestore.rules 2>/dev/null; then changed=1; else changed=0; fi
+          if [ "$changed" = 0 ]; then echo "Rules unchanged."; exit 0; fi
+          if [ -z "$SA" ]; then echo "::warning title=Publish the rules by hand::firestore.rules changed. Paste it into Firebase → Firestore → Rules and Publish (or add the FIREBASE_SERVICE_ACCOUNT secret to do this automatically)."; exit 0; fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx --yes firebase-tools@15 deploy --only firestore:rules --project "$PROJECT" --non-interactive
+      - name: Build the site folder
+        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc ./ _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with: { path: _site }
+      - id: deploy
+        uses: actions/deploy-pages@v4
+      - name: Tag this version
+        if: github.event_name == 'push'
+        run: |
+          tag="live-$(TZ=Africa/Dar_es_Salaam date +%Y-%m-%d-%H%M)"
+          git tag "$tag" && git push origin "$tag"
+          echo "### Live → https://wasabi.co.tz (version $tag)" >> "$GITHUB_STEP_SUMMARY"
+      - if: github.event_name == 'workflow_dispatch'
+        run: echo "### Live → https://wasabi.co.tz (put back to ${{ inputs.version || 'latest main' }})" >> "$GITHUB_STEP_SUMMARY"

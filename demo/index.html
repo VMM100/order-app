@@ -24,6 +24,12 @@
 <div class="toast" id="toast" hidden></div>
 <div id="recaptcha"></div>
 <script>
+  // The staging copy (test site) says so on every page.
+  if (/staging/.test(location.hostname)) addEventListener("DOMContentLoaded", () => {
+    const b = document.createElement("div"); b.textContent = "Staging · test copy, not the live site";
+    b.style.cssText = "position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2000;pointer-events:none;background:#e0457b;color:#fff;font:600 12px/1 system-ui,sans-serif;padding:7px 12px;border-radius:999px;box-shadow:0 2px 8px rgb(0 0 0/.3);white-space:nowrap";
+    document.body.appendChild(b);
+  });
   // Before the app loads: the presenter page and role picker show the Wasabi logo; a room's screens
   // stay blank until the room's name arrives.
   (() => {
