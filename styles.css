@@ -376,3 +376,7 @@ body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);bo
 .wsign .err{margin:8px 0 0;font-size:13px;padding:10px 12px}
 .wsign-foot{max-width:380px;text-align:center;margin-top:14px}
 @media (prefers-reduced-motion:no-preference){.pindots.shake{animation:pinshake .35s}@keyframes pinshake{25%{transform:translateX(-8px)}50%{transform:translateX(8px)}75%{transform:translateX(-4px)}}}
+
+/* Back button at the left of the header on every app screen */
+.backbtn{flex:none;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:grid;place-items:center;padding:0}
+.backbtn:hover{border-color:var(--accent)}
