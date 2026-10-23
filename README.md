@@ -13,7 +13,7 @@ To go back to v1, ask for the code to be reset to the `v1` branch, or browse it 
 
 ## Screens
 
-Live at https://vmm100.github.io/order-app/. Every restaurant has an id (`r`), e.g. `crafty-dees`, carried in its links.
+Live at https://wasabi.co.tz/ (the old https://vmm100.github.io/order-app/ links forward there). The bare address shows the landing page (diner-first, with Scan table QR); any link with `?r=…` or a `#screen` opens the app. Every restaurant has an id (`r`), e.g. `crafty-dees`, carried in its links. Every app screen has a back arrow; pulling down at the top of a page refreshes it.
 
 | Screen | Link |
 | --- | --- |
@@ -27,7 +27,9 @@ Live at https://vmm100.github.io/order-app/. Every restaurant has an id (`r`), e
 | Join friends with their group's code (the Share invite) | `?r=ID&c=1234` |
 | Waiter (own phone, set up once from the staff QR; each shift starts with name + PIN and ends with End shift or after 16 hours) | `?r=ID&s=…#waiter` |
 | Kitchen / bar / grill (set up once from their staff QR) | `?r=ID&s=…#kitchen` |
-| Diner's account: visits at every restaurant | `#account` |
+| Sign in for everyone (Google or phone). Owners, managers and the Wasabi team then choose: as a guest, as owner/manager of a restaurant, or the company page. Diners see their account: visits at every restaurant, offers, delete account. Log out in the header; back asks first | `#account` |
+| Landing page | `/` (no `?r` and no `#`) |
+| Privacy policy | `privacy.html` |
 
 ## Files
 

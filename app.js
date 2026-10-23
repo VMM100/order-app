@@ -932,6 +932,10 @@ function dinerScreen() {
   }
   function renderCart() {
     setBarTop(); keepBar();
+    // The basket survives a refresh or a trip back to the front page (until it's sent).
+    const ck = `wasabi-cart-${RID}-${S.n || params.get("c") || "x"}`;
+    if (!S.cartRestored) { S.cartRestored = true; try { const saved = JSON.parse(sessionStorage.getItem(ck) || "[]"); if (!S.cart.length && Array.isArray(saved)) S.cart = saved.filter((x) => x && x.n && !soldOut(x.n)); } catch {} }
+    try { S.cart.length ? sessionStorage.setItem(ck, JSON.stringify(S.cart)) : sessionStorage.removeItem(ck); } catch {}
     const c = $("#cart"); if (!S.me || S.tab !== "menu" || !S.cart.length) { c.hidden = true; c.innerHTML = ""; document.body.classList.remove("hascart"); return; }
     const tot = S.cart.reduce((a, l) => a + l.pr, 0), n = S.cart.length; c.hidden = false;
     const a = document.activeElement, focused = a && a.id === "note";
