@@ -4,7 +4,7 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/13.0.0/firebase
 
 const firebaseConfig = {
   apiKey: "AIzaSyA1AC8HPl9IZxf9tlb3fjoLB_mpCSx8L3g",
-  authDomain: "order-app-47367.firebaseapp.com",
+  authDomain: "auth.wasabi.co.tz",   // Google sign-in runs on our own address (Firebase Hosting custom domain)
   projectId: "order-app-47367",
   storageBucket: "order-app-47367.firebasestorage.app",
   messagingSenderId: "151565820125",
