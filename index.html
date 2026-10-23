@@ -20,7 +20,7 @@
   document.documentElement.className = IS_APP ? "is-app" : "is-home";
   document.write(IS_APP
     ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css">'
-    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css">');
+    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=2">');
   // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
   if (!IS_APP) addEventListener("hashchange", () => { if (location.hash.length > 1) location.reload(); });
 </script>
