@@ -2023,7 +2023,9 @@ function accountScreen() {
         ${S.roles.map((m) => `<a class="pick" href="${BASE}?r=${encodeURIComponent(m.rid)}#${m.role === "manager" ? "manager" : "owner"}"><span class="avatar">${ini(m.name)}</span>
           <span><b>${esc(m.name)}</b><span class="note">${m.role === "owner" ? "Owner" : "Manager"}${state(m)}</span></span></a>`).join("")}
         ${S.co ? `<a class="pick" href="${BASE}#company"><span class="avatar">${wasabiLeaf("wleaf", "#4a6716")}</span>
-          <span><b>${esc(COMPANY.name)} company page</b><span class="note">Restaurants, approvals and payments</span></span></a>` : ""}
+          <span><b>${esc(COMPANY.name)} company page</b><span class="note">Restaurants, approvals and payments</span></span></a>`
+        <a class="pick" href="${BASE}demo/"><span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20v.01M17 20h4v-3"/></svg></span>
+          <span><b>Launch a live demo</b><span class="note">One QR code for the room; everyone picks a role</span></span></a>` : ""}
       </div>
       <button class="btn" data-act="signout" style="margin-top:18px">Use a different account</button></section>`;
   }

@@ -2120,11 +2120,20 @@ function errorBox(e) {
 
 // ================= DEMO: presenter page and role picker =================
 // The presenter's screen (iPad, laptop or projector): makes a room and shows one big QR code for the room.
+// Only the Wasabi company team can start a demo (signed in with Google on wasabi.co.tz first; the
+// database rules enforce it too). Anyone else who opens this address only sees how to join one.
 function presenterScreen() {
   wasabiPage(); $("#wrap").classList.add("wide"); $("#sub").textContent = "Live demo"; document.title = "Live demo · " + COMPANY.name;
-  paint(`<p class="empty">Setting up the demo room…</p>`);
+  paint(`<p class="empty">Loading…</p>`);
   (async () => {
-    await ensureUser();
+    const u = await authReady();
+    if (!(await isCompanyUser(u))) {
+      $("#wrap").classList.remove("wide");
+      return paint(`<section style="text-align:center;padding-top:30px"><h2 class="jtitle">Join a live demo</h2>
+        <p>Scan the QR code on the presenter's screen with your phone camera, then pick a role.</p>
+        <p class="note"><a href="${location.origin}/">wasabi.co.tz</a> · <a href="${location.origin}/#account">Sign in</a></p></section>`);
+    }
+    paint(`<p class="empty">Setting up the demo room…</p>`);
     let room = store.get("wasabi-demo-room");
     if (!room || !room.id || Date.now() - room.t > (DEMO_HOURS - 1) * 3600e3 || params.get("new")) {
       const id = newKey().slice(0, 8), k = newKey(); RID = id;

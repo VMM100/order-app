@@ -26,7 +26,7 @@ service cloud.firestore {
     function isCompany() { return verified() && exists(/databases/$(database)/documents/company/$(email())); }
 
     // ---------- live demo (demo/ folder of the site) ----------
-    // A room is a throwaway copy of a restaurant: anyone with a phone in the room (a quiet anonymous
+    // A room is a throwaway copy of a restaurant, started by the company team: anyone with a phone in the room (a quiet anonymous
     // sign-in, no account) can read and write it for 12 hours after it was made; then it is read-only.
     // Nothing here can reach real restaurants, accounts or diners.
     function demoOpen(room) {
@@ -35,7 +35,8 @@ service cloud.firestore {
     }
     match /demo/{room} {
       allow read: if signedIn();
-      allow create: if signedIn() && room.size() <= 12 && request.resource.data.created is int
+      // Only the company team can start a room; anyone with the room's QR can then take part.
+      allow create: if isCompany() && room.size() <= 12 && request.resource.data.created is int
         && request.resource.data.created > request.time.toMillis() - 60000 && request.resource.data.created < request.time.toMillis() + 60000;
       allow update: if demoOpen(room) && request.resource.data.created == resource.data.created;
       match /{rest=**} {
