@@ -2158,7 +2158,7 @@ function presenterScreen() {
       if (b.dataset.act === "dnew") { if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again: new room, new QR"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Start a new room"; }, 4000); return; }
         location.href = `${BASE}?new=1`; }
     });
-  })().catch((e) => paint(errorBox(e)));
+  })().catch((e) => paint(denied(e) ? `<section><div class="err">The demo can't open a room yet: the database doesn't allow demo rooms. Publish the latest rules (firestore.rules) in Firebase → Firestore → Rules, then reload this page.</div></section>` : errorBox(e)));
 }
 // What the QR opens on each phone: pick a role.
 function roleScreen() {
