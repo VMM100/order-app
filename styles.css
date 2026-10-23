@@ -402,3 +402,11 @@ body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);bo
 .ask-box p{margin:8px 0 0;color:var(--muted)}
 .ask-acts{display:grid;gap:10px;margin-top:20px}
 @media (prefers-reduced-motion:no-preference){.ask-box{animation:askin .18s ease-out}@keyframes askin{from{transform:translateY(8px);opacity:0}}}
+
+/* Menu template: download / upload, and the import preview */
+.tmpl{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:12px 14px}
+.tmpl b{font-size:15px}
+.impbox{margin-top:10px;background:var(--hop-soft);border-radius:12px;padding:12px 14px}
+.implist{margin:6px 0 0;padding-left:18px;font-size:14px}
+.implist li+li{margin-top:2px}
+.implist.warn{color:var(--warn);font-size:13px}

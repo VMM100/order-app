@@ -17,6 +17,7 @@ import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStar
 import { computeMetrics, sampleData } from "./metrics.js";
 import { genericPhoto } from "./photos.js";
 import { COMPANY } from "./platform.js";
+import { menuToCsv, readFile, rowsToMenu, mergeMenu } from "./menuio.js";
 import { wasabiLockup, wasabiLeaf } from "./brand.js";
 
 // ---------- helpers ----------
@@ -1440,7 +1441,20 @@ function ownerScreen(role) {
   // ----- menu editor -----
   function menuTab() {
     const stationSel = (si, cur) => `<select class="field sel" id="ss-${si}" data-f="sst" data-si="${si}" aria-label="Station">${STN.map(([k, v]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${v}</option>`).join("")}</select>`;
-    return `<section><p class="note" style="margin-top:0">Changes save as you go and reach diners' phones straight away. Use <b>Sold out</b> for anything that runs out tonight.</p>
+    const imp = S.imp;
+    const tmpl = `<div class="tmpl"><div style="min-width:0"><b>Menu template</b>
+        <div class="note" style="margin:2px 0 0">Fill in your whole menu in Excel or Google Sheets (one row per price), then upload it here. The download already has your current menu in it.</div></div>
+      <div class="row"><button class="btn" data-act="mdl">Download template</button>
+        <label class="btn primary" for="mup">${S.busy === "mup" ? "Reading…" : "Upload template"}</label>
+        <input type="file" id="mup" accept=".csv,.xlsx,.xls,text/csv" hidden></div></div>
+      ${imp && imp.error ? `<div class="impbox"><p class="err" style="margin:0">${esc(imp.error)}</p><button class="btn" data-act="impcancel" style="margin-top:10px">OK</button></div>` : ""}
+      ${imp && imp.menu ? `<div class="impbox"><b>Ready to import: ${imp.items} item${imp.items > 1 ? "s" : ""} in ${imp.menu.length} section${imp.menu.length > 1 ? "s" : ""}</b>
+        <ul class="implist">${imp.menu.map((x) => `<li>${esc(x.c)} · ${x.items.length} item${x.items.length > 1 ? "s" : ""} · goes to ${esc(STATIONS[x.st] || x.st)}</li>`).join("")}</ul>
+        ${imp.warn.length ? `<p class="note" style="margin:8px 0 4px"><b>${imp.warn.length} row${imp.warn.length > 1 ? "s" : ""} to check</b></p><ul class="implist warn">${imp.warn.slice(0, 8).map((w) => `<li>${esc(w)}</li>`).join("")}${imp.warn.length > 8 ? `<li>and ${imp.warn.length - 8} more</li>` : ""}</ul>` : ""}
+        <div class="row" style="margin-top:12px"><button class="btn primary" data-act="impreplace">${S.armed === "impr" ? "Tap again to replace" : "Replace my menu"}</button>
+          <button class="btn" data-act="impadd">Add to my menu</button><button class="btn ghost" data-act="impcancel">Cancel</button></div>
+        <p class="note">Replace swaps your whole menu for the file. Add keeps your menu and adds the file's items, updating ones with the same name. Photos stay on items with the same name either way.</p></div>` : ""}`;
+    return `<section>${tmpl}<p class="note" style="margin-top:14px">Changes save as you go and reach diners' phones straight away. Use <b>Sold out</b> for anything that runs out tonight.</p>
       ${MENU.map((sec, si) => `<article class="ticket preparing ed">
         <div class="edhead"><input class="field" id="sn-${si}" data-f="sname" data-si="${si}" value="${esc(sec.c)}" aria-label="Section name">
           <label class="note" style="margin:0" for="ss-${si}">Goes to</label>${stationSel(si, sec.st)}</div>
@@ -1616,6 +1630,14 @@ function ownerScreen(role) {
 
   // ----- events -----
   function at(d) { const sec = MENU[+d.si], it = sec && d.ii != null ? sec.items[+d.ii] : null; return { sec, it }; }
+  document.addEventListener("change", async (e) => {
+    if (e.target.id !== "mup" || !e.target.files || !e.target.files[0]) return;
+    const f = e.target.files[0]; e.target.value = "";
+    S.busy = "mup"; render();
+    try { const rows = await readFile(f); S.imp = rowsToMenu(rows, STATIONS); }
+    catch { S.imp = { error: "Couldn't read that file. Save it as CSV or Excel (.xlsx) and try again." }; }
+    S.busy = ""; render();
+  });
   document.addEventListener("change", (e) => {
     const el = e.target, d = el.dataset; if (!d.f || !unlocked) return;
     const v = el.value.trim(), { sec, it } = at(d);
@@ -1669,6 +1691,15 @@ function ownerScreen(role) {
     const ix = (s) => s.split(".").map(Number);
     if (!owner && (d.font || d.preset || d.period || ["resetcolors", "rmlogo", "sample", "unsample", "reload"].includes(d.act))) return;
     if (d.otab === "tables") { location.href = `${BASE}?r=${RID}#setup`; return; }
+    if (d.act === "mdl") {
+      const url = URL.createObjectURL(new Blob([menuToCsv(MENU, STATIONS)], { type: "text/csv;charset=utf-8" }));
+      const a = document.createElement("a"); a.href = url; a.download = `${RID || "menu"}-menu.csv`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000); toast("Template downloaded"); return; }
+    if (d.act === "impcancel") { S.imp = null; render(); return; }
+    if ((d.act === "impreplace" || d.act === "impadd") && S.imp && S.imp.menu) {
+      if (d.act === "impreplace" && S.armed !== "impr") return arm("impr");
+      const n = S.imp.items; MENU = mergeMenu(MENU, S.imp.menu, d.act === "impreplace" ? "replace" : "add");
+      S.imp = null; S.armed = null; S.edit = null; render(); await save(`${n} items imported`); return; }
     if (d.act === "wlqr") { S.wqr = !S.wqr; render(); return; }
     if (d.act === "wlcopy" || d.act === "wlshare") {
       if (!S.wtok) return; const link = waiterLink();

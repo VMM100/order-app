@@ -20,7 +20,7 @@
   window.addEventListener("pagehide", () => { try { sessionStorage.setItem("wasabi-been", "1"); } catch {} });
   document.documentElement.className = IS_APP ? "is-app" : "is-home";
   document.write(IS_APP
-    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=4">'
+    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=5">'
     : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=5">');
   // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
   // Going back from an app screen to the bare address shows the landing page again, and the other way round.
