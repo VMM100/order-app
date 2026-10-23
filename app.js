@@ -221,8 +221,8 @@ function brandCss(c1, c2) {
   const L = { bg: "#f6f4ee", surface: "#ffffff" }, D = { bg: "#161812", surface: "#20231b" };
   const a1 = buttonColour(mix(c1, "#ffffff", lum(c1) < 0.04 ? 0.35 : 0.15)), a2 = readable(c2, D.surface, "#ffffff");
   const b1 = buttonColour(c1);
-  const light = `--accent:${b1};--accent-ink:${inkOn(b1)};--accent-soft:${mix(c1, L.surface, 0.84)};--hop:${readable(c2, L.surface, "#000000")};--hop-soft:${mix(c2, L.surface, 0.86)}`;
-  const dark = `--accent:${a1};--accent-ink:${inkOn(a1)};--accent-soft:${mix(c1, D.bg, 0.72)};--hop:${a2};--hop-soft:${mix(c2, D.bg, 0.75)}`;
+  const light = `--accent:${b1};--accent-ink:${inkOn(b1)};--accent-soft:${mix(c1, L.surface, 0.84)};--hop:${readable(c2, L.surface, "#000000")};--hop-ink:${inkOn(readable(c2, L.surface, "#000000"))};--hop-soft:${mix(c2, L.surface, 0.86)}`;
+  const dark = `--accent:${a1};--accent-ink:${inkOn(a1)};--accent-soft:${mix(c1, D.bg, 0.72)};--hop:${a2};--hop-ink:${inkOn(a2)};--hop-soft:${mix(c2, D.bg, 0.75)}`;
   return `:root{${light}}@media (prefers-color-scheme:dark){:root{${dark}}}`;
 }
 function applyBrand() {
@@ -824,11 +824,13 @@ function dinerScreen() {
       // the header and highlights whichever section is on screen (see spy() below).
       body = `<div class="cats" id="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${esc(m.c)}</button>`).join("")}</div>
        ${MENU.map((cat, ci) => `<div class="msec" id="sec-${ci}" data-sec="${ci}"><h2 class="sech">${esc(cat.c)}</h2>
-       ${cat.items.map((it, ii) => { const gp = !it.img && genericPhoto(it.n), inCart = S.cart.filter((c) => c.n === it.n).length;
+       ${cat.items.map((it, ii) => { const gp = !it.img && genericPhoto(it.n), inCart = (l) => S.cart.filter((c) => c.n === it.n && (c.v || "") === (l || "")).length;
          return `<div class="item${it.out ? " out" : ""}${it.img || gp ? " withph" : ""}">
-         <div class="itxt"><h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}${inCart ? ` <span class="incart num">${inCart} in basket</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}</div>
+         <div class="itxt"><h3>${esc(it.n)}${it.out ? ` <span class="pill s-served">Sold out</span>` : ""}</h3>${it.d ? `<p class="d">${esc(it.d)}</p>` : ""}${it.m ? `<div class="meta">${esc(it.m)}</div>` : ""}</div>
          ${it.img ? `<div class="ph"><img data-photo="${esc(it.img)}" alt="${esc(it.n)}" loading="lazy"></div>` : gp ? `<div class="ph loaded"><img src="${gp}" alt="${esc(it.n)}" loading="lazy"></div>` : ""}
-         ${it.out ? "" : `<div class="vars${it.v.length === 1 ? " one" : ""}">${it.v.map(([l, p], vi) => `<button class="var" data-add="${ci}.${ii}.${vi}" aria-label="Add ${esc(it.n)}${l ? " " + esc(l) : ""}, TSh ${fmt(p)}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num">${fmt(p)}</span></button>`).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
+         ${it.out ? "" : `<div class="vars${it.v.length === 1 ? " one" : ""}">${it.v.map(([l, p], vi) => { const q = inCart(l), key = `${ci}.${ii}.${vi}`;
+           // In the basket: the option stays highlighted with a count badge; each tap adds one more.
+           return `<button class="var${q ? " on" : ""}" data-add="${key}" aria-label="Add ${esc(it.n)}${l ? " " + esc(l) : ""}, TSh ${fmt(p)}${q ? `, ${q} in basket` : ""}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num">${fmt(p)}</span>${q ? `<span class="vq num${S.bump === key ? " bump" : ""}" aria-hidden="true">${q}</span>` : ""}</button>`; }).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
     } else if (S.tab === "orders") {
       body = Object.entries(g.people || {}).sort(([a], [b]) => (a === S.me.pid ? -1 : b === S.me.pid ? 1 : 0)).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
         return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
@@ -946,7 +948,7 @@ function dinerScreen() {
     if (d.tab) { S.tab = d.tab; render(); window.scrollTo(0, 0); }
     else if (d.cat) { S.cat = +d.cat; markCat(); jumpTo(S.cat); }
     else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c]?.items[i]; if (!it || it.out || !it.v[v]) return render(); const [l, p] = it.v[v];
-      S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}${l ? " · " + l : ""}`); render(); }
+      S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}${l ? " · " + l : ""}`); S.bump = d.add; render(); S.bump = null; }
     else if (d.rm) { S.cart.splice(+d.rm, 1); render(); }
     else if (d.inc) { const x = S.cart.find((l) => l.n + "|" + (l.v || "") === d.inc); if (x) S.cart.push({ ...x }); render(); }
     else if (d.dec) { const i = S.cart.map((l) => l.n + "|" + (l.v || "")).lastIndexOf(d.dec); if (i >= 0) S.cart.splice(i, 1); if (!S.cart.length) S.cartOpen = false; render(); }

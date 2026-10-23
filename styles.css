@@ -2,7 +2,7 @@
 :root{
   --bg:#f6f4ee; --surface:#ffffff; --fg:#22261f; --muted:#5d6255; --line:#dfdcd1;
   --accent:#a8650f; --accent-ink:#ffffff; --accent-soft:#f6e7cf;
-  --hop:#3f5a2c; --hop-soft:#e3ead9;
+  --hop:#3f5a2c; --hop-ink:#ffffff; --hop-soft:#e3ead9;
   --good:#2f7a45; --warn:#8a520c; --crit:#b23a2e; --crit-soft:#fbe9e6;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Work Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -11,7 +11,7 @@
 @media (prefers-color-scheme:dark){:root{
   --bg:#161812; --surface:#20231b; --fg:#ecebe3; --muted:#a2a596; --line:#34382c;
   --accent:#e0a14a; --accent-ink:#1b1408; --accent-soft:#3a2c16;
-  --hop:#a9c38c; --hop-soft:#2a3421;
+  --hop:#a9c38c; --hop-ink:#16200f; --hop-soft:#2a3421;
   --good:#6cc487; --warn:#e5a24d; --crit:#ec7a6c; --crit-soft:#3d1f1a; color-scheme:dark}}
 *{box-sizing:border-box}
 html{padding-top:env(safe-area-inset-top,0px)}
@@ -70,7 +70,14 @@ section{padding-top:16px}
 .var .vl{color:var(--fg)}
 .var .num{color:var(--fg);font-weight:600}
 .var:active{background:var(--hop-soft);border-color:var(--hop)}
-.incart{display:inline-block;vertical-align:2px;margin-left:4px;font-size:11px;font-weight:600;color:var(--hop);background:var(--hop-soft);border-radius:999px;padding:1px 8px}
+/* Quick taps add more, so the phone mustn't select the price text or show its own tap flash. */
+.var{position:relative;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.var.on{background:var(--hop-soft);border-color:var(--hop)}
+.var .vq{position:absolute;top:-8px;right:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--hop);color:var(--hop-ink);
+  font-size:12px;font-weight:700;line-height:22px;text-align:center;box-shadow:0 0 0 2px var(--bg);pointer-events:none}
+.var .vq.bump{animation:vq-bump .28s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes vq-bump{from{transform:scale(.6)}}
+@media (prefers-reduced-motion:reduce){.var .vq.bump{animation:none}}
 .cart{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);
   padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-shadow:0 -6px 20px rgb(0 0 0 / .08)}
 .cart .in{max-width:560px;margin:0 auto;display:grid;gap:8px}
@@ -336,8 +343,8 @@ body.hello-on{overflow:hidden}
 
 /* ---------- Wasabi's own pages: company, sign-up, account ---------- */
 .wlogo{height:26px;width:auto;display:block;color:var(--fg)}
-body.wasabi{--accent:#9cc43c;--accent-ink:#1a2117;--accent-soft:#e8f0d2;--hop:#4a6716;--hop-soft:#e8f0d2;
+body.wasabi{--accent:#9cc43c;--accent-ink:#1a2117;--accent-soft:#e8f0d2;--hop:#4a6716;--hop-ink:#ffffff;--hop-soft:#e8f0d2;
   --display:"Bricolage Grotesque","Work Sans",system-ui,sans-serif;--dcase:none}
-@media (prefers-color-scheme:dark){body.wasabi{--accent:#a9d14a;--accent-ink:#121610;--accent-soft:#2a3a1c;--hop:#b8db6c;--hop-soft:#2a3a1c}}
+@media (prefers-color-scheme:dark){body.wasabi{--accent:#a9d14a;--accent-ink:#121610;--accent-soft:#2a3a1c;--hop:#b8db6c;--hop-ink:#121610;--hop-soft:#2a3a1c}}
 body.wasabi header.top h1{font-weight:800;letter-spacing:-.01em}
 body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
