@@ -20,7 +20,7 @@
   document.documentElement.className = IS_APP ? "is-app" : "is-home";
   document.write(IS_APP
     ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css">'
-    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=2">');
+    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=3">');
   // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
   if (!IS_APP) addEventListener("hashchange", () => { if (location.hash.length > 1) location.reload(); });
 </script>
@@ -42,10 +42,10 @@
     <div class="in">
       <a class="logo" href="./" aria-label="Wasabi home"><img src="img/brand/wasabi-lockup-reverse.svg" alt="Wasabi" width="141" height="28"></a>
       <nav class="nav" aria-label="Main">
-        <a class="hide-s" href="#how-it-works" data-scroll>How it works</a>
-        <a class="hide-s" href="#pricing" data-scroll>Pricing</a>
-        <a href="#owner">Sign in</a>
-        <a class="btn btn-go" href="#signup">Start free trial</a>
+        <a class="hide-s" href="#find-us" data-scroll>Find us</a>
+        <a class="hide-s" href="#for-restaurants" data-scroll>For restaurants</a>
+        <a class="hide-s" href="#account">My account</a>
+        <button type="button" class="btn btn-go" data-scan><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx=".5"/><rect x="13" y="7" width="4" height="4" rx=".5"/><rect x="7" y="13" width="4" height="4" rx=".5"/><path d="M14 14h3v3"/></svg>Scan table QR</button>
       </nav>
     </div>
   </header>
@@ -54,16 +54,14 @@
     <section class="hero">
       <div class="in">
         <div>
-          <span class="eyebrow">Table ordering for restaurants and bars</span>
-          <h1>Your menu on every table. <em>The bill splits itself.</em></h1>
-          <p class="lede">Diners scan a code, order from their own phones and split the bill however they like. Orders go straight to your kitchen and bar, so your waiters spend their time on service, not trips back and forth.</p>
+          <span class="eyebrow">Order at the table</span>
+          <h1>Order from your table. <em>Split the bill in a tap.</em></h1>
+          <p class="lede">At restaurants and bars with Wasabi, scan the code on your table to see the menu, order with friends from your own phones and split the bill however you like.</p>
           <div class="ctas">
-            <a class="btn btn-go" href="#signup">Start your free 30-day trial</a>
-            <a class="btn btn-line" href="https://wa.me/255748227000?text=Hi%2C%20I%27d%20like%20a%20Wasabi%20demo%20for%20my%20restaurant" target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.6-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3Z"/></svg>
-              Book a demo</a>
+            <button type="button" class="btn btn-go btn-xl" data-scan><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx=".5"/><rect x="13" y="7" width="4" height="4" rx=".5"/><rect x="7" y="13" width="4" height="4" rx=".5"/><path d="M14 14h3v3"/></svg>Scan table QR</button>
+            <a class="btn btn-line" href="#find-us" data-scroll>Where can I use it?</a>
           </div>
-          <p class="fine">No app to download. Works on the phones your team already has.</p>
+          <p class="fine">No app to download and no account needed. The camera is only used to read the code.</p>
         </div>
 
         <div class="stage" aria-hidden="true">
@@ -80,7 +78,7 @@
             </div>
             <div class="s-cart"><span>Place order · 2 items</span><span>TSh 20,000</span></div>
           </div></div>
-          <div class="float f1"><i>🍺</i><div><b>Bar: 2 × Blonde Ale</b><small>Table 4 · just now</small></div></div>
+          <div class="float f1"><i>✓</i><div><b>Order sent to the bar</b><small>2 × Blonde Ale · just now</small></div></div>
           <div class="float f2"><i>÷</i><div><b>Split 3 ways</b><small>TSh 19,000 each</small></div></div>
         </div>
       </div>
@@ -91,20 +89,47 @@
         <div class="sec-h">
           <span class="eyebrow">How it works</span>
           <h2>Scan, order, split. That's the whole night.</h2>
-          <p>No app to install and no account needed. The phone camera opens your menu in the browser.</p>
+          <p>No app and no account. Scanning opens the menu straight in your browser.</p>
         </div>
         <div class="steps">
-          <div class="step"><h3>Scan the table code</h3><p>Each table has its own QR card. Diners see your menu with photos, prices and what's sold out tonight.</p></div>
-          <div class="step"><h3>Everyone orders</h3><p>Friends join the table with a 4-digit code and order from their own phones. Drinks go to the bar, food to the kitchen.</p></div>
-          <div class="step"><h3>Split the bill</h3><p>Split equally or by what each person ordered. Diners see their share, call the waiter and pay as they do today.</p></div>
+          <div class="step"><h3>Scan the table code</h3><p>Tap <b>Scan table QR</b> or use your phone's camera. The menu opens with photos, prices and what's available tonight.</p></div>
+          <div class="step"><h3>Order together</h3><p>Friends join your table with a 4-digit code and order from their own phones. Your order goes straight to the kitchen and bar.</p></div>
+          <div class="step"><h3>Split the bill</h3><p>Split equally or by what each person had. See your share, call the waiter and pay as you normally would.</p></div>
         </div>
+      </div>
+    </section>
+
+    <section class="sec findus" id="find-us" aria-labelledby="h-find">
+      <div class="in">
+        <div class="sec-h">
+          <span class="eyebrow">Find us at</span>
+          <h2 id="h-find">Order with Wasabi here.</h2>
+          <p>Look for the Wasabi table cards at these restaurants and bars. Own one? <a href="#for-restaurants" data-scroll>Bring Wasabi to your tables</a>.</p>
+        </div>
+      </div>
+      <div class="marquee">
+        <ul class="track"><li class="spot"><img src="img/logos/crafty-dees.png" alt="" width="64" height="64" loading="lazy"><span><b>Crafty Dee's</b><small>Brewpub &amp; beer garden · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your restaurant here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your bar here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your café here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your rooftop here</b><small>Join us · Dar es Salaam</small></span></li></ul>
+        <ul class="track" aria-hidden="true"><li class="spot"><img src="img/logos/crafty-dees.png" alt="" width="64" height="64" loading="lazy"><span><b>Crafty Dee's</b><small>Brewpub &amp; beer garden · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your restaurant here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your bar here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your café here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your rooftop here</b><small>Join us · Dar es Salaam</small></span></li></ul>
+      </div>
+    </section>
+
+    <section class="biz" id="for-restaurants">
+      <div class="in">
+        <span class="eyebrow">For restaurants and bars</span>
+        <h2>Your menu on every table. <em>The bill splits itself.</em></h2>
+        <p class="lede">Orders go straight to your kitchen and bar, so your waiters spend their time on service, not trips back and forth. It runs on the phones your team already has.</p>
+        <div class="ctas">
+          <a class="btn btn-go" href="#signup">Start your free 30-day trial</a>
+          <a class="btn btn-line" href="https://wa.me/255748227000?text=Hi%2C%20I%27d%20like%20a%20Wasabi%20demo%20for%20my%20restaurant" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.6-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3Z"/></svg>Book a demo</a>
+        </div>
+        <p class="fine">Already with Wasabi? <a href="#owner">Sign in to your restaurant</a></p>
       </div>
     </section>
 
     <section class="sec alt" id="features">
       <div class="in">
         <div class="sec-h">
-          <span class="eyebrow">For your restaurant</span>
+          <span class="eyebrow">What you get</span>
           <h2>Built for a busy Friday night.</h2>
           <p>Everything your team needs runs on ordinary phones and tablets. No tills or special hardware to buy.</p>
         </div>
@@ -166,26 +191,12 @@
           <h2>Good to know.</h2>
         </div>
         <div class="faq">
-          <details><summary>Do diners need to download an app?</summary><p>No. They point their phone camera at the table card and your menu opens in the browser. Signing in is optional; it lets regulars see past visits and offers.</p></details>
+          <details><summary>Do I need to download an app?</summary><p>No. Scan the table card and the menu opens in your browser. Signing in is optional; it keeps your past visits and any offers in one place.</p></details>
+          <details><summary>How do I pay?</summary><p>Your share shows on your phone. Pay your waiter by cash, card or mobile money, as you normally would. Paying inside Wasabi is coming later.</p></details>
           <details><summary>What do we need to buy?</summary><p>Nothing special. Your team uses phones or tablets you already have, and you print the table cards from Wasabi on any printer.</p></details>
           <details><summary>Does it replace our waiters?</summary><p>No. Waiters still welcome guests, serve and take payment. They just stop running back and forth with orders, so each one can look after more tables.</p></details>
-          <details><summary>Can diners pay inside the app?</summary><p>Not yet. Today diners see their share and pay your waiter. Payment in the app is on our roadmap.</p></details>
           <details><summary>How long does setup take?</summary><p>Most restaurants are ready in an afternoon: add your menu, set your tables, print the cards and give each waiter a PIN. We help with all of it.</p></details>
         </div>
-      </div>
-    </section>
-
-    <section class="sec findus" id="find-us" aria-labelledby="h-find">
-      <div class="in">
-        <div class="sec-h">
-          <span class="eyebrow">Find us at</span>
-          <h2 id="h-find">Order with Wasabi here.</h2>
-          <p>Look for the Wasabi table cards at these restaurants and bars. Want yours on the list? <a href="#signup">Start a free trial</a>.</p>
-        </div>
-      </div>
-      <div class="marquee">
-        <ul class="track"><li class="spot"><img src="img/logos/crafty-dees.png" alt="" width="64" height="64" loading="lazy"><span><b>Crafty Dee's</b><small>Brewpub &amp; beer garden · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your restaurant here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your bar here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your café here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your rooftop here</b><small>Join us · Dar es Salaam</small></span></li></ul>
-        <ul class="track" aria-hidden="true"><li class="spot"><img src="img/logos/crafty-dees.png" alt="" width="64" height="64" loading="lazy"><span><b>Crafty Dee's</b><small>Brewpub &amp; beer garden · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your restaurant here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your bar here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your café here</b><small>Join us · Dar es Salaam</small></span></li><li class="spot spot-open"><span class="spot-plus" aria-hidden="true">+</span><span><b>Your rooftop here</b><small>Join us · Dar es Salaam</small></span></li></ul>
       </div>
     </section>
 
@@ -211,13 +222,21 @@
     </section>
   </main>
 
+  <div class="scan" id="scan" hidden role="dialog" aria-modal="true" aria-labelledby="scan-t">
+    <video id="scan-v" playsinline muted></video>
+    <div class="scan-frame" aria-hidden="true"></div>
+    <div class="scan-top"><b id="scan-t">Scan the table QR</b><button type="button" class="scan-x" data-close aria-label="Close">✕</button></div>
+    <div class="scan-bottom"><p id="scan-msg" role="status">Starting the camera…</p>
+      <div class="scan-acts"><button type="button" class="btn btn-go" data-retry hidden>Try again</button><button type="button" class="btn btn-line" data-close hidden>Close</button></div></div>
+  </div>
+
   <footer class="foot">
     <div class="in">
       <img src="img/brand/wasabi-lockup.svg" alt="Wasabi" width="111" height="22">
       <nav aria-label="Footer">
+        <a href="#account">My account</a>
         <a href="#signup">Register a restaurant</a>
-        <a href="#owner">Owner sign-in</a>
-        <a href="#account">Diner account</a>
+        <a href="#owner">Restaurant sign-in</a>
       </nav>
       <span>© 2026 Wasabi · Dar es Salaam</span>
     </div>
@@ -235,6 +254,61 @@
     document.querySelectorAll("a[data-scroll]").forEach((l) => l.addEventListener("click", (e) => {
       e.preventDefault(); document.querySelector(l.getAttribute("href")).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     }));
+    // ---- Scan table QR: the camera reads the table card and opens that table's menu. ----
+    // Uses the browser's own QR reader where there is one (Chrome on Android), otherwise a small
+    // bundled reader (vendor/jsQR.min.js, loaded only when needed). Only Wasabi table links are opened.
+    const sc = { el: document.getElementById("scan"), v: document.getElementById("scan-v"), msg: document.getElementById("scan-msg"),
+      stream: null, det: null, cv: null, run: false, last: "", from: null };
+    const say = (t) => { sc.msg.textContent = t; };
+    const acts = (on) => sc.el.querySelectorAll("[data-retry],.scan-acts [data-close]").forEach((b) => (b.hidden = !on));
+    const ours = (u) => ["wasabi.co.tz", "www.wasabi.co.tz", location.host].includes(u.host) || (u.host === "vmm100.github.io" && u.pathname.startsWith("/order-app"));
+    function stopCam() { sc.run = false; if (sc.stream) sc.stream.getTracks().forEach((t) => t.stop()); sc.stream = null; sc.v.srcObject = null; }
+    function closeScan() { stopCam(); sc.el.hidden = true; sc.el.classList.remove("err"); document.body.classList.remove("scan-on"); if (sc.from) sc.from.focus(); }
+    function fail(t) { stopCam(); sc.el.classList.add("err"); say(t); acts(true); }
+    const loadReader = () => window.jsQR ? Promise.resolve() : new Promise((ok, no) => { const x = document.createElement("script"); x.src = "vendor/jsQR.min.js"; x.onload = ok; x.onerror = no; document.head.appendChild(x); });
+    async function openScan(e) {
+      sc.from = e && e.currentTarget; sc.el.hidden = false; sc.el.classList.remove("err"); acts(false); sc.last = "";
+      document.body.classList.add("scan-on"); sc.el.querySelector(".scan-x").focus(); say("Starting the camera…");
+      if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+        return fail("This browser can't open the camera here. Use your phone's camera app instead: point it at the table card and tap the link that appears.");
+      try { sc.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false }); }
+      catch (err) {
+        const n = err && err.name;
+        return fail(n === "NotAllowedError" || n === "SecurityError" ? "Camera access is off. Allow the camera for this site in your browser settings and try again, or use your phone's camera app."
+          : n === "NotFoundError" || n === "OverconstrainedError" ? "No camera was found on this device." : "Couldn't start the camera. Try again, or use your phone's camera app.");
+      }
+      if (sc.el.hidden) return stopCam();
+      sc.v.srcObject = sc.stream; try { await sc.v.play(); } catch {}
+      say("Point your camera at the QR code on your table.");
+      sc.det = null;
+      if ("BarcodeDetector" in window) { try { if ((await BarcodeDetector.getSupportedFormats()).includes("qr_code")) sc.det = new BarcodeDetector({ formats: ["qr_code"] }); } catch {} }
+      if (!sc.det) { try { await loadReader(); } catch { return fail("Couldn't load the code reader. Check your connection, or use your phone's camera app."); } }
+      sc.run = true; tick();
+    }
+    async function read() {
+      const v = sc.v; if (v.readyState < 2 || !v.videoWidth) return null;
+      if (sc.det) { const c = await sc.det.detect(v); return c.length ? c[0].rawValue : null; }
+      const w = Math.min(640, v.videoWidth), h = Math.round(w * v.videoHeight / v.videoWidth);
+      sc.cv = sc.cv || document.createElement("canvas"); sc.cv.width = w; sc.cv.height = h;
+      const g = sc.cv.getContext("2d", { willReadFrequently: true }); g.drawImage(v, 0, 0, w, h);
+      const r = window.jsQR(g.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: "dontInvert" }); return r ? r.data : null;
+    }
+    async function tick() {
+      if (!sc.run) return;
+      let t = null; try { t = await read(); } catch {}
+      if (t && t !== sc.last) {
+        sc.last = t; let u = null; try { u = new URL(t); } catch {}
+        if (u && ours(u) && u.searchParams.get("r")) { say("Opening the menu…"); stopCam(); if (navigator.vibrate) navigator.vibrate(40); location.href = u.href; return; }
+        say("That isn't a Wasabi table code. Look for the card on your table with the Wasabi leaf.");
+        setTimeout(() => { if (sc.run) { sc.last = ""; say("Point your camera at the QR code on your table."); } }, 3000);
+      }
+      setTimeout(() => requestAnimationFrame(tick), 120);
+    }
+    document.querySelectorAll("[data-scan]").forEach((b) => b.addEventListener("click", openScan));
+    sc.el.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeScan(); else if (e.target.closest("[data-retry]")) openScan(); });
+    addEventListener("keydown", (e) => { if (e.key === "Escape" && !sc.el.hidden) closeScan(); });
+    addEventListener("pagehide", stopCam);
+
     // Pricing: monthly or yearly.
     const P = { m: ["TSh 130,000", "a month", " "], y: ["TSh 1,300,000", "a year", "Two months free compared with paying monthly"] };
     document.querySelectorAll("[data-plan]").forEach((b) => b.addEventListener("click", () => {
