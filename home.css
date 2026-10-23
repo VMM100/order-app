@@ -162,3 +162,21 @@ footer.foot img{height:22px;width:auto}
 footer.foot nav{display:flex;flex-wrap:wrap;gap:18px}
 footer.foot a{text-decoration:none}
 footer.foot a:hover{color:var(--text);text-decoration:underline}
+
+/* "Find us at": restaurants using Wasabi, scrolling sideways on a loop. The list is drawn twice so the
+   loop is seamless; the second copy is hidden from screen readers. Pauses on hover; still when the
+   visitor prefers less motion (then it scrolls by hand). */
+.findus{padding-bottom:64px}
+.findus .sec-h a{color:var(--wasabi-deep);font-weight:600}
+.marquee{display:flex;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.track{list-style:none;margin:0;padding:6px 8px;display:flex;gap:16px;flex:none;animation:slide 32s linear infinite}
+.marquee:hover .track{animation-play-state:paused}
+@keyframes slide{to{transform:translateX(-100%)}}
+.spot{flex:none;display:flex;align-items:center;gap:14px;width:290px;padding:14px 18px 14px 14px;background:var(--card);border:1px solid var(--line);border-radius:18px}
+.spot img{width:64px;height:64px;flex:none;border-radius:50%}
+.spot b{display:block;font-size:17px}
+.spot small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.spot-open{background:transparent;border:1.5px dashed #c5cbb5}
+.spot-plus{width:64px;height:64px;flex:none;border-radius:50%;background:var(--wasabi-soft);color:var(--wasabi-deep);display:grid;place-items:center;font:700 30px var(--display)}
+.spot-open b{color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.track{animation:none}.track[aria-hidden]{display:none}.marquee{overflow-x:auto;-webkit-mask-image:none;mask-image:none;padding-inline:var(--gut)}}
