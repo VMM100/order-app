@@ -4,7 +4,7 @@
 :root{
   --ink:#1a2117; --ink-2:#232c1f; --ink-3:#2e3a28; --paper:#f6f4ee; --card:#ffffff; --line:#dfe2d4;
   --text:#1f251b; --muted:#5a6151; --on-ink:#f6f4ee; --on-ink-muted:#b9c0ad;
-  --wasabi:#9cc43c; --wasabi-deep:#4a6716; --wasabi-soft:#e8f0d2;
+  --wasabi:#9cc43c; --wasabi-deep:#4a6716; --wasabi-soft:#e8f0d2; --ginger:#f2a493;
   --display:"Bricolage Grotesque","Work Sans",system-ui,sans-serif;
   --body:"Work Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --gut:max(16px,env(safe-area-inset-left,0px));
@@ -47,7 +47,7 @@ p{margin:0}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--wasabi)}
 .eyebrow::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--wasabi)}
 .hero h1{font-size:clamp(40px,9vw,72px);margin-top:14px}
-.hero h1 em{font-style:normal;color:var(--wasabi)}
+.hero h1 em{font-style:normal;color:var(--ginger)} /* the page's one ginger accent (brand rule) */
 .lede{font-size:clamp(17px,2.2vw,20px);color:var(--on-ink-muted);margin-top:18px;max-width:34em}
 .ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
 .fine{font-size:14px;color:var(--on-ink-muted);margin-top:14px}
