@@ -410,3 +410,4 @@ body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);bo
 .implist{margin:6px 0 0;padding-left:18px;font-size:14px}
 .implist li+li{margin-top:2px}
 .implist.warn{color:var(--warn);font-size:13px}
+.scanbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%}

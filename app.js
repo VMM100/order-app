@@ -2025,6 +2025,16 @@ function accountScreen() {
       <p class="note wsign-foot">Diners don't need to sign in to order. Signing in keeps your visits and offers in one place. <a href="privacy.html">Privacy policy</a></p>
       <div style="text-align:center;margin-top:12px">${back()}</div></section>`;
   }
+  function nameHtml() {
+    const guess = (S.user.displayName || "").trim().split(/\s+/)[0] || "";
+    return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Welcome</div>
+        <div class="wsign-title">What's your first name?</div></div>
+      <div class="wsign-step"><form id="acname" class="grid"><label class="flabel" for="acnamein">Your first name <span>Waiters and your friends at the table see this</span></label>
+        <input class="field" id="acnamein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(guess)}">
+        <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Saving…" : "Continue"}</button></form>
+        ${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}</div></div>
+      <p class="note wsign-foot">Signed in as ${esc(S.user.email || S.user.phoneNumber || "")} · <button class="linkbtn" data-act="signout">Use a different account</button></p></section>`;
+  }
   function chooserHtml(who) {
     const state = (m) => { if (!m.acct) return ""; const k = subState(m.acct).kind;
       return k === "pending" ? " · waiting for approval" : k === "suspended" ? " · paused" : k === "expired" ? " · subscription ended" : ""; };
@@ -2048,6 +2058,8 @@ function accountScreen() {
     document.title = $("#sub").textContent + " · " + COMPANY.name;
     if (S.loading) return paint(`<p class="empty">Loading…</p>`);
     if (!S.user) return paint(signInHtml());
+    // First sign-in: ask everyone for their first name once, before anything else.
+    if (!(S.profile && S.profile.name)) return paint(nameHtml());
     if (runs() && !S.guest) return paint(chooserHtml(S.user.email || S.user.phoneNumber || ""));
     const by = {}; S.visits.forEach((v) => { (by[v.rid] ||= { name: v.rname, list: [] }).list.push(v); });
     const groups = Object.values(by).sort((a, b) => b.list[0].date - a.list[0].date);
@@ -2058,6 +2070,8 @@ function accountScreen() {
       <div class="acct"><div class="avatar">${esc(((S.profile && S.profile.name) || "?").slice(0, 1).toUpperCase())}</div>
         <div><b style="font-size:20px">${esc((S.profile && S.profile.name) || "Diner")}</b><div class="note" style="margin:0">${esc(who)}</div></div></div>
       ${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}
+      <button class="btn primary big scanbtn" data-scan style="margin-top:18px"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx=".5"/><rect x="13" y="7" width="4" height="4" rx=".5"/><rect x="7" y="13" width="4" height="4" rx=".5"/><path d="M14 14h3v3"/></svg>Scan table QR</button>
+      <p class="note" style="text-align:center">At a bar, café or restaurant with Wasabi? Scan the card on your table to order.</p>
       <div class="label">Your visits</div>
       ${groups.length ? groups.map((g) => `<div class="ticket preparing" style="margin-bottom:12px">
           <header><b>${esc(g.name)}</b><span class="note" style="margin:0">${g.list.length} visit${g.list.length > 1 ? "s" : ""} · TSh ${fmt(g.list.reduce((a, v) => a + (v.share || 0), 0))}</span></header>
@@ -2085,6 +2099,15 @@ function accountScreen() {
     } catch (err) { e.target.checked = !on; fail(err); }
   });
   document.addEventListener("submit", async (e) => {
+    if (e.target.id === "acname") { e.preventDefault(); if (!S.user || S.busy) return;
+      const name = $("#acnamein").value.trim(); if (!name) { S.authErr = "Enter your first name."; return render(); }
+      S.busy = true; S.authErr = ""; render();
+      try {
+        if (S.profile) await updateDoc(dinerRef(S.user.uid), { name });
+        else await setDoc(dinerRef(S.user.uid), { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: {}, offerNames: {}, created: Date.now() });
+        S.profile = { ...(S.profile || {}), name }; toast(`Hi ${name}`);
+      } catch (err) { S.authErr = "Couldn't save your name. Check your connection and try again."; }
+      S.busy = false; render(); return; }
     if (e.target.id === "acphone") { e.preventDefault();
       S.phone = $("#acphonein").value; const full = normalisePhone(S.phone);
       if (!full) { S.authErr = "That doesn't look like a phone number. Try 0748 227 000."; return render(); }

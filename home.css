@@ -196,25 +196,6 @@ footer.foot a:hover{color:var(--text);text-decoration:underline}
 .biz h2 em{font-style:normal;color:var(--wasabi)}
 .biz .fine a{color:var(--on-ink);font-weight:600}
 
-/* Scanner: full screen camera with a framed target in the middle */
-body.scan-on{overflow:hidden}
-.scan{position:fixed;inset:0;z-index:50;background:#000;color:#fff}
-.scan video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.scan-frame{position:absolute;left:50%;top:46%;width:min(68vw,300px);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:24px;box-shadow:0 0 0 100vmax rgb(0 0 0/.55);
-  background:linear-gradient(var(--wasabi),var(--wasabi)) top left/36px 4px,linear-gradient(var(--wasabi),var(--wasabi)) top left/4px 36px,
-    linear-gradient(var(--wasabi),var(--wasabi)) top right/36px 4px,linear-gradient(var(--wasabi),var(--wasabi)) top right/4px 36px,
-    linear-gradient(var(--wasabi),var(--wasabi)) bottom left/36px 4px,linear-gradient(var(--wasabi),var(--wasabi)) bottom left/4px 36px,
-    linear-gradient(var(--wasabi),var(--wasabi)) bottom right/36px 4px,linear-gradient(var(--wasabi),var(--wasabi)) bottom right/4px 36px;background-repeat:no-repeat}
-.scan-top{position:absolute;inset:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:calc(14px + env(safe-area-inset-top,0px)) var(--gut) 14px;font-size:17px}
-.scan-x{width:44px;height:44px;border-radius:50%;border:0;background:rgb(255 255 255/.16);color:#fff;font-size:18px;cursor:pointer}
-.scan-x:focus-visible{outline:3px solid var(--wasabi);outline-offset:2px}
-.scan-bottom{position:absolute;inset:auto 0 0;padding:20px var(--gut) calc(28px + env(safe-area-inset-bottom,0px));text-align:center}
-.scan-bottom p{max-width:28em;margin:0 auto;font-size:16px}
-.scan-acts{display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap}
-.scan-acts .btn-line{color:#fff}
-.scan.err{background:var(--ink)}
-.scan.err video,.scan.err .scan-frame{display:none}
-.scan.err .scan-bottom{inset:auto 0 50%;transform:translateY(50%)}
 
 /* Phone menu: ☰ next to Scan table QR; the links that don't fit in the bar */
 .hburger{display:none;width:44px;height:44px;border-radius:12px;border:1px solid rgb(255 255 255/.18);background:transparent;color:var(--on-ink);place-items:center;cursor:pointer;padding:0}

@@ -42,8 +42,8 @@
   // App screens (tables, staff, owner pages) aren't pages for search results.
   if (IS_APP) { const m = document.createElement("meta"); m.name = "robots"; m.content = "noindex"; document.head.appendChild(m); }
   document.write(IS_APP
-    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=6"><link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="preconnect" href="https://firestore.googleapis.com"><link rel="preconnect" href="https://identitytoolkit.googleapis.com"><link rel="preconnect" href="https://securetoken.googleapis.com"><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js" crossorigin><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js" crossorigin><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js" crossorigin><link rel="modulepreload" href="app.js"><link rel="modulepreload" href="firebase.js"><link rel="modulepreload" href="account.js"><link rel="modulepreload" href="menu.js"><link rel="modulepreload" href="platform.js"><link rel="modulepreload" href="brand.js"><link rel="modulepreload" href="metrics.js"><link rel="modulepreload" href="photos.js"><link rel="modulepreload" href="menuio.js">'
-    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=6">');
+    ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=7"><link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="preconnect" href="https://firestore.googleapis.com"><link rel="preconnect" href="https://identitytoolkit.googleapis.com"><link rel="preconnect" href="https://securetoken.googleapis.com"><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js" crossorigin><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js" crossorigin><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js" crossorigin><link rel="modulepreload" href="app.js"><link rel="modulepreload" href="firebase.js"><link rel="modulepreload" href="account.js"><link rel="modulepreload" href="menu.js"><link rel="modulepreload" href="platform.js"><link rel="modulepreload" href="brand.js"><link rel="modulepreload" href="metrics.js"><link rel="modulepreload" href="photos.js"><link rel="modulepreload" href="menuio.js">'
+    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=7">');
   // App mode: open the connections to Firebase and start fetching all the app's code at once, rather
   // than one file discovering the next (the sign-in page used to wait on that chain).
   // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
@@ -257,14 +257,6 @@
     </section>
   </main>
 
-  <div class="scan" id="scan" hidden role="dialog" aria-modal="true" aria-labelledby="scan-t">
-    <video id="scan-v" playsinline muted></video>
-    <div class="scan-frame" aria-hidden="true"></div>
-    <div class="scan-top"><b id="scan-t">Scan the table QR</b><button type="button" class="scan-x" data-close aria-label="Close">✕</button></div>
-    <div class="scan-bottom"><p id="scan-msg" role="status">Starting the camera…</p>
-      <div class="scan-acts"><button type="button" class="btn btn-go" data-retry hidden>Try again</button><button type="button" class="btn btn-line" data-close hidden>Close</button></div></div>
-  </div>
-
   <footer class="foot">
     <div class="in">
       <img src="img/brand/wasabi-lockup.svg" alt="Wasabi" width="111" height="22" loading="lazy">
@@ -315,61 +307,6 @@
     document.querySelectorAll("a[data-scroll]").forEach((l) => l.addEventListener("click", (e) => {
       e.preventDefault(); document.querySelector(l.getAttribute("href")).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     }));
-    // ---- Scan table QR: the camera reads the table card and opens that table's menu. ----
-    // Uses the browser's own QR reader where there is one (Chrome on Android), otherwise a small
-    // bundled reader (vendor/jsQR.min.js, loaded only when needed). Only Wasabi table links are opened.
-    const sc = { el: document.getElementById("scan"), v: document.getElementById("scan-v"), msg: document.getElementById("scan-msg"),
-      stream: null, det: null, cv: null, run: false, last: "", from: null };
-    const say = (t) => { sc.msg.textContent = t; };
-    const acts = (on) => sc.el.querySelectorAll("[data-retry],.scan-acts [data-close]").forEach((b) => (b.hidden = !on));
-    const ours = (u) => ["wasabi.co.tz", "www.wasabi.co.tz", location.host].includes(u.host) || (u.host === "vmm100.github.io" && u.pathname.startsWith("/order-app"));
-    function stopCam() { sc.run = false; if (sc.stream) sc.stream.getTracks().forEach((t) => t.stop()); sc.stream = null; sc.v.srcObject = null; }
-    function closeScan() { stopCam(); sc.el.hidden = true; sc.el.classList.remove("err"); document.body.classList.remove("scan-on"); if (sc.from) sc.from.focus(); }
-    function fail(t) { stopCam(); sc.el.classList.add("err"); say(t); acts(true); }
-    const loadReader = () => window.jsQR ? Promise.resolve() : new Promise((ok, no) => { const x = document.createElement("script"); x.src = "vendor/jsQR.min.js"; x.onload = ok; x.onerror = no; document.head.appendChild(x); });
-    async function openScan(e) {
-      sc.from = e && e.currentTarget; sc.el.hidden = false; sc.el.classList.remove("err"); acts(false); sc.last = "";
-      document.body.classList.add("scan-on"); sc.el.querySelector(".scan-x").focus(); say("Starting the camera…");
-      if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
-        return fail("This browser can't open the camera here. Use your phone's camera app instead: point it at the table card and tap the link that appears.");
-      try { sc.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false }); }
-      catch (err) {
-        const n = err && err.name;
-        return fail(n === "NotAllowedError" || n === "SecurityError" ? "Camera access is off. Allow the camera for this site in your browser settings and try again, or use your phone's camera app."
-          : n === "NotFoundError" || n === "OverconstrainedError" ? "No camera was found on this device." : "Couldn't start the camera. Try again, or use your phone's camera app.");
-      }
-      if (sc.el.hidden) return stopCam();
-      sc.v.srcObject = sc.stream; try { await sc.v.play(); } catch {}
-      say("Point your camera at the QR code on your table.");
-      sc.det = null;
-      if ("BarcodeDetector" in window) { try { if ((await BarcodeDetector.getSupportedFormats()).includes("qr_code")) sc.det = new BarcodeDetector({ formats: ["qr_code"] }); } catch {} }
-      if (!sc.det) { try { await loadReader(); } catch { return fail("Couldn't load the code reader. Check your connection, or use your phone's camera app."); } }
-      sc.run = true; tick();
-    }
-    async function read() {
-      const v = sc.v; if (v.readyState < 2 || !v.videoWidth) return null;
-      if (sc.det) { const c = await sc.det.detect(v); return c.length ? c[0].rawValue : null; }
-      const w = Math.min(640, v.videoWidth), h = Math.round(w * v.videoHeight / v.videoWidth);
-      sc.cv = sc.cv || document.createElement("canvas"); sc.cv.width = w; sc.cv.height = h;
-      const g = sc.cv.getContext("2d", { willReadFrequently: true }); g.drawImage(v, 0, 0, w, h);
-      const r = window.jsQR(g.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: "dontInvert" }); return r ? r.data : null;
-    }
-    async function tick() {
-      if (!sc.run) return;
-      let t = null; try { t = await read(); } catch {}
-      if (t && t !== sc.last) {
-        sc.last = t; let u = null; try { u = new URL(t); } catch {}
-        if (u && ours(u) && u.searchParams.get("r")) { say("Opening the menu…"); stopCam(); if (navigator.vibrate) navigator.vibrate(40); location.href = u.href; return; }
-        say("That isn't a Wasabi table code. Look for the card on your table with the Wasabi leaf.");
-        setTimeout(() => { if (sc.run) { sc.last = ""; say("Point your camera at the QR code on your table."); } }, 3000);
-      }
-      setTimeout(() => requestAnimationFrame(tick), 120);
-    }
-    document.querySelectorAll("[data-scan]").forEach((b) => b.addEventListener("click", openScan));
-    sc.el.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeScan(); else if (e.target.closest("[data-retry]")) openScan(); });
-    addEventListener("keydown", (e) => { if (e.key === "Escape" && !sc.el.hidden) closeScan(); });
-    addEventListener("pagehide", stopCam);
-
     // Pricing: monthly or yearly.
     const P = { m: ["TSh 130,000", "a month", " "], y: ["TSh 1,300,000", "a year", "Two months free compared with paying monthly"] };
     document.querySelectorAll("[data-plan]").forEach((b) => b.addEventListener("click", () => {
@@ -379,6 +316,7 @@
     }));
   }
 </script>
+<script src="scan.js?v=1" defer></script>
 <script src="ptr.js?v=1" defer></script>
 </body>
 </html>
