@@ -89,7 +89,7 @@ jobs:
     environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
     steps:
       - uses: actions/checkout@v5
-        with: { ref: "${{ env.REF }}", fetch-depth: 2 }
+        with: { ref: "${{ env.REF }}", fetch-depth: 1 }
       - uses: actions/setup-node@v5
         with: { node-version: 22 }
       # Rules go first, so the live app never runs against rules older than it expects. Rules changes are
@@ -98,9 +98,8 @@ jobs:
         if: github.event_name == 'push'
         env: { SA: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" }
         run: |
-          if ! git diff --quiet HEAD~1 HEAD -- firestore.rules 2>/dev/null; then changed=1; else changed=0; fi
-          if [ "$changed" = 0 ]; then echo "Rules unchanged."; exit 0; fi
-          if [ -z "$SA" ]; then echo "::warning title=Publish the rules by hand::firestore.rules changed. Paste it into Firebase → Firestore → Rules and Publish (or add the FIREBASE_SERVICE_ACCOUNT secret to do this automatically)."; exit 0; fi
+          # Published every release (Firebase skips it if nothing changed), so rules never fall behind.
+          if [ -z "$SA" ]; then echo "::warning title=Rules not published automatically::Add the FIREBASE_SERVICE_ACCOUNT secret, or paste firestore.rules into Firebase → Firestore → Rules and Publish."; exit 0; fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx --yes firebase-tools@15 deploy --only firestore:rules --project "$PROJECT" --non-interactive
       - name: Build the site folder
