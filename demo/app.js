@@ -16,7 +16,7 @@
 import { db, app as fbApp } from "./firebase.js";
 import { pushState, enablePush, refreshPush, testRing, ringFor } from "./push.js";
 import {
-  doc, collection, query, where, onSnapshot, getDocs, runTransaction,
+  doc, collection, query, where, onSnapshot, getDocs, runTransaction, documentId,
   updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc, collectionGroup,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
@@ -276,15 +276,39 @@ function loadFonts(id, keys) {
 
 // ---------- photos (menu items and logo) ----------
 // Stored as small compressed images in their own database documents, loaded once per phone.
-const photoCache = new Map();
+// Speed: photos load only as they come near the screen, and the ones needed together arrive in one
+// request (up to 30 at a time), instead of one request per dish.
+const photoCache = new Map(), photoWant = new Set();
+let photoTimer = null;
+function photoFor(id) {
+  if (photoCache.has(id)) return photoCache.get(id);
+  let done; const p = new Promise((r) => (done = r)); p.done = done;
+  photoCache.set(id, p); photoWant.add(id);
+  clearTimeout(photoTimer); photoTimer = setTimeout(fetchPhotos, 25);
+  return p;
+}
+function fetchPhotos() {
+  const ids = [...photoWant]; photoWant.clear();
+  for (let i = 0; i < ids.length; i += 30) {
+    const chunk = ids.slice(i, i + 30);
+    getDocs(query(rcol("photos"), where(documentId(), "in", chunk)))
+      .then((s) => { const got = new Map(s.docs.map((d) => [d.id, d.data().data])); chunk.forEach((id) => photoCache.get(id).done(got.get(id) || null)); })
+      .catch(() => chunk.forEach((id) => { photoCache.get(id).done(null); photoCache.delete(id); }));   // try again next time
+  }
+}
+async function showPhoto(img) {
+  const id = img.dataset.photo, src = await photoFor(id);
+  if (src && img.dataset.photo === id) { img.src = src; img.closest(".ph")?.classList.add("loaded"); } else if (!src) img.closest(".ph")?.classList.add("none");
+}
+const photoSeen = "IntersectionObserver" in window
+  ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { photoSeen.unobserve(e.target); showPhoto(e.target); } }), { rootMargin: "800px 0px" })
+  : null;
 function hydratePhotos() {
-  document.querySelectorAll("img[data-photo]").forEach(async (img) => {
+  document.querySelectorAll("img[data-photo]").forEach((img) => {
     const id = img.dataset.photo; if (!id || img.dataset.phDone === id) return;
     img.dataset.phDone = id;
     if (isFileLogo(id)) { img.src = id; img.closest(".ph")?.classList.add("loaded"); return; }
-    if (!photoCache.has(id)) photoCache.set(id, getDoc(rdoc("photos", id)).then((s) => (s.exists() ? s.data().data : null)).catch(() => null));
-    const src = await photoCache.get(id);
-    if (src && img.dataset.photo === id) { img.src = src; img.closest(".ph")?.classList.add("loaded"); } else if (!src) img.closest(".ph")?.classList.add("none");
+    if (photoSeen) photoSeen.observe(img); else showPhoto(img);
   });
 }
 async function resizeImage(file, max, keepAlpha) {
@@ -488,9 +512,11 @@ async function isCompanyUser(u) {
 async function adminRole(u) {
   if (!isAccount(u) || !u.email || !RID) return null;
   const em = u.email.toLowerCase(); let role = null;
-  try { const a = await getDoc(doc(db, "accounts", RID)); if (a.exists()) { ACCOUNT = a.data(); if (ACCOUNT.ownerEmail === em) role = "owner"; } } catch {}
-  if (!role) { try { if ((await getDoc(rdoc("admins", em))).exists()) role = "manager"; } catch {} }
-  IS_CO = await isCompanyUser(u);
+  // All three lookups at once: one wait instead of three in a row.
+  const [a, m, co] = await Promise.all([getDoc(doc(db, "accounts", RID)).catch(() => null), getDoc(rdoc("admins", em)).catch(() => null), isCompanyUser(u)]);
+  if (a && a.exists()) { ACCOUNT = a.data(); if (ACCOUNT.ownerEmail === em) role = "owner"; }
+  if (!role && m && m.exists()) role = "manager";
+  IS_CO = co;
   if (!role && IS_CO) role = "company";
   return role;
 }
@@ -1806,8 +1832,9 @@ function companyScreen() {
   }
   async function load() {
     try {
-      C.list = (await getDocs(collection(db, "accounts"))).docs.map((d) => ({ rid: d.id, ...d.data() }));
-      C.team = (await getDocs(collection(db, "company"))).docs.map((d) => ({ email: d.id, ...d.data() }));
+      const [list, team] = await Promise.all([getDocs(collection(db, "accounts")), getDocs(collection(db, "company"))]);
+      C.list = list.docs.map((d) => ({ rid: d.id, ...d.data() }));
+      C.team = team.docs.map((d) => ({ email: d.id, ...d.data() }));
     } catch (e) { C.err = denied(e) ? "This account can't read the company records." : "Couldn't load. Check the connection."; }
     render();
   }
