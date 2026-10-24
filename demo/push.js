@@ -11,7 +11,7 @@ import { setDoc } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-fires
 export const VAPID_KEY = "BFcm12BhAaP0Kf3f4ihfFiIoYQcGNEkEc-CwftZZR7jfL9LjHef1x4YY7h0fIuznx2kp5__tnEos23raRcQBZhs";
 // The ring service (worker/ring.js on Cloudflare), e.g. "https://wasabi-ring.NAME.workers.dev".
 // Empty: nothing is sent. The staging site uses its own copy (wasabi-ring-staging).
-const RING_LIVE = "";
+const RING_LIVE = "https://wasabi-ring.vandanmamlani.workers.dev";
 export const RING_URL = RING_LIVE && /staging|localhost/.test(location.hostname) ? RING_LIVE.replace("//wasabi-ring.", "//wasabi-ring-staging.") : RING_LIVE;
 
 const SW_URL = new URL("../sw.js", import.meta.url);
