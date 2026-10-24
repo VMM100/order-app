@@ -846,10 +846,15 @@ function dinerScreen() {
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
       <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
         ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}
-        <button class="btn primary big">Join ${unit}</button></form>${err}</section>`;
+        <button class="btn primary big">Join ${unit}</button></form>${err}
+      <div class="orline"><span>or</span></div>
+      <button class="btn big" data-act="signout">Join as a guest instead</button>
+      <p class="note">Just a first name, no account. This signs your account out on this phone.</p></section>`;
     if (S.user && S.profile && S.profile.name) return `<section>${bar}
       <button class="btn primary big" data-act="joinme" style="margin-top:16px">Join as ${esc(S.profile.name)}</button>
-      <p class="note">Not ${esc(S.profile.name)}? <button class="linkbtn" data-act="signout">Sign out</button></p>${err}</section>`;
+      <div class="orline"><span>or</span></div>
+      <button class="btn big" data-act="signout">Join as a guest instead</button>
+      <p class="note">Just a first name, no account. This signs your account out on this phone.</p>${err}</section>`;
     // Most people just type their name, so that comes first; signing in is the optional extra.
     return `<section>${bar}<h2 class="jtitle">Join the ${unit}</h2>
       <form id="joinform" class="grid"><label class="flabel" for="namein">Your first name <span>Just your first name, no account needed</span></label>
@@ -1060,7 +1065,7 @@ function dinerScreen() {
       S.busy = false; render();
     }
     else if (d.act === "joinme" && S.profile) { try { await joinAs(S.profile.name, S.user); } catch (err) { fail(err); } }
-    else if (d.act === "signout") { try { await signOutUser(); } catch {} S.step = ""; render(); }
+    else if (d.act === "signout") { try { await signOutUser(); } catch {} S.step = ""; S.user = null; S.profile = null; S.name = ""; render(); }
     else if (d.act === "usual") { usualFrom(S.visits).forEach((u) => S.cart.push({ ...u })); toast("Your usual is in the basket"); renderCart(); }
     else if (d.act === "newgroup" && S.viaKey) { S.choosing = false; try { attach(await startGroup(S.n, S.proof)); } catch (err) { fail(err); } }
     else if (d.act === "newsession" && S.viaKey) { S.access = false; S.sid = null; S.g = null; S.me = null; store.set(meKey(), null); start(); }
