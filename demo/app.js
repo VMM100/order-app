@@ -398,6 +398,9 @@ async function savePhoto(dataUrl, old) {
 // tables the owner marks as shared can hold several groups, each with its own code and bill.
 const groupRef = (sid) => rdoc("groups", sid);
 const isShared = (n) => SHARED.includes(Number(n));
+// A diner's name as it is now (they can change it at the table); orders and alerts keep the name
+// they were made with, used when the table has closed.
+const nowName = (g, pid, was) => (g && g.people && g.people[pid] && g.people[pid].name) || was || "A guest";
 const gname = (g) => (g && g.label ? `${g.label}'s group` : "New group");
 // "Table 8", or "Table 8 · Amani's group" when the table has more than one group or is shared.
 const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []).filter((x) => x.table === g.table && x.open).length > 1 ? ` · ${gname(g)}` : "");
@@ -978,6 +981,7 @@ function dinerScreen() {
     // ☰: inviting friends, the account and help. Waiter, Call waiter and Bill please stay on the page.
     setMenu([
       { html: `<b>${esc(S.me.name)}</b> at Table ${esc(S.n)}${shared ? ` · ${esc(gname(g))}` : ""}<br>Friends join with code <b class="code num">${esc(g.code)}</b><div style="margin-top:8px"><button class="btn small primary" data-act="share">Share invite</button></div>` },
+      { label: "Change my name", sub: `Your table and waiter see you as ${S.me.name}`, run: () => { S.renaming = true; S.help = false; render(); window.scrollTo(0, 0); const i = $("#renamein"); if (i) { i.focus(); i.select(); } } },
       ...(S.user ? [{ label: "My account", sub: "Your visits and WhatsApp offers", href: BASE + "#account" }] : []),
       { label: "How it works", sub: "Ordering, the bill and your waiter", run: () => { S.help = true; render(); window.scrollTo(0, 0); } },
     ]);
@@ -987,7 +991,12 @@ function dinerScreen() {
         <li><b>Call waiter</b> or <b>Bill please</b> alerts your waiter, and you'll see when they're on the way.</li>
         <li><b>Bill</b> shows what each person owes. Pay your waiter as usual.</li>
         <li>Friends can join with the code under ☰ → Share invite.</li></ol></div>` : "";
-    paint(`<section class="dsec">${help}
+    // Change my name: a small card at the top, like How it works.
+    const rename = S.renaming ? `<div class="helpcard"><div class="trow"><b>Change my name</b><button class="btn small ghost" data-act="renameclose">Cancel</button></div>
+      <form id="renameform" class="grid" style="margin-top:8px"><label class="flabel" for="renamein">Your first name <span>Your table and waiter see this</span></label>
+        <input class="field" id="renamein" maxlength="16" autocomplete="given-name" value="${esc(S.me.name)}">
+        <button class="btn primary big">Save name</button></form></div>` : "";
+    paint(`<section class="dsec">${rename}${help}
       <div class="tcard">
         <div class="trow"><div class="who2"><span>Waiter</span> <b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned"}</b></div>
           <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
@@ -1077,6 +1086,17 @@ function dinerScreen() {
       try { await phoneConfirm(code); } catch (err) { S.authErr = authMessage(err); S.busy = false; render(); return; }
       S.busy = false;
     }
+    // Change my name at the table: only this diner's own entry in the group changes (the database
+    // rules allow nothing else). Orders already placed show the new name on staff screens too.
+    if (e.target.id === "renameform") {
+      const name = $("#renamein").value.trim().slice(0, 16), me = S.me, p = S.g && S.g.people && me && S.g.people[me.pid];
+      if (!name || !p) return;
+      if (name === me.name) { S.renaming = false; return render(); }
+      try { await updateDoc(groupRef(S.sid), { [`people.${me.pid}`]: { ...p, name } });
+        S.me = { ...me, name }; store.set(meKey(), S.me); S.renaming = false; toast(`Your table now sees you as ${name}`); render(); }
+      catch (err) { fail(err); }
+      return;
+    }
     if (e.target.id === "profileform") {
       const name = $("#profilein").value.trim(); if (!name || !S.user) return;
       const on = !!($("#offersin") && $("#offersin").checked);
@@ -1111,6 +1131,7 @@ function dinerScreen() {
       S.placing = false; render();
     }
     else if (d.act === "helpclose") { S.help = false; render(); }
+    else if (d.act === "renameclose") { S.renaming = false; render(); }
     else if (d.act === "share") {
       const link = `${BASE}?r=${RID}&c=${S.g.code}`, what = isShared(S.n) ? "group" : "table";
       const txt = `Join our ${what} at ${rname()}: ${link} (code ${S.g.code}, works until the ${what} closes)`;
@@ -1154,7 +1175,7 @@ function stationScreen(st) {
       const mins = Math.max(0, Math.floor((Date.now() - bl[0].t) / 60000)), lim = st === "bar" ? [5, 10] : [15, 25];
       const late = s === "ready" ? "" : mins >= lim[1] ? " late" : mins >= lim[0] ? " warn" : "";
       return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="age num${late}" title="Waiting ${mins} min">${mins}<small> min</small></span></header>
-        <div class="note" style="margin:2px 0 0">${esc(bl[0].pname)} · waiter ${w ? esc(wname(w)) : "not assigned yet"}</div>
+        <div class="note" style="margin:2px 0 0">${esc(nowName(g, bl[0].pid, bl[0].pname))} · waiter ${w ? esc(wname(w)) : "not assigned yet"}</div>
         <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}</span>${l.s === "ready"
           ? `<span class="pill s-ready">Ready</span>` : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">Ready</button>`}</li>`).join("")}</ul>${note ? `<div class="nt">${esc(note.note)}</div>` : ""}
         <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
@@ -1265,7 +1286,7 @@ function waiterScreen(boss) {
     const mine = S.groups.filter((g) => g.waiter === S.me);
     const others = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
     // A guest's call or bill request sits at the top of their table's card.
-    const alertRow = (a, g) => `<div class="arow"><div><b>${ALERT[a.type]}</b> <span class="note" style="margin:0">from ${esc(a.pname)} · ${ago(a.t)}</span></div>
+    const alertRow = (a, g) => `<div class="arow"><div><b>${ALERT[a.type]}</b> <span class="note" style="margin:0">from ${esc(nowName(g, a.pid, a.pname))} · ${ago(a.t)}</span></div>
       <div class="row">${a.ack ? `<span class="pill s-preparing">On the way</span><button class="btn primary" data-done="${a.id}">${a.type === "bill" ? "Bill delivered" : "Done"}</button>`
         : `<button class="btn primary" data-ack="${a.id}">On my way</button>`}${a.type === "bill" && g.waiter === S.me && S.open !== g.session ? `<button class="btn" data-open="${g.session}">Open bill</button>` : ""}</div></div>`;
     const busy = (g) => S.alerts.filter(live(g)).some((a) => !a.ack) * 2 + S.lines.some((l) => live(g)(l) && l.s === "ready");
@@ -1280,7 +1301,7 @@ function waiterScreen(boss) {
       return `<article class="ticket${al.some((a) => !a.ack) ? " alert" : ""}"><header><b>${esc(name(g))}</b><span class="note" style="margin:0">code ${esc(g.code)}</span></header>
         ${al.map((a) => alertRow(a, g)).join("")}
         <p class="note" style="margin:4px 0 0">${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "No guests yet"}</p>
-        ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(l.pname)} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
+        ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
         <div class="acts"><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${g.session}">Hand over</button>
           ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>
         ${open ? billHtml(g, billLines, true) : ""}</article>`;

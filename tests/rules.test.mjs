@@ -558,3 +558,17 @@ test("push: refused when the restaurant is more than 7 days unpaid", async () =>
   await setAccount({ paidUntil: Date.now() - 8 * DAY });
   await assertFails(s.doc(`${R}/push/s1`).set(push()));
 });
+
+// ---------- changing your name at the table ----------
+test("a diner can change their own name at the table, not anyone else's", async () => {
+  const d1 = await seatAt("d1");
+  // A friend joins with the group's code.
+  const d2 = diner("d2");
+  await d2.doc(`${R}/passes/d2`).set({ table: 4, via: "code", c: "1234", session: "4-a", t: 1 });
+  await assertSucceeds(d2.doc(`${R}/groups/4-a`).update({ "people.d2": { name: "Neha", t: 2, uid: "d2", acct: false } }));
+  await assertSucceeds(d1.doc(`${R}/groups/4-a`).update({ "people.d1": { name: "Vandan", t: 1, uid: "d1", acct: false } }));
+  await assertFails(d1.doc(`${R}/groups/4-a`).update({ "people.d2": { name: "Haha", t: 2, uid: "d2", acct: false } }));
+  await assertFails(d1.doc(`${R}/groups/4-a`).update({ "people.d1": { name: "", t: 1, uid: "d1", acct: false } }));
+  await assertFails(d1.doc(`${R}/groups/4-a`).update({ "people.d1": { name: "A name far too long for a table", t: 1, uid: "d1", acct: false } }));
+  await assertFails(d1.doc(`${R}/groups/4-a`).update({ label: "Vandan" }));   // the group's label stays
+});

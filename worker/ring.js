@@ -40,17 +40,20 @@ async function handle(env, [path, root, rid, kind, id], count) {
   const base = `${root}/${rid}`, now = Date.now();
   const doc = await getDoc(env, path);
   if (!doc) return;
-  let msg, key, groupId;
+  let msg, key, group = null;
+  // The diner's name as it is now (they can change it at the table), else the name on the order.
+  const nameOf = (pid, was) => (group && group.people && group.people[pid] && group.people[pid].name) || was;
   if (kind === "alerts") {
     if (doc.done || !(now - num(doc.t) < FRESH_MS)) return;
-    groupId = doc.session; key = `a-${id}`;
+    key = `a-${id}`; group = doc.session ? await getDoc(env, `${base}/groups/${doc.session}`) : null;
+    const who = nameOf(doc.pid, doc.pname) || "A guest";
     msg = { title: `Table ${doc.table} · ${ALERT[doc.type] || "Needs you"}`,
-      body: doc.type === "bill" ? `${doc.pname || "A guest"} wants the bill` : `${doc.pname || "A guest"} is calling you`, tag: `t${doc.table}-${doc.type}` };
+      body: doc.type === "bill" ? `${who} wants the bill` : `${who} is calling you`, tag: `t${doc.table}-${doc.type}` };
   } else if (kind === "lines") {
     if (doc.s !== "ready" || !(now - num(doc.tReady) < FRESH_MS)) return;
-    groupId = doc.session; key = `l-${id}`;
+    key = `l-${id}`; group = doc.session ? await getDoc(env, `${base}/groups/${doc.session}`) : null;
     const item = `${doc.n || "An order"}${doc.v ? ` (${doc.v})` : ""}`;
-    msg = { title: `Table ${doc.table} · Ready to serve`, body: `${item}${count > 1 ? ` and ${count - 1} more` : ""} for ${doc.pname || "a guest"}`, tag: `t${doc.table}-ready` };
+    msg = { title: `Table ${doc.table} · Ready to serve`, body: `${item}${count > 1 ? ` and ${count - 1} more` : ""} for ${nameOf(doc.pid, doc.pname) || "a guest"}`, tag: `t${doc.table}-ready` };
   } else {
     const people = Object.values(doc.people || {}), first = Math.min(...people.map((p) => num(p.t)));
     if (!doc.open || doc.waiter || !people.length || !(now - first < FRESH_MS)) return;
@@ -59,7 +62,7 @@ async function handle(env, [path, root, rid, kind, id], count) {
   }
   // Only once per event, however many times the app asks.
   if (!(await claimOnce(env, base, key))) return;
-  const waiter = kind === "groups" ? null : ((groupId && await getDoc(env, `${base}/groups/${groupId}`)) || {}).waiter || null;
+  const waiter = kind === "groups" ? null : (group && group.waiter) || null;
   const phones = await phonesFor(env, base, waiter);
   await Promise.all(phones.map((p) => send(env, base, p, msg)));
   console.log(`rang ${phones.length} phone(s)`, path);
