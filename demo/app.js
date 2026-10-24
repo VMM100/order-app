@@ -13,7 +13,8 @@
 //   index.html#owner      owner: dashboard, menu, look, staff, who can sign in (Google sign-in)
 //   index.html#manager    manager: menu and staff only (Google sign-in)
 // Who may see and change what is enforced by the database rules in firestore.rules.
-import { db } from "./firebase.js";
+import { db, app as fbApp } from "./firebase.js";
+import { pushState, enablePush, refreshPush, testRing, ringFor } from "./push.js";
 import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction,
   updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc, collectionGroup,
@@ -844,7 +845,9 @@ function dinerScreen() {
   async function joinAs(name, u) {
     const pid = auth.currentUser.uid, person = { name, t: Date.now(), uid: pid, acct: isAccount(auth.currentUser) }, patch = {};
     patch[`people.${pid}`] = person; if (!S.g.label) patch.label = name;
+    const first = !Object.keys(S.g.people || {}).length && !S.g.waiter;
     await updateDoc(groupRef(S.sid), patch);
+    if (first) ringFor(groupRef(S.sid).path);
     store.set(meKey(), { pid, name, session: S.sid }); S.me = { pid, name, session: S.sid };
     store.set("dees-lasttable", location.href); render();
   }
@@ -1003,7 +1006,7 @@ function dinerScreen() {
     else if (d.act === "cart") { S.cartOpen = !S.cartOpen; renderCart(); }
     else if (d.split) setSplit(S.sid, d.split);
     else if (d.alert) {
-      try { await addDoc(rcol("alerts"), { table: Number(S.n), session: S.sid, type: d.alert, pid: S.me.pid, pname: S.me.name, t: Date.now(), ack: null, ackBy: null, done: false });
+      try { const ar = await addDoc(rcol("alerts"), { table: Number(S.n), session: S.sid, type: d.alert, pid: S.me.pid, pname: S.me.name, t: Date.now(), ack: null, ackBy: null, done: false }); ringFor(ar.path);
         toast(S.g.waiter ? `${wname(S.g.waiter)} has been notified` : "All waiters notified"); } catch (err) { fail(err); }
     }
     else if (d.act === "place" && S.cart.length && !S.placing) {
@@ -1075,12 +1078,13 @@ function stationScreen(st) {
     if (d.act === "testsound") beep();
     if (d.adv) { b.disabled = true; const batch = writeBatch(db);
       const now = Date.now();
-      S.lines.filter((l) => l.batch === d.adv && (d.to === "preparing" ? l.s === "new" : l.s !== "ready")).forEach((l) =>
+      const moving = S.lines.filter((l) => l.batch === d.adv && (d.to === "preparing" ? l.s === "new" : l.s !== "ready"));
+      moving.forEach((l) =>
         batch.update(rdoc("lines", l.id), d.to === "preparing" ? { s: "preparing", tPrep: now } : { s: "ready", tReady: now, tPrep: l.tPrep || now }));
-      try { await batch.commit(); } catch (err) { fail(err); b.disabled = false; } }
+      try { await batch.commit(); if (d.to !== "preparing" && moving.length) ringFor(rdoc("lines", moving[0].id).path, moving.length); } catch (err) { fail(err); b.disabled = false; } }
     // One dish ready on its own: the waiter is alerted for just that dish.
     if (d.ready) { const l = S.lines.find((x) => x.id === d.ready); if (!l) return; b.disabled = true; const now = Date.now();
-      try { await updateDoc(rdoc("lines", l.id), { s: "ready", tReady: now, tPrep: l.tPrep || now }); } catch (err) { fail(err); b.disabled = false; } }
+      try { await updateDoc(rdoc("lines", l.id), { s: "ready", tReady: now, tPrep: l.tPrep || now }); ringFor(rdoc("lines", l.id).path); } catch (err) { fail(err); b.disabled = false; } }
   });
   setInterval(render, 30000);
   cfgListeners.add(render);
@@ -1096,12 +1100,20 @@ function waiterScreen(boss) {
   const S = { me: boss ? store.get("dees-waiter-" + RID) : null, since: null, picking: null, pinErr: "", busy: false, endArmed: false,
     groups: [], lines: [], alerts: [], open: null, confirm: null, pin: "", shake: false };
   const myRef = () => rdoc("staff", auth.currentUser.uid);
+  // Ringing with the screen off (push.js): offered once a shift starts, on the waiter's own phone.
+  const pushRef = () => rdoc("push", auth.currentUser.uid);
+  const pushUrl = () => `${location.origin}${location.pathname}?r=${encodeURIComponent(RID)}#waiter`;
+  let ring = pushState(), ringBusy = false;
+  const keepRing = () => { if (S.me && !boss && ring === "on") refreshPush(fbApp, pushRef(), pushUrl()); };
+  const ringBar = () => boss || !S.me || ring === "unsupported" || ring === "on" ? "" : ring === "blocked"
+    ? `<div class="soundbar"><span><b>Notifications are blocked</b>, so this phone can't ring with the screen off. In Chrome: ⋮ → Settings → Site settings → Notifications → allow this site, then reload.</span></div>`
+    : `<div class="soundbar"><span><b>Ring this phone when the screen is off.</b> Calls, bill requests and ready orders ring even when it's locked.</span><button class="btn primary" data-act="ring" ${ringBusy ? "disabled" : ""}>${ringBusy ? "Turning on…" : "Turn on"}</button></div>`;
   async function loadShift() {
     if (boss) return;
     try { const d = (await getDoc(myRef())).data() || {};
       const ok = d.waiter && d.shift && Date.now() - d.shift < SHIFT_MS && WAITERS.some((w) => w.id === d.waiter);
       S.me = ok ? d.waiter : null; S.since = ok ? d.shift : null; } catch { S.me = null; }
-    update();
+    keepRing(); update();
   }
   async function endShift(msg) {
     S.me = null; S.since = null; S.endArmed = false; S.picking = null; render();
@@ -1154,6 +1166,7 @@ function waiterScreen(boss) {
           run: () => { if (!S.endArmed) { S.endArmed = true; setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); render(); }
             else { const mine = S.groups.filter((g) => g.waiter === S.me).length; endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); } } }] : []),
       ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : []),
+      ...(!boss && ring === "on" ? [{ label: "Test ring", sub: "Rings when the screen is off", keep: true, run: () => testRing(wname(S.me)).catch(() => toast("Couldn't show a test ring.")) }] : []),
       { html: othersList.length ? `<b>Other waiters' tables</b><br>${othersList.map((g) => `${esc(name(g))}: ${esc(wname(g.waiter))}`).join("<br>")}` : "<b>Other waiters' tables</b><br>None right now" },
     ]);
     const free = S.groups.filter((g) => !g.waiter && seated(g));
@@ -1180,7 +1193,7 @@ function waiterScreen(boss) {
           ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>
         ${open ? billHtml(g, billLines, true) : ""}</article>`;
     }).join("");
-    paint(`<section>${pick}${soundBar()}
+    paint(`<section>${pick}${ringBar()}${soundBar()}
       ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
       <div class="label">My tables</div>${mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
     </section>`);
@@ -1207,7 +1220,7 @@ function waiterScreen(boss) {
     const pin = S.pin, w = S.picking; if (!w || S.busy || !/^\d{4}$/.test(pin)) return;
     S.busy = true; S.pinErr = ""; render();
     try { const now = Date.now(); await setDoc(myRef(), { token: store.get("dees-staff-" + RID), t: now, waiter: w, pin, shift: now });
-      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}!`); update(); return; }
+      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}!`); keepRing(); update(); return; }
     catch (err) { S.pinErr = denied(err) ? "That PIN didn't work. Try again, or ask the owner or manager." : "Couldn't connect. Try again."; S.pin = ""; S.shake = true; }
     S.busy = false; render();
   }
@@ -1226,7 +1239,12 @@ function waiterScreen(boss) {
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     try {
-      if (d.act === "sound") { await enableSound(); render(); }
+      if (d.act === "ring") { ringBusy = true; render();
+        try { ring = await enablePush(fbApp, pushRef(), pushUrl());
+          toast(ring === "on" ? "This phone will ring for your tables, even with the screen off" : ring === "blocked" ? "Notifications are blocked in Chrome's settings" : "Ringing not turned on"); }
+        catch { toast("Couldn't turn on ringing. Check your connection and try again."); }
+        ringBusy = false; render(); }
+      else if (d.act === "sound") { await enableSound(); render(); }
       else if (d.act === "testsound") beep();
       else if (d.me && boss) { S.me = d.me; store.set("dees-waiter-" + RID, d.me); update(); }
       else if (d.pickme) { S.picking = d.pickme; S.pin = "0000"; S.pinErr = ""; startShift(); }   // DEMO: no PIN, tap your name to start

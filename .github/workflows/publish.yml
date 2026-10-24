@@ -2,6 +2,7 @@
 #
 #   staging branch  →  checks  →  staging site (https://wasabi-tz-staging.web.app)
 #   main branch     →  checks  →  database rules → live site (https://wasabi.co.tz) → version tag live-…
+#   Both also publish the ring service (worker/ring.js) to Cloudflare: wasabi-ring-staging / wasabi-ring.
 #   Run workflow    →  pick a version tag (e.g. live-2026-10-24-0930) to put an older version back live.
 #
 # Nothing is published unless every check passes: scripts parse, the main pages open in a real
@@ -67,13 +68,26 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version: 22 }
+      - name: Publish the ring service (Cloudflare)
+        env:
+          CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          RINGER: "${{ secrets.RINGER_SERVICE_ACCOUNT }}"
+        working-directory: worker
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$RINGER" ]; then
+            echo "::warning title=Ring service not published::Add CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and RINGER_SERVICE_ACCOUNT in GitHub secrets to turn on waiter ringing."; exit 0; fi
+          npx --yes wrangler@3 deploy --name wasabi-ring-staging 2>&1 | tee deploy.txt
+          printf '%s' "$RINGER" | npx --yes wrangler@3 secret put GOOGLE_SERVICE_ACCOUNT --name wasabi-ring-staging
+          url=$(grep -oE 'https://wasabi-ring-staging\.[a-z0-9-]+\.workers\.dev' deploy.txt | head -1)
+          echo "### Ring service → $url" >> "$GITHUB_STEP_SUMMARY"
       - name: Sign in to Firebase
         env: { SA: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" }
         run: |
           if [ -z "$SA" ]; then echo "::error title=Staging not set up yet::Add the FIREBASE_SERVICE_ACCOUNT secret in GitHub (Settings → Secrets and variables → Actions)."; exit 1; fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"; echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
       - name: Build the site folder
-        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc ./ _site/
+        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/
       - name: Make the staging site (first time only)
         run: npx --yes firebase-tools@15 hosting:sites:create wasabi-tz-staging --project "$PROJECT" --non-interactive || true
       - name: Publish
@@ -102,8 +116,21 @@ jobs:
           if [ -z "$SA" ]; then echo "::warning title=Rules not published automatically::Add the FIREBASE_SERVICE_ACCOUNT secret, or paste firestore.rules into Firebase → Firestore → Rules and Publish."; exit 0; fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx --yes firebase-tools@15 deploy --only firestore:rules --project "$PROJECT" --non-interactive
+      - name: Publish the ring service (Cloudflare)
+        env:
+          CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          RINGER: "${{ secrets.RINGER_SERVICE_ACCOUNT }}"
+        working-directory: worker
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$RINGER" ]; then
+            echo "::warning title=Ring service not published::Add CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and RINGER_SERVICE_ACCOUNT in GitHub secrets to turn on waiter ringing."; exit 0; fi
+          npx --yes wrangler@3 deploy --name wasabi-ring 2>&1 | tee deploy.txt
+          printf '%s' "$RINGER" | npx --yes wrangler@3 secret put GOOGLE_SERVICE_ACCOUNT --name wasabi-ring
+          url=$(grep -oE 'https://wasabi-ring\.[a-z0-9-]+\.workers\.dev' deploy.txt | head -1)
+          echo "### Ring service → $url" >> "$GITHUB_STEP_SUMMARY"
       - name: Build the site folder
-        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc ./ _site/
+        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with: { path: _site }

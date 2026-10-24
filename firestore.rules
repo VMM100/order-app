@@ -178,6 +178,18 @@ service cloud.firestore {
                   && request.resource.data.shift < request.time.toMillis() + 10 * 60 * 1000));
         allow delete: if signedIn() && (uid == me() || boss(rid));
       }
+      // A staff phone's push address, so it can ring with the screen off. Only the phone itself
+      // writes it, only while it holds the current staff code; only the server reads it.
+      match /push/{uid} {
+        allow get: if signedIn() && uid == me();
+        allow create, update: if live(rid) && signedIn() && uid == me()
+          && get(/databases/$(database)/documents/restaurants/$(rid)/staff/$(me())).data.token == staffToken()
+          && request.resource.data.keys().hasOnly(['token', 't', 'url'])
+          && request.resource.data.token is string && request.resource.data.token.size() > 0 && request.resource.data.token.size() <= 4096
+          && request.resource.data.url is string && request.resource.data.url.size() <= 500
+          && request.resource.data.t is int;
+        allow delete: if signedIn() && (uid == me() || boss(rid));
+      }
       match /tablekeys/{n} {
         allow read, write: if boss(rid);
       }
