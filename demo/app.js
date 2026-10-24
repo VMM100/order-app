@@ -311,6 +311,67 @@ function hydratePhotos() {
     if (photoSeen) photoSeen.observe(img); else showPhoto(img);
   });
 }
+// ---------- QR codes in the restaurant's look ----------
+// Dots in the restaurant's dark colour, the three corner squares in its accent colour, and its logo on a
+// white badge in the middle. Uses the highest error correction (30%), so the logo covering the centre
+// still scans. Colours are darkened if needed so every phone camera reads them against white.
+function qrColours() {
+  const fresh = !BRAND.c1 && RID && RID !== RESTAURANT_ID;
+  const c1 = BRAND.c1 || (fresh ? "#9cc43c" : "#a8650f"), c2 = BRAND.c2 || (fresh ? "#4a6716" : "#3f5a2c");
+  const deepen = (c, min) => { let out = c; for (let t = 0.1; contrast(out, "#ffffff") < min && t <= 1; t += 0.1) out = mix(c, "#000000", t); return out; };
+  return { dot: deepen(c2, 7), eye: deepen(c1, 4.5), eyeDot: deepen(c2, 7) };
+}
+async function qrLogo() {
+  if (!BRAND.logo) return null;
+  const src = isFileLogo(BRAND.logo) ? BRAND.logo : await photoFor(BRAND.logo);
+  if (!src) return null;
+  return new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
+}
+async function brandQr(el, text, size) {
+  if (!el || !window.QRCode) return;
+  // The library works out the code's grid; we draw it ourselves.
+  const tmp = document.createElement("div");
+  const q = new QRCode(tmp, { text, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.H });
+  const m = q && q._oQRCode;
+  if (!m || typeof m.getModuleCount !== "function") { el.innerHTML = ""; new QRCode(el, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.H }); return; }
+  const n = m.getModuleCount(), quiet = 3, cells = n + quiet * 2, scale = 3;
+  const px = Math.floor((size * scale) / cells), W = px * cells;
+  const cv = document.createElement("canvas"); cv.width = cv.height = W;
+  cv.style.width = cv.style.height = size + "px"; cv.setAttribute("role", "img"); cv.setAttribute("aria-label", "QR code");
+  const g = cv.getContext("2d"), C = qrColours();
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, W);
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  const at = (k) => (k + quiet) * px;
+  // Centre badge: about a fifth of the code, kept clear of dots.
+  const badge = Math.max(5, Math.round(n * 0.22)) | 1, b0 = (n - badge) >> 1, b1 = b0 + badge - 1;
+  const inEye = (r, c) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
+  const inBadge = (r, c) => r >= b0 && r <= b1 && c >= b0 && c <= b1;
+  g.fillStyle = C.dot;
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    if (!m.isDark(r, c) || inEye(r, c) || inBadge(r, c)) continue;
+    rr(at(c) + px * 0.04, at(r) + px * 0.04, px * 0.92, px * 0.92, px * 0.26); g.fill();
+  }
+  // Corner squares: a rounded ring in the accent colour around a rounded dot.
+  [[0, 0], [0, n - 7], [n - 7, 0]].forEach(([r, c]) => {
+    g.fillStyle = C.eye; rr(at(c), at(r), px * 7, px * 7, px * 2); g.fill();
+    g.fillStyle = "#ffffff"; rr(at(c) + px, at(r) + px, px * 5, px * 5, px * 1.3); g.fill();
+    g.fillStyle = C.eyeDot; rr(at(c) + px * 2, at(r) + px * 2, px * 3, px * 3, px * 0.9); g.fill();
+  });
+  el.innerHTML = ""; el.appendChild(cv);
+  // Logo (or the restaurant's initial) on a white rounded badge.
+  const bx = at(b0), bw = px * badge, pad = px * 0.6;
+  g.fillStyle = "#ffffff"; rr(bx, bx, bw, bw, px * 1.4); g.fill();
+  const logo = await qrLogo();
+  if (logo) {
+    const box = bw - pad * 2, k = Math.min(box / logo.naturalWidth, box / logo.naturalHeight);
+    const w = logo.naturalWidth * k, h = logo.naturalHeight * k;
+    g.save(); rr(bx + pad, bx + pad, box, box, px); g.clip(); g.drawImage(logo, bx + (bw - w) / 2, bx + (bw - h) / 2, w, h); g.restore();
+  } else {
+    g.fillStyle = C.eye; rr(bx + pad, bx + pad, bw - pad * 2, bw - pad * 2, px); g.fill();
+    g.fillStyle = "#ffffff"; g.font = `700 ${Math.round(bw * 0.5)}px system-ui, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(((BRAND.name || "W").trim()[0] || "W").toUpperCase(), bx + bw / 2, bx + bw / 2 + bw * 0.03);
+  }
+}
 async function resizeImage(file, max, keepAlpha) {
   const url = URL.createObjectURL(file);
   try {
@@ -1390,8 +1451,8 @@ function setupScreen(role) {
       <div class="label">Owner and manager pages</div>
       <div class="links">${IS_CO ? link(BASE + "demo.html?r=" + RID, "Demo stage (company only): several phones on one iPad or laptop") : ""}${link(BASE + "?r=" + RID + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "?r=" + RID + "#manager", "Manager (menu and staff)")}</div>
       <p class="note">These open with the owner's or a manager's Google sign-in. The owner adds managers under Owner → Staff.</p></section>`);
-    const draw = () => { for (let i = 1; i <= TABLES; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length && keys[i]) new QRCode(el, { text: tableLink(i, keys[i]), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }
-      screens.forEach(([k]) => { const el = document.getElementById("sqr-" + k); if (el && !el.childNodes.length && staffTok) new QRCode(el, { text: staffLink(k), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }); };
+    const draw = () => { for (let i = 1; i <= TABLES; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length && keys[i]) brandQr(el, tableLink(i, keys[i]), 132); }
+      screens.forEach(([k]) => { const el = document.getElementById("sqr-" + k); if (el && !el.childNodes.length && staffTok) brandQr(el, staffLink(k), 132); }); };
     if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true });
   }
   // A sheet of table cards to print and cut out: name, table number, QR, one line of instructions.
@@ -1401,11 +1462,12 @@ function setupScreen(role) {
     sheet.innerHTML = Array.from({ length: TABLES }, (_, i) => `<div class="pcard"><div class="pname">${esc(rname())}</div><div class="ptable">Table ${i + 1}</div>
       <div class="pqr" id="pqr${i + 1}"></div><div class="phow">Scan to see the menu, order,<br>call your waiter and split the bill</div></div>`).join("");
     document.body.appendChild(sheet);
-    for (let i = 1; i <= TABLES; i++) { try { new QRCode(document.getElementById("pqr" + i), { text: tableLink(i, keys[i]), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M }); } catch {} }
+    // Wait until every code (and its logo) is drawn before opening the print dialog.
+    const drawn = Array.from({ length: TABLES }, (_, i) => brandQr(document.getElementById("pqr" + (i + 1)), tableLink(i + 1, keys[i + 1]), 220).catch(() => {}));
     document.body.classList.add("printing");
     const done = () => { document.body.classList.remove("printing"); sheet.remove(); };
     window.addEventListener("afterprint", done, { once: true });
-    setTimeout(() => { try { window.print(); } catch { done(); } }, 300);
+    Promise.all(drawn).then(() => setTimeout(() => { try { window.print(); } catch { done(); } }, 150));
   }
   document.addEventListener("click", async (e) => {
     const ot = e.target.closest("button[data-otab]");
@@ -1493,7 +1555,7 @@ function ownerScreen(role) {
     paint(subBanner() + tabBar(TABS, S.tab) + `
       ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
     const qr = document.getElementById("wlqr");
-    if (qr && S.wtok) { const draw = () => { if (!qr.childNodes.length) new QRCode(qr, { text: waiterLink(), width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); };
+    if (qr && S.wtok) { const draw = () => { if (!qr.childNodes.length) brandQr(qr, waiterLink(), 160); };
       if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true }); }
   }
 
@@ -2209,7 +2271,7 @@ function presenterScreen() {
           <button class="btn" data-act="dcopy">Copy join link</button><button class="btn ghost" data-act="dnew">Start a new room</button></div>
         <p class="note">No sign-in for anyone. Everything happens in this room only, with Crafty Dee's menu; real restaurants are never touched. The room closes by itself after ${DEMO_HOURS} hours.</p>
       </div></section>`);
-    const draw = () => { const el = document.getElementById("dqr"); if (el && !el.childNodes.length && window.QRCode) new QRCode(el, { text: join, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M }); };
+    const draw = () => { const el = document.getElementById("dqr"); if (el && !el.childNodes.length && window.QRCode) brandQr(el, join, 512); };
     if (window.QRCode) draw(); else addEventListener("load", draw, { once: true });
     document.addEventListener("click", async (e) => {
       const b = e.target.closest("button[data-act]"); if (!b) return;
