@@ -46,6 +46,20 @@ service cloud.firestore {
       }
     }
 
+    // ---------- invites: which restaurant a 4-digit table code belongs to ----------
+    // Lets someone type a friend's code on the front page's scanner, before the app knows the restaurant.
+    // A code can only point to a restaurant where that code is open right now, and can't be taken over
+    // while it's open somewhere else (so codes are unique across restaurants while in use).
+    match /invites/{code} {
+      function codeOpen(rid) { return exists(/databases/$(database)/documents/restaurants/$(rid)/codes/$(code)); }
+      function codeOpenAfter(rid) { return existsAfter(/databases/$(database)/documents/restaurants/$(rid)/codes/$(code)); }
+      function validInvite() { return signedIn() && request.resource.data.keys().hasOnly(['rid'])
+        && request.resource.data.rid is string && request.resource.data.rid.size() <= 64 && codeOpenAfter(request.resource.data.rid); }
+      allow get: if signedIn();
+      allow create: if validInvite();
+      allow update: if validInvite() && (resource.data.rid == request.resource.data.rid || !codeOpen(resource.data.rid));
+    }
+
     match /meta/company {
       allow read: if true;
       // The first company admin: allowed once, together with their own company entry.

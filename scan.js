@@ -27,6 +27,17 @@
 .wscan button:focus-visible{outline:3px solid ${GREEN};outline-offset:2px}
 .wscan-msg{position:absolute;left:0;right:0;padding:0 max(20px,env(safe-area-inset-left,0px));text-align:center}
 .wscan-msg p{max-width:26em;margin:0 auto;font-size:16px;line-height:1.45;text-shadow:0 1px 8px rgb(0 0 0/.5)}
+.wscan-code{max-width:300px;margin:20px auto 0;text-align:left}
+.wscan-code label{display:block;font-size:14px;color:rgb(255 255 255/.8);margin:0 0 8px;text-align:center;text-shadow:0 1px 8px rgb(0 0 0/.5)}
+.wscan-coderow{display:flex;gap:8px}
+.wscan-code input{flex:1;min-width:0;height:50px;border-radius:12px;border:1.5px solid rgb(255 255 255/.32);background:rgb(13 17 11/.55);color:#fff;
+  font:600 22px/1 inherit;letter-spacing:.32em;text-align:center;font-variant-numeric:tabular-nums;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.wscan-code input::placeholder{letter-spacing:normal;font-size:15px;font-weight:500;color:rgb(255 255 255/.55)}
+.wscan-code input:focus{outline:none;border-color:${GREEN};box-shadow:0 0 0 3px rgb(156 196 60/.3)}
+.wscan-code button{height:50px;padding:0 20px;border-radius:12px;border:0;background:${GREEN};color:#1a2117;font:700 16px/1 inherit;cursor:pointer}
+.wscan-code.bad input{border-color:#f2a493;animation:wscan-shake .3s}
+@keyframes wscan-shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@media (max-height:640px){.wscan-badge{display:none}}
 .wscan-acts{display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap}
 .wscan-acts button{min-height:46px;padding:0 22px;border-radius:999px;font:600 15px/1 inherit;cursor:pointer;border:1.5px solid rgb(255 255 255/.5);background:none;color:#fff}
 .wscan-acts .go{background:${GREEN};border-color:${GREEN};color:#1a2117}
@@ -49,11 +60,21 @@
         <g clip-path="url(#wscan-clip)"><rect class="sweep"/></g><path class="edge"/><path class="corner"/></svg>
       <div class="wscan-top"><b id="wscan-t">Scan the table QR</b><button type="button" class="wscan-x" data-close aria-label="Close">✕</button></div>
       <div class="wscan-msg"><p role="status">Starting the camera…</p>
-        <div class="wscan-acts"><button type="button" class="go" data-retry hidden>Try again</button><button type="button" data-close hidden>Close</button></div></div>
+        <div class="wscan-acts"><button type="button" class="go" data-retry hidden>Try again</button><button type="button" data-close hidden>Close</button></div>
+        <form class="wscan-code" autocomplete="off" novalidate><label for="wscan-codein">Joining friends? Type the code from their phone</label>
+          <div class="wscan-coderow"><input id="wscan-codein" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4-digit code"><button type="submit">Join</button></div></form></div>
       <img class="wscan-badge" src="${base}img/brand/powered-by-wasabi.png" alt="Spiced by Wasabi">`;
     document.body.appendChild(el);
     sc.el = el; sc.v = el.querySelector("video"); sc.msg = el.querySelector(".wscan-msg p");
     el.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) close(); else if (e.target.closest("[data-retry]")) open(); });
+    // A friend's 4-digit code: the app finds their restaurant and table (see joinByInvite in app.js).
+    const form = el.querySelector(".wscan-code"), inp = form.querySelector("input");
+    inp.addEventListener("input", () => { inp.value = inp.value.replace(/\D/g, "").slice(0, 4); form.classList.remove("bad"); });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault(); const v = inp.value.trim();
+      if (!/^\d{4}$/.test(v)) { form.classList.remove("bad"); void form.offsetWidth; form.classList.add("bad"); say("Codes are 4 digits. Check the number on your friend's phone."); return; }
+      stopCam(); say("Finding your friends…"); location.href = base + "?c=" + v;
+    });
     addEventListener("resize", layout); addEventListener("orientationchange", () => setTimeout(layout, 250));
   }
   // One set of numbers for the window: the blur's hole, the faint edge, the green corner brackets

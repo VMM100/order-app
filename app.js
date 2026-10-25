@@ -402,6 +402,8 @@ const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []
 // Diners can't browse groups or codes. To see a table they hold a pass (passes/{their sign-in}),
 // which the database only accepts with the table's QR key or an open group's code.
 const passRef = (u) => rdoc("passes", u);
+// invites/{code} → which restaurant a table code belongs to (for codes typed on the front page's scanner).
+const inviteRef = (c) => doc(db, "invites", String(c));
 const codeRef = (c) => rdoc("codes", String(c));
 const newCode = () => String(1000 + Math.floor(Math.random() * 9000));
 const newGroup = (n, code) => ({ table: Number(n), session: `${n}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, code,
@@ -421,7 +423,7 @@ function tableGroup(n, proof) {
       if (cur) { const g = await tx.get(groupRef(cur)); if (g.exists() && g.data().open) { sid = cur; tx.set(passRef(me), { ...proof, session: cur, t: Date.now() }); return; } }
       const g = newGroup(n, code); sid = g.session;
       tx.set(groupRef(sid), g); tx.set(tableRef(n), { table: Number(n), current: sid });
-      tx.set(codeRef(code), { session: sid, table: Number(n) }); tx.set(passRef(me), { ...proof, session: sid, t: Date.now() });
+      tx.set(codeRef(code), { session: sid, table: Number(n) }); tx.set(inviteRef(code), { rid: RID }); tx.set(passRef(me), { ...proof, session: sid, t: Date.now() });
     });
     return sid;
   });
@@ -431,7 +433,7 @@ function startGroup(n, proof) {
   const me = auth.currentUser.uid;
   return withFreshCode(async (code) => {
     const g = newGroup(n, code), b = writeBatch(db);
-    b.set(groupRef(g.session), g); b.set(codeRef(code), { session: g.session, table: Number(n) }); b.set(passRef(me), { ...proof, session: g.session, t: Date.now() });
+    b.set(groupRef(g.session), g); b.set(codeRef(code), { session: g.session, table: Number(n) }); b.set(inviteRef(code), { rid: RID }); b.set(passRef(me), { ...proof, session: g.session, t: Date.now() });
     await b.commit(); return g.session;
   });
 }
@@ -796,6 +798,8 @@ function dinerScreen() {
   // code (a friend's invite), or a guest coming back to the group they already joined.
   async function start() {
     const c = params.get("c"), k = params.get("k");
+    // A friend's code typed on the front page (?c=1234, no restaurant yet): find the restaurant, then join.
+    if (!RID && c) return joinByInvite(c);
     if (!RID) { $("#cart").hidden = true; return paint(`<section><p class="empty">Scan the QR code on your table to see the menu and order.</p>
       <p class="note" style="text-align:center">Run a restaurant? <a href="${BASE}#signup">Register it with ${esc(COMPANY.name)}</a> · <a href="${BASE}#owner">Owner sign-in</a></p></section>`); }
     startConfig();
@@ -830,6 +834,21 @@ function dinerScreen() {
       return codeEntry(S.n);
     } catch (e) { paint(errorBox(e)); }
   }
+  async function joinByInvite(c) {
+    $("#cart").hidden = true; paint(`<p class="empty">Finding your friends…</p>`);
+    const again = (msg) => paint(`<section><div class="label">Join your friends</div><p class="err">${esc(msg)}</p>
+      <form id="invform" class="grid"><input class="field num" id="invin" inputmode="numeric" maxlength="4" placeholder="Their 4-digit code" autocomplete="off" value="${esc(c)}">
+        <button class="btn primary big">Join their table</button></form>
+      <p class="note">The code is on your friend's phone under ☰. Or <button class="linkbtn" data-scan>scan the QR code on the table</button>.</p></section>`);
+    if (!/^\d{4}$/.test(String(c).trim())) return again("Codes are 4 digits. Check the number with your friend.");
+    try {
+      await ensureUser();
+      const inv = await getDoc(inviteRef(String(c).trim()));
+      if (!inv.exists() || !inv.data().rid) return again("No open table with that code. Check the number on your friend's phone.");
+      location.replace(`${BASE}?r=${encodeURIComponent(inv.data().rid)}&c=${encodeURIComponent(String(c).trim())}`);
+    } catch (e) { again("Couldn't check that code. Check your connection and try again."); }
+  }
+  document.addEventListener("submit", (e) => { if (e.target.id !== "invform") return; e.preventDefault(); const v = ($("#invin").value || "").trim(); joinByInvite(v); });
   function attach(sid) {
     S.sid = sid; S.access = true; S.err = "";
     subGroup && subGroup(); subLines && subLines(); subAlerts && subAlerts();

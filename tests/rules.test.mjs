@@ -572,3 +572,18 @@ test("a diner can change their own name at the table, not anyone else's", async 
   await assertFails(d1.doc(`${R}/groups/4-a`).update({ "people.d1": { name: "A name far too long for a table", t: 1, uid: "d1", acct: false } }));
   await assertFails(d1.doc(`${R}/groups/4-a`).update({ label: "Vandan" }));   // the group's label stays
 });
+
+// ---------- invites: a table code typed on the front page ----------
+test("invites: a code can only point to a restaurant where it's open, and can't be taken while open", async () => {
+  const d1 = await seatAt("d1", 4, "4-a", "1234", "r1");
+  await assertSucceeds(d1.doc("invites/1234").set({ rid: "r1" }));
+  await assertSucceeds(diner("x").doc("invites/1234").get());
+  await assertFails(d1.doc("invites/5555").set({ rid: "r1" }));                 // no open table with that code
+  await assertFails(d1.doc("invites/1234").set({ rid: "r1", extra: 1 }));
+  // Another restaurant opens a table with the same code: it can't take the invite while r1's is open.
+  const d2 = await seatAt("d2", 4, "4-b", "1234", "r2");
+  await assertFails(d2.doc("invites/1234").set({ rid: "r2" }));
+  // r1's table closes (its code goes): now r2 can use it.
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`${R}/codes/1234`).delete());
+  await assertSucceeds(d2.doc("invites/1234").set({ rid: "r2" }));
+});
