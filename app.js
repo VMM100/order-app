@@ -2236,10 +2236,16 @@ function accountScreen() {
       const name = $("#acnamein").value.trim(); if (!name) { S.authErr = "Enter your first name."; return render(); }
       S.busy = true; S.authErr = ""; render();
       try {
-        if (S.profile) await updateDoc(dinerRef(S.user.uid), { name });
-        else await setDoc(dinerRef(S.user.uid), { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: {}, offerNames: {}, created: Date.now() });
+        // Never wait forever: if the database doesn't answer in 12 seconds, say so instead of "Saving…".
+        const write = S.profile ? updateDoc(dinerRef(S.user.uid), { name })
+          : setDoc(dinerRef(S.user.uid), { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: {}, offerNames: {}, created: Date.now() });
+        await Promise.race([write, new Promise((_, no) => setTimeout(() => no(Object.assign(new Error("timeout"), { code: "timeout" })), 12000))]);
         S.profile = { ...(S.profile || {}), name }; toast(`Hi ${name}`);
-      } catch (err) { S.authErr = "Couldn't save your name. Check your connection and try again."; }
+      } catch (err) {
+        console.error("Saving name failed", err);
+        S.authErr = err && err.code === "timeout" ? "The database isn't answering, so your name wasn't saved yet. Check your connection and try again."
+          : denied(err) ? "This account isn't allowed to save a name here. Try signing out and in again." : "Couldn't save your name. Check your connection and try again.";
+      }
       S.busy = false; render(); return; }
     if (e.target.id === "acphone") { e.preventDefault();
       S.phone = $("#acphonein").value; const full = normalisePhone(S.phone);
