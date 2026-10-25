@@ -532,3 +532,43 @@ test("demo: a room can't reach real restaurants", async () => {
   await assertFails(diner("p1").doc(`${R}/lines/x`).set({ table: 4 }));
   await assertFails(diner("p1").doc(`${R}/secrets/staff`).get());
 });
+
+// ---------- ringing staff phones (push) ----------
+const push = (extra = {}) => ({ token: "fcm-token-abc", t: 1, url: "https://wasabi.co.tz/?r=r1#waiter", ...extra });
+test("push: a staff phone saves its own push address, nobody else can read or forge it", async () => {
+  const s = await staffPhone("s1");
+  await assertSucceeds(s.doc(`${R}/push/s1`).set(push()));
+  await assertSucceeds(s.doc(`${R}/push/s1`).get());
+  await assertFails(s.doc(`${R}/push/s2`).set(push()));                       // not its own
+  await assertFails(s.doc(`${R}/push/s1`).set(push({ extra: 1 })));           // unknown field
+  await assertFails(s.doc(`${R}/push/s1`).set(push({ token: "" })));          // empty token
+  await assertFails(owner().doc(`${R}/push/s1`).get());                       // only the server reads them
+  const other = await staffPhone("s2");
+  await assertFails(other.doc(`${R}/push/s1`).get());
+  await assertFails(other.collection(`${R}/push`).get());
+});
+test("push: a phone without the current staff code can't register", async () => {
+  await assertFails(diner("d1").doc(`${R}/push/d1`).set(push()));
+  const s = await staffPhone("s1");
+  await assertSucceeds(owner().doc(`${R}/secrets/staff`).set({ token: "NEWTOK" }));
+  await assertFails(s.doc(`${R}/push/s1`).set(push()));
+});
+test("push: refused when the restaurant is more than 7 days unpaid", async () => {
+  const s = await staffPhone("s1");
+  await setAccount({ paidUntil: Date.now() - 8 * DAY });
+  await assertFails(s.doc(`${R}/push/s1`).set(push()));
+});
+
+// ---------- changing your name at the table ----------
+test("a diner can change their own name at the table, not anyone else's", async () => {
+  const d1 = await seatAt("d1");
+  // A friend joins with the group's code.
+  const d2 = diner("d2");
+  await d2.doc(`${R}/passes/d2`).set({ table: 4, via: "code", c: "1234", session: "4-a", t: 1 });
+  await assertSucceeds(d2.doc(`${R}/groups/4-a`).update({ "people.d2": { name: "Neha", t: 2, uid: "d2", acct: false } }));
+  await assertSucceeds(d1.doc(`${R}/groups/4-a`).update({ "people.d1": { name: "Vandan", t: 1, uid: "d1", acct: false } }));
+  await assertFails(d1.doc(`${R}/groups/4-a`).update({ "people.d2": { name: "Haha", t: 2, uid: "d2", acct: false } }));
+  await assertFails(d1.doc(`${R}/groups/4-a`).update({ "people.d1": { name: "", t: 1, uid: "d1", acct: false } }));
+  await assertFails(d1.doc(`${R}/groups/4-a`).update({ "people.d1": { name: "A name far too long for a table", t: 1, uid: "d1", acct: false } }));
+  await assertFails(d1.doc(`${R}/groups/4-a`).update({ label: "Vandan" }));   // the group's label stays
+});
