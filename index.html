@@ -38,7 +38,12 @@
   // app; the bare address (wasabi.co.tz) shows the landing page. Each loads only its own styles and code.
   window.IS_APP = !!(location.search.length > 1 || location.hash.length > 1);
   window.addEventListener("pagehide", () => { try { sessionStorage.setItem("wasabi-been", "1"); } catch {} });
-  document.documentElement.className = IS_APP ? "is-app" : "is-home";
+  // Before launch, the front page on wasabi.co.tz just says "Coming soon"; the staging site keeps the full
+  // landing page to work on. Every app link (?r=…, #account, #owner, #company, /demo/) works as usual.
+  // To launch: set LAUNCHED to true.
+  window.LAUNCHED = false;
+  window.IS_SOON = !IS_APP && !LAUNCHED && /(^|\.)wasabi\.co\.tz$/.test(location.hostname);
+  document.documentElement.className = IS_APP ? "is-app" : IS_SOON ? "is-home is-soon" : "is-home";
   // The staging copy (test site) says so on every page, so nobody mistakes it for the live site.
   if (/staging/.test(location.hostname)) addEventListener("DOMContentLoaded", () => {
     const b = document.createElement("div"); b.textContent = "Staging · test copy, not the live site";
@@ -49,7 +54,7 @@
   if (IS_APP) { const m = document.createElement("meta"); m.name = "robots"; m.content = "noindex"; document.head.appendChild(m); }
   document.write(IS_APP
     ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="styles.css?v=7"><link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="preconnect" href="https://firestore.googleapis.com"><link rel="preconnect" href="https://identitytoolkit.googleapis.com"><link rel="preconnect" href="https://securetoken.googleapis.com"><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js" crossorigin><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js" crossorigin><link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js" crossorigin><link rel="modulepreload" href="app.js"><link rel="modulepreload" href="firebase.js"><link rel="modulepreload" href="account.js"><link rel="modulepreload" href="menu.js"><link rel="modulepreload" href="platform.js"><link rel="modulepreload" href="brand.js"><link rel="modulepreload" href="metrics.js"><link rel="modulepreload" href="photos.js"><link rel="modulepreload" href="menuio.js">'
-    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=7">');
+    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="home.css?v=8">');
   // App mode: open the connections to Firebase and start fetching all the app's code at once, rather
   // than one file discovering the next (the sign-in page used to wait on that chain).
   // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
@@ -67,6 +72,19 @@
 <div class="cart" id="cart" hidden></div>
 <div class="toast" id="toast" hidden></div>
 <div id="recaptcha"></div>
+
+<!-- ================= COMING SOON (wasabi.co.tz until launch) ================= -->
+<div id="soon" hidden>
+  <svg class="soon-leaf" viewBox="0 0 64 64" aria-hidden="true"><g transform="translate(9 9) scale(.72)"><path fill-rule="evenodd" d="M31.0 33.0L21.4 52.7A26 26 0 1 0 11.3 42.6ZM31.3 28.7L25.2 13.9L28.4 29.6ZM34.9 31.2L45.1 18.9L32.8 29.1ZM34.4 35.6L50.1 38.8L35.3 32.7Z"/><path d="M29.7 31.7L32.3 34.3L9.3 60.1a2.1 2.1 0 0 1-3-3Z"/></g></svg>
+  <main class="soon-in">
+    <img class="soon-logo" src="img/brand/wasabi-lockup-reverse.svg" alt="Wasabi" width="181" height="36">
+    <span class="eyebrow">Coming soon · Dar es Salaam</span>
+    <h1>Order from your table. <em>Split the bill in a tap.</em></h1>
+    <p class="lede">Scan the code on your table, order with friends from your own phones and pay your share. Wasabi is coming to bars and cafés in Dar es Salaam soon.</p>
+    <a class="btn btn-go" href="https://wa.me/255748227000?text=Hi%2C%20I%27d%20like%20to%20hear%20about%20Wasabi%20for%20my%20place" target="_blank" rel="noopener">Run a bar or café? Talk to us</a>
+  </main>
+  <footer class="soon-foot"><a href="#account">Sign in</a><a href="privacy.html">Privacy</a><span>© 2026 Wasabi · Dar es Salaam</span></footer>
+</div>
 
 <!-- ================= LANDING PAGE ================= -->
 <div id="home">
@@ -301,6 +319,7 @@
     const q = document.createElement("script"); q.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"; q.defer = true; document.body.appendChild(q);
     const a = document.createElement("script"); a.type = "module"; a.src = "app.js"; document.body.appendChild(a);
   } else {
+    if (window.IS_SOON) document.getElementById("soon").hidden = false;
     document.getElementById("home").hidden = false;
     // Phone menu (☰ in the top bar): opens a list of links under the bar.
     const hb = document.getElementById("hburger"), hm = document.getElementById("hmenu");
