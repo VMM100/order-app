@@ -207,3 +207,21 @@ footer.foot a:hover{color:var(--text);text-decoration:underline}
 .hmenu a:first-child{color:var(--wasabi)}
 .hmenu a:focus-visible{outline:3px solid var(--wasabi);outline-offset:-3px;border-radius:8px}
 @media (min-width:761px){.hmenu{display:none!important}}
+
+/* Coming soon (wasabi.co.tz until launch): one calm screen in Wasabi ink, the full landing page hidden. */
+/* #soon has the hidden attribute, so app screens (which don.t load this file) never show it. */
+.is-soon #home{display:none}
+.is-soon body{background:var(--ink)}
+.is-soon #soon{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;background:var(--ink);color:var(--on-ink);position:relative;overflow:hidden;
+  padding:max(28px,env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-right,0px)) max(20px,env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px))}
+.soon-leaf{position:absolute;right:-14vmin;bottom:-12vmin;width:72vmin;height:72vmin;fill:var(--wasabi);opacity:.07;pointer-events:none}
+.soon-in{position:relative;flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:18px;max-width:680px;margin:0 auto;width:100%}
+.soon-logo{height:36px;width:auto;margin-bottom:22px}
+#soon .eyebrow{color:var(--wasabi)}
+#soon h1{font:800 clamp(38px,8vw,72px)/1.02 var(--display);letter-spacing:-.02em;margin:0;text-wrap:balance}
+#soon h1 em{font-style:normal;color:var(--ginger)} /* the page's one ginger accent (brand rule) */
+#soon .lede{font-size:clamp(16px,2.2vw,19px);line-height:1.55;color:var(--on-ink-muted);max-width:34em;margin:0}
+#soon .btn{margin-top:10px}
+.soon-foot{position:relative;display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:center;font-size:13px;color:var(--on-ink-muted);padding-top:28px}
+.soon-foot a{color:var(--on-ink);text-decoration:none;font-weight:600}
+.soon-foot a:hover{color:var(--wasabi)}
