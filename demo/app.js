@@ -1218,7 +1218,11 @@ function waiterScreen(boss) {
   const pushUrl = () => `${location.origin}${location.pathname}?r=${encodeURIComponent(RID)}#waiter`;
   let ring = pushState(), ringBusy = false;
   const keepRing = () => { if (S.me && !boss && ring === "on") refreshPush(fbApp, pushRef(), pushUrl()); };
-  const ringBar = () => boss || !S.me || ring === "unsupported" || ring === "on" ? "" : ring === "blocked"
+  // Always say where ringing stands, so nobody wonders whether it's on.
+  const ringBar = () => !S.me || ring === "unsupported" ? ""
+    : boss ? `<div class="soundbar"><span><b>This phone won't ring with the screen off</b> while you're signed in as owner or manager. Waiters' own phones ring.</span></div>`
+    : ring === "on" ? `<div class="soundbar"><span><b>Rings with the screen off.</b> Calls, bill requests and ready orders ring this phone, even when it's locked.</span><button class="btn" data-act="testring">Test ring</button></div>`
+    : ring === "blocked"
     ? `<div class="soundbar"><span><b>Notifications are blocked</b>, so this phone can't ring with the screen off. In Chrome: ⋮ → Settings → Site settings → Notifications → allow this site, then reload.</span></div>`
     : `<div class="soundbar"><span><b>Ring this phone when the screen is off.</b> Calls, bill requests and ready orders ring even when it's locked.</span><button class="btn primary" data-act="ring" ${ringBusy ? "disabled" : ""}>${ringBusy ? "Turning on…" : "Turn on"}</button></div>`;
   async function loadShift() {
@@ -1352,7 +1356,8 @@ function waiterScreen(boss) {
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     try {
-      if (d.act === "ring") { ringBusy = true; render();
+      if (d.act === "testring") testRing(wname(S.me)).catch(() => toast("Couldn't show a test ring."));
+      else if (d.act === "ring") { ringBusy = true; render();
         try { ring = await enablePush(fbApp, pushRef(), pushUrl());
           toast(ring === "on" ? "This phone will ring for your tables, even with the screen off" : ring === "blocked" ? "Notifications are blocked in Chrome's settings" : "Ringing not turned on"); }
         catch (err) { console.error("Turning on ringing failed", err);
