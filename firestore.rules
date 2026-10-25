@@ -163,6 +163,17 @@ service cloud.firestore {
               .hasOnly(['sections', 'waiters', 'shared', 'prices', 'tables', 'updated']));
       allow delete: if isCompany();
 
+      // Sold-out list, kept apart from the menu so marking one item sold out sends diners only this
+      // small list, not the whole menu. out: { "item name": true }.
+      function stockOut() {
+        let p = /databases/$(database)/documents/restaurants/$(rid)/live/stock;
+        return exists(p) ? get(p).data.get('out', {}) : {};
+      }
+      match /live/{doc} {
+        allow read: if live(rid) || isCompany() || isAdmin(rid);
+        allow write: if boss(rid) && doc == 'stock' && request.resource.data.keys().hasOnly(['out', 't'])
+          && request.resource.data.out is map && request.resource.data.out.size() <= 500;
+      }
       match /photos/{id} {
         allow read: if true;
         allow create: if boss(rid) && request.resource.data.data is string;
@@ -278,7 +289,7 @@ service cloud.firestore {
             && l.keys().hasOnly(['table', 'session', 'batch', 'pid', 'pname', 'n', 'v', 'pr', 'st', 's', 't', 'note'])
             && l.pid == me() && l.table == g.table && l.s == 'new'
             && l.n is string && l.v is string
-            && price != null && l.pr == price.p && l.st == price.st
+            && price != null && l.pr == price.p && l.st == price.st && !(l.n in stockOut())
             && (l.note == null || (l.note is string && l.note.size() <= 200));
         }
         allow read: if isStaff() || (hasPass() && live(rid) && resource.data.session == pass().session);

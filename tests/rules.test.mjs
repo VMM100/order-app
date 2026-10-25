@@ -587,3 +587,20 @@ test("invites: a code can only point to a restaurant where it's open, and can't 
   await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`${R}/codes/1234`).delete());
   await assertSucceeds(d2.doc("invites/1234").set({ rid: "r2" }));
 });
+
+// ---------- sold-out list (live/stock) ----------
+test("sold out: owner and manager mark items, nobody else; a sold-out item can't be ordered", async () => {
+  await assertSucceeds(owner().doc(`${R}/live/stock`).set({ out: { Pilsner: true }, t: 1 }));
+  await assertSucceeds(manager().doc(`${R}/live/stock`).set({ out: { Pilsner: true, "Fish & Chips": true }, t: 2 }));
+  await assertFails(owner().doc(`${R}/live/other`).set({ out: {}, t: 1 }));
+  await assertFails(owner().doc(`${R}/live/stock`).set({ out: {}, t: 1, extra: 1 }));
+  const d = await seatAt("d1");
+  await assertSucceeds(d.doc(`${R}/live/stock`).get());
+  await assertFails(d.doc(`${R}/live/stock`).set({ out: {}, t: 3 }));
+  const s = await staffPhone("s1");
+  await assertFails(s.doc(`${R}/live/stock`).set({ out: {}, t: 3 }));
+  // Pilsner is sold out: ordering it is refused; once it's back, it's accepted.
+  await assertFails(d.doc(`${R}/lines/l1`).set(line("d1", "4-a")));
+  await assertSucceeds(owner().doc(`${R}/live/stock`).set({ out: { "Fish & Chips": true }, t: 4 }));
+  await assertSucceeds(d.doc(`${R}/lines/l1`).set(line("d1", "4-a")));
+});
