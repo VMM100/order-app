@@ -86,6 +86,10 @@ jobs:
         run: |
           if [ -z "$SA" ]; then echo "::error title=Staging not set up yet::Add the FIREBASE_SERVICE_ACCOUNT secret in GitHub (Settings → Secrets and variables → Actions)."; exit 1; fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"; echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+      # Staging shares the live database, so its rules go out here too. Rules changes must stay backward
+      # compatible (only add what's new), so the live site keeps working with them.
+      - name: Publish database rules
+        run: npx --yes firebase-tools@15 deploy --only firestore:rules --project "$PROJECT" --non-interactive
       - name: Build the site folder
         run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/
       - name: Make the staging site (first time only)

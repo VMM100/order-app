@@ -1355,7 +1355,8 @@ function waiterScreen(boss) {
       if (d.act === "ring") { ringBusy = true; render();
         try { ring = await enablePush(fbApp, pushRef(), pushUrl());
           toast(ring === "on" ? "This phone will ring for your tables, even with the screen off" : ring === "blocked" ? "Notifications are blocked in Chrome's settings" : "Ringing not turned on"); }
-        catch { toast("Couldn't turn on ringing. Check your connection and try again."); }
+        catch (err) { console.error("Turning on ringing failed", err);
+          toast(denied(err) ? "Ringing isn't allowed for this phone yet. Ask the owner to make sure it's set up as a staff phone." : `Couldn't turn on ringing (${(err && (err.code || err.message)) || "error"}). Try again.`); }
         ringBusy = false; render(); }
       else if (d.act === "sound") { await enableSound(); render(); }
       else if (d.act === "testsound") beep();
