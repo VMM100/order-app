@@ -31,15 +31,14 @@
 .wscan-code label{display:block;font-size:14px;color:rgb(255 255 255/.8);margin:0 0 8px;text-align:center;text-shadow:0 1px 8px rgb(0 0 0/.5)}
 .wscan-coderow{display:flex;gap:8px}
 .wscan-code input{flex:1;min-width:0;height:50px;border-radius:12px;border:1.5px solid rgb(255 255 255/.32);background:rgb(13 17 11/.55);color:#fff;
-  font:600 22px/1 inherit;letter-spacing:.32em;text-align:center;font-variant-numeric:tabular-nums;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  font-family:inherit;font-size:24px;font-weight:700;line-height:1;letter-spacing:.32em;padding:0 0 0 .32em;text-align:center;font-variant-numeric:tabular-nums;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .wscan-code input::placeholder{letter-spacing:normal;font-size:15px;font-weight:500;color:rgb(255 255 255/.55)}
 .wscan-code input:focus{outline:none;border-color:${GREEN};box-shadow:0 0 0 3px rgb(156 196 60/.3)}
-.wscan-code button{height:50px;padding:0 20px;border-radius:12px;border:0;background:${GREEN};color:#1a2117;font:700 16px/1 inherit;cursor:pointer}
+.wscan-code button{height:50px;padding:0 20px;border-radius:12px;border:0;background:${GREEN};color:#1a2117;font-family:inherit;font-size:16px;font-weight:700;cursor:pointer}
 .wscan-code.bad input{border-color:#f2a493;animation:wscan-shake .3s}
 @keyframes wscan-shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
-@media (max-height:640px){.wscan-badge{display:none}}
 .wscan-acts{display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap}
-.wscan-acts button{min-height:46px;padding:0 22px;border-radius:999px;font:600 15px/1 inherit;cursor:pointer;border:1.5px solid rgb(255 255 255/.5);background:none;color:#fff}
+.wscan-acts button{min-height:46px;padding:0 22px;border-radius:999px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;border:1.5px solid rgb(255 255 255/.5);background:none;color:#fff}
 .wscan-acts .go{background:${GREEN};border-color:${GREEN};color:#1a2117}
 .wscan-badge{position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);height:34px;width:auto;pointer-events:none;filter:drop-shadow(0 2px 8px rgb(0 0 0/.35))}
 .wscan.err video,.wscan.err .wscan-frame{display:none}
@@ -82,8 +81,9 @@
   function layout() {
     if (!sc.el || sc.el.hidden) return;
     const W = sc.el.clientWidth, H = sc.el.clientHeight;
-    const s = Math.round(Math.min(W * 0.72, H * 0.46, 340));
-    const x = Math.round((W - s) / 2), y = Math.max(84, Math.round(H * 0.44 - s / 2)), r = Math.round(s * 0.09);
+    // Short screens get a slightly smaller window, so the code box below still fits.
+    const s = Math.round(Math.min(W * 0.72, H * (H < 760 ? 0.38 : 0.44), 340));
+    const x = Math.round((W - s) / 2), y = Math.max(76, Math.round(H * (H < 760 ? 0.36 : 0.41) - s / 2)), r = Math.round(s * 0.09);
     const L = Math.round(s * 0.16);                                  // bracket arm beyond the curve
     const rect = `M${x + r} ${y}H${x + s - r}A${r} ${r} 0 0 1 ${x + s} ${y + r}V${y + s - r}A${r} ${r} 0 0 1 ${x + s - r} ${y + s}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + s - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
     const corners = [
@@ -103,7 +103,10 @@
     // The blur everywhere except the window: a mask with the same rounded square cut out.
     const mask = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><path fill-rule="evenodd" d="M0 0H${W}V${H}H0Z${rect}"/></svg>`)}")`;
     const dim = sc.el.querySelector(".wscan-dim"); dim.style.webkitMaskImage = mask; dim.style.maskImage = mask;
-    sc.el.querySelector(".wscan-msg").style.top = (y + s + 26) + "px";
+    const msg = sc.el.querySelector(".wscan-msg"); msg.style.top = (y + s + 22) + "px";
+    // The Spiced by Wasabi badge steps aside if the text and code box would reach it.
+    const badge = sc.el.querySelector(".wscan-badge"); badge.style.visibility = "";
+    if (msg.getBoundingClientRect().bottom > badge.getBoundingClientRect().top - 12) badge.style.visibility = "hidden";
   }
   const say = (t) => { sc.msg.textContent = t; };
   const acts = (on) => sc.el.querySelectorAll(".wscan-acts button").forEach((b) => (b.hidden = !on));
