@@ -38,7 +38,7 @@ async function check(name, path, test, { wait = 0 } = {}) {
 const T = { timeout: 20000 };
 
 await check("Landing page", "", async (p) => {
-  await p.locator("h1").first().waitFor(T);
+  await p.locator("#home h1").first().waitFor(T);
   await p.locator("[data-scan]:visible").first().click();
   await p.locator(".wscan").waitFor(T);
   await p.locator(".wscan-x").click();
