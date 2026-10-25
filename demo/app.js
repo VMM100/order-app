@@ -18,7 +18,9 @@ import { pushState, enablePush, refreshPush, testRing, ringFor } from "./push.js
 import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction, documentId,
   updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc, collectionGroup,
+  disableNetwork, enableNetwork,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import morphdom from "../vendor/morphdom-esm.js";
 import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
 import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "./account.js";
 import { computeMetrics, sampleData } from "./metrics.js";
@@ -51,9 +53,39 @@ const denied = (e) => String(e && (e.code || e.message)).includes("permission");
 // Re-render without losing what someone is typing.
 function paint(html) {
   const a = document.activeElement, id = a && a.id, pos = a && a.selectionStart;
+  $("#view").dataset.soft = "";
   $("#view").innerHTML = html;
   hydratePhotos();
   if (id) { const el = document.getElementById(id); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} } }
+}
+
+// The diner's table screen: change only what's different (one dish going sold out, a new order line,
+// the waiter on the way), so photos, scrolling and anything being typed stay as they are.
+function paintSoft(html) {
+  const view = $("#view");
+  if (view.dataset.soft !== "1") { paint(html); view.dataset.soft = "1"; return; }
+  morphdom(view, `<main id="view">${html}</main>`, { childrenOnly: true, onBeforeElUpdated(from, to) {
+    if (from.isEqualNode(to)) return false;
+    if (from === document.activeElement && (from.tagName === "INPUT" || from.tagName === "TEXTAREA")) return false;
+    // Photos already shown stay shown (the new HTML doesn't carry the loaded picture).
+    if (from.tagName === "IMG" && from.dataset.phDone && from.dataset.photo === to.dataset.photo) {
+      to.dataset.phDone = from.dataset.phDone; const src = from.getAttribute("src"); if (src) to.setAttribute("src", src);
+    }
+    if (from.classList && from.classList.contains("ph")) ["loaded", "none"].forEach((c) => from.classList.contains(c) && to.classList.add(c));
+    return true;
+  } });
+  hydratePhotos();
+}
+// Pull down to refresh on live screens (table, waiter, kitchen, bar): reconnect and fetch only what
+// changed since, instead of reloading the page. A newly published version of the app still reloads.
+let APP_VERSION = null;
+const appVersion = () => fetch(new URL("version.txt", location.href).href + "?" + Date.now(), { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).then((t) => t.trim()).catch(() => "");
+appVersion().then((v) => { APP_VERSION = v || null; });
+async function softRefresh() {
+  const v = await appVersion();
+  if (APP_VERSION && v && v !== APP_VERSION) return "reload";
+  await disableNetwork(db); await enableNetwork(db);
+  return true;
 }
 
 // ---------- the ☰ menu in the header ----------
@@ -180,6 +212,11 @@ const tableLink = (n, k) => `${BASE}?r=${RID}&t=${n}&k=${k}`;
 // The database can't store a list inside a list, so prices are saved as {l, p} pairs.
 const cfgRef = () => doc(db, "demo", RID);   // DEMO: rooms live under demo/{room}
 let MENU = START_MENU, WAITERS = START_WAITERS, SHARED = [], CFG_SAVED = false, CFG_STALE = false;
+// Sold out tonight: names from restaurants/{rid}/live/stock (fast, small), plus any old "out" flag saved
+// inside the menu itself (oldOut). it.out is what every screen shows.
+let STOCK_OUT = new Set();
+const applyStock = () => MENU.forEach((c) => c.items.forEach((it) => { it.out = !!it.oldOut || STOCK_OUT.has(it.n); }));
+const stockRef = () => rdoc("live", "stock");
 // A restaurant's logo until its owner uploads one (or removes it, which saves "" rather than nothing).
 // Paths starting with img/ are files in this app; anything else is a photo id in the database.
 const DEFAULT_LOGOS = { "crafty-dees": "img/logos/crafty-dees.png" };
@@ -190,10 +227,12 @@ let TABLES = TABLE_COUNT, PAUSED = false;
 const cfgListeners = new Set();
 // Resolves once the restaurant settings (menu, shared tables…) have loaded, or failed to.
 let cfgLoaded; const cfgReady = new Promise((r) => (cfgLoaded = r));
-const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
+const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, oldOut: !!it.out, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
 const menuToDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: c.items.map((it) => {
   const o = { n: it.n, v: it.v.map(([l, p]) => ({ l: l || "", p: Number(p) || 0 })) };
-  if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (it.out) o.out = true; if (it.img) o.img = it.img; return o; }) }));
+  if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (legacyOut(it)) o.out = true; if (it.img) o.img = it.img; return o; }) }));
+// Only the old in-menu flag is saved with the menu; tonight's sold-out list lives in live/stock.
+const legacyOut = (it) => ("oldOut" in it ? it.oldOut : !!it.out);
 // New restaurants start with two empty sections; the demo restaurant starts with Crafty Dee's menu.
 const starterMenu = () => (true ? START_MENU : [{ c: "Drinks", st: "bar", items: [] }, { c: "Food", st: "kitchen", items: [] }]);
 let cfgStarted = false;
@@ -203,13 +242,18 @@ function startConfig() {
   onSnapshot(cfgRef(), (snap) => {
     PAUSED = false;
     if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
-    applyBrand();
+    applyStock(); applyBrand();
     cfgLoaded(); cfgListeners.forEach((f) => f());
   }, (e) => { if (denied(e)) PAUSED = true; cfgLoaded(); cfgListeners.forEach((f) => f()); });
+  // Sold-out changes arrive on their own: only this small list, never the whole menu.
+  onSnapshot(stockRef(), (snap) => {
+    STOCK_OUT = new Set(Object.keys((snap.exists() && snap.data().out) || {}));
+    applyStock(); cfgListeners.forEach((f) => f());
+  }, () => {});
 }
 // prices: "item|option" → price and station, for available items only. The database rules check every
 // order against it, so nobody can order something sold out or at a price they typed themselves.
-const priceMap = (secs) => { const m = {}; secs.forEach((c) => c.items.forEach((it) => { if (!it.out) it.v.forEach(([l, p]) => (m[it.n + "|" + (l || "")] = { p: Number(p) || 0, st: c.st })); })); return m; };
+const priceMap = (secs) => { const m = {}; secs.forEach((c) => c.items.forEach((it) => { if (!legacyOut(it)) it.v.forEach(([l, p]) => (m[it.n + "|" + (l || "")] = { p: Number(p) || 0, st: c.st })); })); return m; };
 const saveConfig = () => setDoc(cfgRef(), { sections: menuToDb(MENU), waiters: WAITERS, shared: SHARED, brand: BRAND, prices: priceMap(MENU), tables: TABLES, updated: Date.now() }, { merge: true });   // DEMO: merge keeps the room's created time
 
 // ---------- branding: name, logo and two colours chosen by the owner ----------
@@ -768,6 +812,7 @@ function stickerPeel(box, still) {
 }
 
 function dinerScreen() {
+  window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   welcomeSplash();
   const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "",
     user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "", uid: null, proof: null, switching: false };
@@ -996,7 +1041,7 @@ function dinerScreen() {
       <form id="renameform" class="grid" style="margin-top:8px"><label class="flabel" for="renamein">Your first name <span>Your table and waiter see this</span></label>
         <input class="field" id="renamein" maxlength="16" autocomplete="given-name" value="${esc(S.me.name)}">
         <button class="btn primary big">Save name</button></form></div>` : "";
-    paint(`<section class="dsec">${rename}${help}
+    paintSoft(`<section class="dsec">${rename}${help}
       <div class="tcard">
         <div class="trow"><div class="who2"><span>Waiter</span> <b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned"}</b></div>
           <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
@@ -1159,6 +1204,7 @@ function dinerScreen() {
 
 // ================= STATION (kitchen / bar / grill) =================
 function stationScreen(st) {
+  window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st] + " screen"; document.title = STATIONS[st] + " · " + rname();
   const S = { lines: [], groups: {}, all: [] }; const notify = watcher();
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => {
@@ -1209,6 +1255,7 @@ function stationScreen(st) {
 // alert and serving actions from the waiter on shift. Owners and managers can work as any waiter.
 const SHIFT_MS = 16 * 3600e3;
 function waiterScreen(boss) {
+  window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Waiter"; document.title = "Waiter · " + rname();
   const S = { me: boss ? store.get("dees-waiter-" + RID) : null, since: null, picking: null, pinErr: "", busy: false, endArmed: false,
     groups: [], lines: [], alerts: [], open: null, confirm: null, pin: "", shake: false };
@@ -1856,7 +1903,12 @@ function ownerScreen(role) {
       catch { const i = $("#wlinkin"); if (i) { i.focus(); i.select(); } toast("Select the link and copy it."); }
       return; }
     if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; render(); }
-    else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii]; it.out = !it.out; render(); save(it.out ? `${it.n} marked sold out` : `${it.n} back on the menu`); }
+    else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii], want = !it.out, msg = want ? `${it.n} marked sold out` : `${it.n} back on the menu`;
+      // Only the small sold-out list changes. An old sold-out flag saved inside the menu is cleared with one full save.
+      const clearOld = !want && it.oldOut; it.oldOut = clearOld ? false : !!it.oldOut;
+      if (want) STOCK_OUT.add(it.n); else STOCK_OUT.delete(it.n); applyStock(); render();
+      try { await setDoc(stockRef(), { out: { [it.n]: want ? true : deleteField() }, t: Date.now() }, { merge: true });
+        if (clearOld) await saveConfig(); toast(msg); } catch (err) { fail(err); } }
     else if (d.edit !== undefined) { S.edit = d.edit || null; render(); }
     else if (d.addv) { const [si, ii] = ix(d.addv); MENU[si].items[ii].v.push(["", MENU[si].items[ii].v.at(-1)[1]]); render(); save(); }
     else if (d.rmv) { const [si, ii, vi] = ix(d.rmv); MENU[si].items[ii].v.splice(vi, 1); render(); save(); }
