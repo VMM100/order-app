@@ -1,0 +1,14 @@
+# Weekly check for updates and security fixes to the tools and GitHub steps we use.
+# Security alerts arrive straight away (turn on in Settings → Code security). Updates come as pull requests
+# into staging, so nothing reaches the live site without passing the checks and being tried on staging.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    target-branch: staging
+    schedule: { interval: weekly, day: monday, time: "07:00", timezone: Africa/Dar_es_Salaam }
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: staging
+    schedule: { interval: weekly, day: monday, time: "07:00", timezone: Africa/Dar_es_Salaam }
