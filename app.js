@@ -229,16 +229,27 @@ const menuToDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: c.items.m
 const legacyOut = (it) => ("oldOut" in it ? it.oldOut : !!it.out);
 // New restaurants start with two empty sections; the demo restaurant starts with Crafty Dee's menu.
 const starterMenu = () => (RID === RESTAURANT_ID ? START_MENU : [{ c: "Drinks", st: "bar", items: [] }, { c: "Food", st: "kitchen", items: [] }]);
-let cfgStarted = false;
-function startConfig() {
-  if (cfgStarted || !RID) return; cfgStarted = true;
-  if (RID !== RESTAURANT_ID) { MENU = starterMenu(); WAITERS = []; }
+let cfgStarted = false, cfgTries = 0, PAUSED_AT = 0;
+function listenConfig() {
   onSnapshot(cfgRef(), (snap) => {
-    step("settings arrived"); PAUSED = false;
+    step("settings arrived");
+    // Ordering was shown as off, but the settings came through after all: start again cleanly.
+    if (PAUSED) { location.reload(); return; }
     if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
     applyStock(); applyBrand();
     cfgLoaded(); cfgListeners.forEach((f) => f());
-  }, (e) => { if (denied(e)) PAUSED = true; cfgLoaded(); cfgListeners.forEach((f) => f()); });
+  }, async (e) => {
+    // A refusal can be a hiccup (sign-in still settling, a new rules version rolling out). Ask again twice,
+    // after making sure this phone is signed in, before telling diners ordering is off.
+    if (denied(e) && cfgTries < 2) { cfgTries++; step("settings refused, asking again"); try { await ensureUser(); } catch {} setTimeout(listenConfig, 800 * cfgTries); return; }
+    if (denied(e)) { PAUSED = true; PAUSED_AT = Date.now(); step("settings refused"); }
+    cfgLoaded(); cfgListeners.forEach((f) => f());
+  });
+}
+function startConfig() {
+  if (cfgStarted || !RID) return; cfgStarted = true;
+  if (RID !== RESTAURANT_ID) { MENU = starterMenu(); WAITERS = []; }
+  listenConfig();
   // Sold-out changes arrive on their own: only this small list, never the whole menu.
   onSnapshot(stockRef(), (snap) => {
     STOCK_OUT = new Set(Object.keys((snap.exists() && snap.data().out) || {}));
@@ -617,7 +628,9 @@ function blockedHtml(st, name) {
   return `<section><div class="label" style="margin-top:0">${t[0]}</div><p>${t[1]}</p></section>`;
 }
 // What diners and staff phones see when the restaurant isn't running (they can't see why).
-const pausedHtml = () => `<section><p class="empty">Ordering by phone isn't available here right now.<br>Please order with a member of staff.</p></section>`;
+const pausedHtml = () => `<section><p class="empty">Ordering by phone isn't available here right now.<br>Please order with a member of staff.</p>
+  <p style="text-align:center"><button class="btn" onclick="location.reload()">Try again</button></p>
+  <p class="note" style="text-align:center;opacity:.6">Ref ${esc(RID)} · ${PAUSED_AT ? new Date(PAUSED_AT).toLocaleTimeString("en-GB") : "-"} · ${navigator.onLine ? "online" : "offline"}</p></section>`;
 
 // ================= SIGN-IN FOR OWNERS, MANAGERS AND STAFF =================
 async function isCompanyUser(u) {
