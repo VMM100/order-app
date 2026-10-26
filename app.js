@@ -2399,7 +2399,8 @@ function accountScreen() {
 // start-up watchdog the screen is still waiting.
 function SK(c = "", st = "") { return `<i class="sk ${c}"${st ? ` style="${st}"` : ""}></i>`; }
 function skel(inner) { return `<div class="skel" data-loading aria-busy="true"><span class="sr">Loading…</span>${inner}</div>`; }
-const skRep = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join("");
+// Function declarations (not consts) so screens drawn before this point in the file can use them.
+function skRep(n, f) { return Array.from({ length: n }, (_, i) => f(i)).join(""); }
 // A diner's menu: category chips, then dishes with a photo and price buttons.
 function skMenu() {
   return skel(`<div class="row" style="margin:6px 0 14px">${skRep(4, (i) => SK("pill", `width:${[64, 82, 58, 74][i]}px`))}</div>`
