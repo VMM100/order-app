@@ -234,7 +234,7 @@ function startConfig() {
   if (cfgStarted || !RID) return; cfgStarted = true;
   if (RID !== RESTAURANT_ID) { MENU = starterMenu(); WAITERS = []; }
   onSnapshot(cfgRef(), (snap) => {
-    PAUSED = false;
+    step("settings arrived"); PAUSED = false;
     if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
     applyStock(); applyBrand();
     cfgLoaded(); cfgListeners.forEach((f) => f());
@@ -510,12 +510,28 @@ async function togglePaid(sid, pid, now) { try { await updateDoc(groupRef(sid), 
 
 applyBrand();
 
+// Start-up trace: each step a screen waits for is noted with its time, so a stuck screen can say exactly
+// where it stopped (shown on "Still connecting…" and in the browser console).
+const BOOT = { t0: performance.now(), steps: [] };
+function step(name) { BOOT.steps.push([name, Math.round(performance.now() - BOOT.t0)]); }
+async function stallReport() {
+  const last = BOOT.steps[BOOT.steps.length - 1], net = navigator.onLine ? "connected" : "offline";
+  let google = "not checked";
+  try { const t = performance.now(); await Promise.race([fetch("https://firestore.googleapis.com/", { mode: "no-cors", cache: "no-store" }),
+      new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 4000))]); google = `reachable (${Math.round(performance.now() - t)} ms)`; }
+  catch { google = "not reachable"; }
+  return { waitingFor: last ? last[0] : "starting", sinceSec: last ? Math.round((performance.now() - BOOT.t0 - last[1]) / 1000) : 0,
+    internet: net, database: google, signedIn: !!(auth.currentUser), steps: BOOT.steps.map(([n, ms]) => `${n} ${ms}ms`).join(" · ") };
+}
+
 // If a screen is still on "Loading…" after 10 seconds, the connection probably stalled
 // (it can happen when several live screens start at once on one device). Offer a reload,
 // and reload by itself once if nobody taps.
 setTimeout(() => {
   const v = $("#view"); if (!v || v.textContent.trim() !== "Loading…") return;
-  v.innerHTML = `<section><p class="empty">Still connecting…</p><button class="btn primary big" onclick="location.reload()">Reload</button></section>`;
+  v.innerHTML = `<section><p class="empty">Still connecting…</p><button class="btn primary big" onclick="location.reload()">Reload</button><p class="note" id="stallwhy" style="text-align:center">Checking what's slow…</p></section>`;
+  stallReport().then((r) => { console.warn("Wasabi start-up stalled", r); const el = document.getElementById("stallwhy");
+    if (el) el.textContent = `Waiting for: ${r.waitingFor} (${r.sinceSec}s) · Internet: ${r.internet} · Database: ${r.database} · Signed in: ${r.signedIn ? "yes" : "no"}`; });
   let once = false; try { once = sessionStorage.getItem("dees-autoreload") === "1"; sessionStorage.setItem("dees-autoreload", "1"); } catch {}
   if (!once) setTimeout(() => location.reload(), 5000);
 }, 10000);
@@ -670,7 +686,7 @@ function adminGate(page, go) {
   const signupLink = `<p class="note">New to ${esc(COMPANY.name)}? <a href="${BASE}#signup">Register your restaurant</a>.</p>`;
   async function check() {
     paint(`<p class="empty">Loading…</p>`);
-    G.u = await authReady();
+    step("sign-in"); G.u = await authReady(); step("sign-in done");
     if (!isAccount(G.u) || !G.u.email) return show(`<section><div class="label" style="margin-top:0">${title} sign-in</div>
       <p>Sign in with the Google account registered for your restaurant.</p>
       <button class="btn primary big" data-act="admin-in" ${G.busy ? "disabled" : ""}>${G.busy ? "Signing in…" : "Sign in with Google"}</button>${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${signupLink}</section>`);
@@ -686,15 +702,15 @@ function adminGate(page, go) {
           : `<p><b>${who}</b> doesn't run a restaurant on ${esc(COMPANY.name)} yet.</p><p>Register your restaurant, or ask your restaurant's owner to add this email as a manager.</p>`}
         <div class="row" style="margin-top:14px"><a class="btn primary" href="${BASE}#signup">Register a restaurant</a>${other}</div></section>`);
     }
-    const role = await adminRole(G.u);
+    step("checking your access"); const role = await adminRole(G.u); step("access checked");
     if (!role) return show(`<section><div class="label" style="margin-top:0">Not an owner or manager here</div>
       <p><b>${who}</b> isn't on this restaurant's list. Ask the owner to add this email under <b>Owner → Staff</b>.</p>${other}${signupLink}</section>`);
     if (role === "manager" && page === "owner") return show(`<section><div class="label" style="margin-top:0">Managers use the manager page</div>
       <p>You're signed in as a manager (${who}). <a href="${BASE}?r=${RID}#manager">Open the manager page</a>.</p></section>`);
     const st = subState(ACCOUNT);
     if (role !== "company" && !st.live) return show(blockedHtml(st, (ACCOUNT && ACCOUNT.name) || RID) + `<section>${other}</section>`);
-    startConfig();
-    await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]);
+    startConfig(); step("restaurant settings");
+    await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]); step("settings loaded");
     G.done = true; go(role === "company" ? "owner" : role);
   }
   const show = (html) => paint(html);
@@ -848,8 +864,8 @@ function dinerScreen() {
     if (!RID) { $("#cart").hidden = true; return paint(`<section><p class="empty">Scan the QR code on your table to see the menu and order.</p>
       <p class="note" style="text-align:center">Run a restaurant? <a href="${BASE}#signup">Register it with ${esc(COMPANY.name)}</a> · <a href="${BASE}#owner">Owner sign-in</a></p></section>`); }
     startConfig();
-    try { S.uid = (await ensureUser()).uid; } catch (e) { return paint(errorBox(e)); }
-    await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]);
+    step("sign-in"); try { S.uid = (await ensureUser()).uid; } catch (e) { return paint(errorBox(e)); }
+    step("menu and settings"); await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]); step("checking your table");
     if (PAUSED) { $("#cart").hidden = true; return paint(pausedHtml()); }
     if (!S.n && c) return findByCode(c);
     if (!S.n) return codeEntry();
@@ -895,6 +911,7 @@ function dinerScreen() {
   }
   document.addEventListener("submit", (e) => { if (e.target.id !== "invform") return; e.preventDefault(); const v = ($("#invin").value || "").trim(); joinByInvite(v); });
   function attach(sid) {
+    step("loading your table");
     S.sid = sid; S.access = true; S.err = "";
     subGroup && subGroup(); subLines && subLines(); subAlerts && subAlerts();
     subGroup = onSnapshot(groupRef(sid), (snap) => {
@@ -1791,7 +1808,9 @@ function ownerScreen(role) {
       <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${esc(lab(r))}</span></div>`).join("")}</div>`;
   }
   function dashTab() {
-    const periods = [["today", "Today"], ["7", "7 days"], ["30", "30 days"], ["all", "All time"]];
+    // No "All time" for now: it downloaded every order ever placed, which gets slow and costly as history grows.
+    // Longer ranges come back with daily summaries (see docs/security/Security Checklist.md → scaling).
+    const periods = [["today", "Today"], ["7", "7 days"], ["30", "30 days"]];
     const head = `<div class="periods">${periods.map(([k, l]) => `<button class="chip" aria-pressed="${S.period === k}" data-period="${k}">${l}</button>`).join("")}
       <button class="btn ghost small hide-phone" data-act="reload">${S.loading ? "Loading…" : "Refresh"}</button></div>`;
     if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : `<p class="empty">Loading numbers…</p>`); }
@@ -1942,7 +1961,7 @@ function ownerScreen(role) {
     else if (d.act === "resetcolors") { BRAND = { ...BRAND, c1: null, c2: null }; applyBrand(); render(); save("Original colours back"); }
     else if (d.act === "rmlogo") { const old = BRAND.logo; BRAND = { ...BRAND, logo: "" }; applyBrand(); render(); await save("Logo removed"); if (old && !isFileLogo(old)) deleteDoc(rdoc("photos", old)).catch(() => {}); }
     else if (d.rmphoto) { const [si, ii] = ix(d.rmphoto), it = MENU[si].items[ii], old = it.img; delete it.img; render(); await save("Photo removed"); deleteDoc(rdoc("photos", old)).catch(() => {}); }
-    else if (d.period) { S.period = d.period; S.m = null; S.err = null; render(); }
+    else if (d.period) { S.period = d.period === "all" ? "30" : d.period; S.m = null; S.err = null; render(); }
     else if (d.act === "reload") { S.m = null; S.err = null; render(); }
     else if (d.act === "sample" && !S.busy) {
       S.busy = "sample"; render();
