@@ -135,6 +135,7 @@ section{padding-top:16px}
 .item.out h3,.item.out .d{color:var(--muted)}
 .field.sel{width:auto;padding:8px 10px;font-size:14px}
 .ed{border-left-color:var(--hop)}
+.ed+.ed{margin-top:14px}   /* owner menu: a gap between sections */
 .edhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .edhead .field:first-child{flex:1 1 180px;font-family:var(--display);font-size:20px;text-transform:var(--dcase,uppercase);font-weight:700;padding:6px 10px}
 .edrow{border-top:1px solid var(--line);padding:10px 0}
