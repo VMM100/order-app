@@ -137,7 +137,7 @@ section{padding-top:16px}
 .ed{border-left-color:var(--hop)}
 .ed+.ed{margin-top:14px}   /* owner menu: a gap between sections */
 .edhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.edhead .field:first-child{flex:1 1 180px;font-family:var(--display);font-size:20px;text-transform:var(--dcase,uppercase);font-weight:700;padding:6px 10px}
+.edhead .field:first-child{flex:1 1 180px;font-family:var(--display);font-size:20px;text-transform:var(--dcase,uppercase);font-weight:700;padding:6px 10px;color:var(--accent)}   /* owner menu: section names in the restaurant's accent colour */
 .edrow{border-top:1px solid var(--line);padding:10px 0}
 .edrow.out b{color:var(--muted);text-decoration:line-through}
 .edsum{display:flex;justify-content:space-between;align-items:center;gap:10px}
