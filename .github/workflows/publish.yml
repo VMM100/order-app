@@ -76,11 +76,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
           CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
           RINGER: "${{ secrets.RINGER_SERVICE_ACCOUNT }}"
-        working-directory: worker
         run: |
+          if [ ! -f worker/ring.js ]; then echo "No ring service in this version."; exit 0; fi
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$RINGER" ]; then
             echo "::warning title=Ring service not published::Add CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and RINGER_SERVICE_ACCOUNT in GitHub secrets to turn on waiter ringing."; exit 0; fi
-          npx --no-install wrangler deploy --name wasabi-ring-staging 2>&1 | tee deploy.txt
+          cd worker && npx --no-install wrangler deploy --name wasabi-ring-staging 2>&1 | tee deploy.txt
           printf '%s' "$RINGER" | npx --no-install wrangler secret put GOOGLE_SERVICE_ACCOUNT --name wasabi-ring-staging
           url=$(grep -oE 'https://wasabi-ring-staging\.[a-z0-9-]+\.workers\.dev' deploy.txt | head -1)
           echo "### Ring service → $url" >> "$GITHUB_STEP_SUMMARY"
@@ -130,11 +130,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
           CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
           RINGER: "${{ secrets.RINGER_SERVICE_ACCOUNT }}"
-        working-directory: worker
         run: |
+          if [ ! -f worker/ring.js ]; then echo "No ring service in this version."; exit 0; fi
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$RINGER" ]; then
             echo "::warning title=Ring service not published::Add CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and RINGER_SERVICE_ACCOUNT in GitHub secrets to turn on waiter ringing."; exit 0; fi
-          npx --no-install wrangler deploy --name wasabi-ring 2>&1 | tee deploy.txt
+          cd worker && npx --no-install wrangler deploy --name wasabi-ring 2>&1 | tee deploy.txt
           printf '%s' "$RINGER" | npx --no-install wrangler secret put GOOGLE_SERVICE_ACCOUNT --name wasabi-ring
           url=$(grep -oE 'https://wasabi-ring\.[a-z0-9-]+\.workers\.dev' deploy.txt | head -1)
           echo "### Ring service → $url" >> "$GITHUB_STEP_SUMMARY"
