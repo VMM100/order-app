@@ -535,11 +535,11 @@ async function stallReport() {
     internet: net, database: google, signedIn: !!(auth.currentUser), steps: BOOT.steps.map(([n, ms]) => `${n} ${ms}ms`).join(" · ") };
 }
 
-// If a screen is still on "Loading…" after 10 seconds, the connection probably stalled
+// If a screen is still loading (a skeleton) after 10 seconds, the connection probably stalled
 // (it can happen when several live screens start at once on one device). Offer a reload,
 // and reload by itself once if nobody taps.
 setTimeout(() => {
-  const v = $("#view"); if (!v || v.textContent.trim() !== "Loading…") return;
+  const v = $("#view"); if (!v || !(v.firstElementChild && v.firstElementChild.hasAttribute("data-loading"))) return;
   v.innerHTML = `<section><p class="empty">Still connecting…</p><button class="btn primary big" onclick="location.reload()">Reload</button><p class="note" id="stallwhy" style="text-align:center">Checking what's slow…</p></section>`;
   stallReport().then((r) => { console.warn("Wasabi start-up stalled", r); const el = document.getElementById("stallwhy");
     if (el) el.textContent = `Waiting for: ${r.waitingFor} (${r.sinceSec}s) · Internet: ${r.internet} · Database: ${r.database} · Signed in: ${r.signedIn ? "yes" : "no"}`; });
@@ -670,7 +670,7 @@ function staffGate(go) {
   const tok = params.get("s");
   if (!RID) RID = store.get("dees-rid");
   if (tok && RID) { store.set("dees-staff-" + RID, tok); store.set("dees-rid", RID); history.replaceState(null, "", `${BASE}?r=${RID}${location.hash}`); }
-  paint(`<p class="empty">Loading…</p>`);
+  paint(skPage());
   (async () => {
     const notSet = (t) => paint(`<section><div class="label" style="margin-top:0">This phone isn't set up for staff</div>
       <p>${t ? "The staff link on this phone has been replaced." : "Staff screens only open on restaurant phones."} Ask the owner or manager to open <b>Setup</b> and scan the <b>staff QR code</b> with this phone.</p>
@@ -698,7 +698,7 @@ function adminGate(page, go) {
   const G = { busy: false, err: "", u: null, done: false };
   const signupLink = `<p class="note">New to ${esc(COMPANY.name)}? <a href="${BASE}#signup">Register your restaurant</a>.</p>`;
   async function check() {
-    paint(`<p class="empty">Loading…</p>`);
+    paint(skPage());
     step("sign-in"); G.u = await authReady(); step("sign-in done");
     if (!isAccount(G.u) || !G.u.email) return show(`<section><div class="label" style="margin-top:0">${title} sign-in</div>
       <p>Sign in with the Google account registered for your restaurant.</p>
@@ -925,10 +925,10 @@ function dinerScreen() {
   document.addEventListener("submit", (e) => { if (e.target.id !== "invform") return; e.preventDefault(); const v = ($("#invin").value || "").trim(); joinByInvite(v); });
   function attach(sid) {
     step("loading your table");
-    S.sid = sid; S.access = true; S.err = "";
+    S.sid = sid; S.access = true; S.err = ""; S.gLoaded = false;
     subGroup && subGroup(); subLines && subLines(); subAlerts && subAlerts();
     subGroup = onSnapshot(groupRef(sid), (snap) => {
-      S.g = snap.data() || null;
+      S.g = snap.data() || null; S.gLoaded = true;
       const saved = store.get(meKey());
       S.me = S.g && saved && saved.session === sid && saved.pid === S.uid && S.g.people && S.g.people[saved.pid] ? saved : null;
       render();
@@ -1041,6 +1041,7 @@ function dinerScreen() {
   function render() {
     if (!S.n || !S.access) return;
     const shared = isShared(S.n), g = S.g;
+    if (!S.gLoaded) { $("#cart").hidden = true; return paint(skMenu()); }
     if (!g || !g.open) {
       $("#cart").hidden = true;
       return paint(`<section><p class="empty">${shared ? "Your group's bill has been closed" : "This table has been closed"}. Thanks for visiting!</p>${S.viaKey
@@ -1255,7 +1256,7 @@ function stationScreen(st) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st] + " screen"; document.title = STATIONS[st] + " · " + rname();
   const S = { lines: [], groups: {}, all: [] }; const notify = watcher();
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => {
-    S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
+    S.loaded = true; S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
     notify(S.lines.filter((l) => l.s === "new").map((l) => l.batch)); render();
   }, (e) => paint(errorBox(e)));
   onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.all = s.docs.map((d) => d.data()); S.groups = {}; S.all.forEach((g) => (S.groups[g.session] = g)); render(); });
@@ -1276,7 +1277,7 @@ function stationScreen(st) {
     });
     setMenu([{ html: `<b>${esc(STATIONS[st])} screen</b><br>${esc(rname())}. Orders for the ${esc(STATIONS[st].toLowerCase())} appear here.` },
       ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : [])]);
-    paint(soundBar() + (tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
+    paint(soundBar() + (!S.loaded ? skTickets(4) : tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
   }
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
@@ -1334,7 +1335,7 @@ function waiterScreen(boss) {
   // A shift that has run 16 hours ends by itself.
   setInterval(() => { if (!boss && S.since && Date.now() - S.since >= SHIFT_MS) endShift("Your shift has ended. Start a new one to keep working."); }, 60000);
   const notify = watcher();
-  onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.groups = s.docs.map((d) => d.data()).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
+  onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.gotGroups = true; S.groups = s.docs.map((d) => d.data()).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => { S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })); update(); });
   onSnapshot(query(rcol("alerts"), where("done", "==", false)), (s) => { S.alerts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.t - b.t); update(); });
   // Bill totals need every line of the group, including served ones.
@@ -1406,7 +1407,7 @@ function waiterScreen(boss) {
     }).join("");
     paint(`<section>${pick}${ringBar()}${soundBar()}
       ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
-      <div class="label">My tables</div>${mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
+      <div class="label">My tables</div>${!S.gotGroups ? skTickets(2) : mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
     </section>`);
   }
   // The sign-in card: a standard two-step sign-in (who are you, then PIN) in the restaurant's look.
@@ -1553,7 +1554,7 @@ function setupScreen(role) {
     const screens = [["waiter", "Waiter"], ...Object.entries(STATIONS)];
     const tableCard = (n) => `<div class="qr"><div class="box" id="qr${n}"></div><b>Table ${n}</b>
       <button class="chip sharetog" data-share="${n}" aria-pressed="${isShared(n)}">${isShared(n) ? "Shared table" : "Normal table"}</button>
-      ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : `<span class="note">Loading…</span>`}
+      ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : skInline(40)}
       <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
     bossMenu(role, [{ label: armed ? "Tap again to erase all orders" : "Reset demo", sub: armed ? "Orders, alerts and history go; menu and staff stay" : "Clear orders and history before a demo", danger: true, keep: !armed,
       run: () => { if (!armed) { armed = true; render(); setTimeout(() => { armed = false; render(); }, 4000); } else resetDemo(); } }]);
@@ -1565,7 +1566,7 @@ function setupScreen(role) {
       <p class="note">Mark big communal tables as <b>Shared</b>: several groups can then order there, each with its own code and bill. On normal tables everyone who scans joins the same bill.</p>
       <button class="btn" data-act="rotate">${rot ? "Tap again: every printed table card will stop working" : "Make new codes for all tables"}</button>
       <div class="label">Staff phones · scan once with each phone</div>
-      <div class="qrs">${screens.map(([k, v]) => `<div class="qr sqr"><div class="box" id="sqr-${k}"></div><b>${esc(v)}</b>${staffTok ? `<a class="note" href="${staffLink(k)}">Open here</a>` : `<span class="note">Loading…</span>`}</div>`).join("")}</div>
+      <div class="qrs">${screens.map(([k, v]) => `<div class="qr sqr"><div class="box" id="sqr-${k}"></div><b>${esc(v)}</b>${staffTok ? `<a class="note" href="${staffLink(k)}">Open here</a>` : skInline(60)}</div>`).join("")}</div>
       <p class="note">Each waiter scans the <b>Waiter</b> code once with their own phone. After that they start each shift with their name and PIN (set the PINs under Owner → Staff). The kitchen, bar and grill phones scan their own code once. Keep these codes away from guests.</p>
       <p class="note">If a phone is lost or someone leaves, make new staff codes: every staff phone is signed out and scans again.</p>
       <button class="btn" data-act="rotstaff">${rotStaff ? "Tap again: every staff phone must scan again" : "Make new staff codes"}</button>
@@ -1766,7 +1767,7 @@ function ownerScreen(role) {
 
   // ----- staff -----
   function staffTab() {
-    const wl = S.wtok == null ? (loadWLink(), `<p class="note">Loading…</p>`)
+    const wl = S.wtok == null ? (loadWLink(), skRows(1))
       : !S.wtok ? `<p class="note">Couldn't load the link. Check the connection and open this tab again.</p>`
       : `<div class="vrow"><input class="field" id="wlinkin" readonly value="${esc(waiterLink())}" aria-label="Waiter sign-in link"><button class="btn" data-act="wlcopy">Copy</button></div>
         <div class="row" style="margin-top:8px"><button class="btn primary" data-act="wlshare">Send to a waiter</button><button class="btn ghost" data-act="wlqr">${S.wqr ? "Hide QR code" : "Show QR code"}</button></div>
@@ -1787,7 +1788,7 @@ function ownerScreen(role) {
       <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name"><button class="btn primary">Add</button></form>
       ${owner ? `<div class="label">Owner and managers</div>
       <p class="note" style="margin-top:0">They sign in with Google. Managers can edit the menu and staff and open Setup; the owner also sees the dashboard and look, and adds or removes managers.</p>
-      ${S.admins == null ? (loadAdmins(), `<p class="note">Loading…</p>`) : `<div class="grid" style="max-width:520px">${S.admins.map((a) => `<div class="vrow"><span class="field" style="overflow:hidden;text-overflow:ellipsis">${esc(a.email)}${a.email === myEmail ? " (you)" : ""}</span>
+      ${S.admins == null ? (loadAdmins(), skRows(2)) : `<div class="grid" style="max-width:520px">${S.admins.map((a) => `<div class="vrow"><span class="field" style="overflow:hidden;text-overflow:ellipsis">${esc(a.email)}${a.email === myEmail ? " (you)" : ""}</span>
         <span class="pill ${a.role === "owner" ? "s-ready" : "s-preparing"}">${a.role === "owner" ? "Owner" : "Manager"}</span>
         ${a.email === myEmail || a.role === "owner" ? "" : `<button class="btn danger" data-deladmin="${esc(a.email)}">${S.armed === "a" + a.email ? "Tap again" : "Remove"}</button>`}</div>`).join("")}</div>`}
       <form id="addadmin" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="adminemail" type="email" autocomplete="off" placeholder="New manager's Google email">
@@ -1826,7 +1827,7 @@ function ownerScreen(role) {
     const periods = [["today", "Today"], ["7", "7 days"], ["30", "30 days"]];
     const head = `<div class="periods">${periods.map(([k, l]) => `<button class="chip" aria-pressed="${S.period === k}" data-period="${k}">${l}</button>`).join("")}
       <button class="btn ghost small hide-phone" data-act="reload">${S.loading ? "Loading…" : "Refresh"}</button></div>`;
-    if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : `<p class="empty">Loading numbers…</p>`); }
+    if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : skKpis()); }
     const m = S.m;
     const sampleNote = m.sample ? `<div class="soundbar" style="margin-top:12px"><span>Includes <b>sample data</b> for demonstration, not real sales.</span><button class="btn" data-act="unsample">${S.busy === "unsample" ? "Removing…" : "Remove sample data"}</button></div>` : "";
     if (!m.items) return head + `<section><p class="empty">No orders in this period yet.<br>Numbers appear here as soon as diners order.</p>
@@ -2020,7 +2021,7 @@ function companyScreen() {
   wasabiPage();
   const C = { u: null, ok: false, claimed: true, list: [], team: [], filter: "all", busy: "", err: "", armed: null, edit: null };
   async function check() {
-    paint(`<p class="empty">Loading…</p>`);
+    paint(skPage());
     C.u = await authReady(); C.ok = await isCompanyUser(C.u);
     if (!C.ok) { try { C.claimed = (await getDoc(doc(db, "meta", "company"))).exists(); } catch { C.claimed = true; } return render(); }
     await load();
@@ -2157,7 +2158,7 @@ function signupScreen() {
   wasabiPage();
   const U = { u: null, mine: [], busy: false, err: "", done: null, form: false };
   async function check() {
-    paint(`<p class="empty">Loading…</p>`);
+    paint(skPage());
     U.u = await authReady();
     if (isAccount(U.u) && U.u.email) U.mine = (await myRestaurants(U.u)).filter((m) => m.role === "owner");
     render();
@@ -2298,7 +2299,7 @@ function accountScreen() {
   function render() {
     $("#sub").textContent = S.user && !(runs() && !S.guest) ? "My account" : "Sign in";
     document.title = $("#sub").textContent + " · " + COMPANY.name;
-    if (S.loading) return paint(`<p class="empty">Loading…</p>`);
+    if (S.loading) return paint(skCards(2));
     if (!S.user) return paint(signInHtml());
     // First sign-in: ask everyone for their first name once, before anything else.
     if (!(S.profile && S.profile.name)) return paint(nameHtml());
@@ -2391,6 +2392,46 @@ function accountScreen() {
   });
   render();
 }
+
+// ---------- skeletons: grey shapes where content is about to appear ----------
+// Each is shaped like what it stands in for, so nothing jumps when the real content arrives. They pulse
+// gently (still, for people who turn motion off). Screen readers hear "Loading…"; data-loading tells the
+// start-up watchdog the screen is still waiting.
+function SK(c = "", st = "") { return `<i class="sk ${c}"${st ? ` style="${st}"` : ""}></i>`; }
+function skel(inner) { return `<div class="skel" data-loading aria-busy="true"><span class="sr">Loading…</span>${inner}</div>`; }
+const skRep = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join("");
+// A diner's menu: category chips, then dishes with a photo and price buttons.
+function skMenu() {
+  return skel(`<div class="row" style="margin:6px 0 14px">${skRep(4, (i) => SK("pill", `width:${[64, 82, 58, 74][i]}px`))}</div>`
+    + skRep(5, (i) => `<div class="item withph"><div class="itxt">${SK("t", `width:${[52, 38, 60, 45, 56][i]}%`)}${SK("", `width:${[80, 66, 74, 58, 70][i]}%`)}</div>
+      <div class="ph">${SK("fill")}</div><div class="vars">${SK("btn")}${i % 2 ? SK("btn") : ""}</div></div>`));
+}
+// Order tickets (kitchen, bar, waiter tables).
+function skTickets(n = 4) {
+  return skel(`<section class="grid">${skRep(n, (i) => `<article class="ticket"><header>${SK("t", "width:40%")}${SK("", "width:44px")}</header>
+    <div style="display:grid;gap:8px;margin:12px 0">${SK("", `width:${[70, 55, 64, 48][i % 4]}%`)}${SK("", `width:${[50, 62, 40, 58][i % 4]}%`)}</div>${SK("btn", "width:96px")}</article>`)}</section>`);
+}
+// A list of rows with a button at the end (staff, managers, links).
+function skRows(n = 3) {
+  return skel(`<div class="grid" style="max-width:520px">${skRep(n, (i) => `<div class="vrow">${SK("field", `width:${[78, 64, 72][i % 3]}%`)}${SK("btn", "width:72px")}</div>`)}</div>`);
+}
+// Dashboard: number tiles, then a chart and a list.
+function skKpis() {
+  return skel(`<div class="kpis">${skRep(4, () => `<div class="kpi">${SK("", "width:60%")}${SK("t", "width:70%;height:26px;margin-top:8px")}</div>`)}</div>
+    <div class="ticket" style="margin-top:14px">${SK("fill", "height:160px")}</div>
+    <div class="ticket" style="margin-top:10px;display:grid;gap:10px">${skRep(4, (i) => SK("", `width:${[72, 60, 66, 50][i]}%`))}</div>`);
+}
+// Cards with a title, a couple of lines and buttons (company list, account, sign-in checks).
+function skCards(n = 3) {
+  return skel(`<section class="grid">${skRep(n, (i) => `<article class="ticket"><header>${SK("t", `width:${[46, 38, 52][i % 3]}%`)}${SK("pill", "width:80px")}</header>
+    ${SK("", "width:62%;margin-top:10px")}<div class="row" style="margin-top:12px">${SK("btn", "width:110px")}${SK("btn", "width:90px")}</div></article>`)}</section>`);
+}
+// Any page before we know exactly what it will show.
+function skPage() {
+  return skel(`<section style="display:grid;gap:12px">${SK("t", "width:45%")}${SK("", "width:85%")}${SK("", "width:70%")}${SK("btn", "width:100%;height:48px;margin-top:6px")}</section>`);
+}
+// A small grey bar inside a line of text.
+function skInline(w = 60) { return `<i class="sk" style="display:inline-block;width:${w}px;vertical-align:middle" aria-label="Loading"></i>`; }
 
 function errorBox(e) {
   return `<section><div class="err">${denied(e)

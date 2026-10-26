@@ -14,13 +14,13 @@
 <link rel="apple-touch-icon" href="img/brand/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="demo/styles.css?v=1">
+<link rel="stylesheet" href="demo/styles.css?v=2">
 </head>
 <body>
 <div class="wrap" id="wrap">
   <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><h1 id="brandname"></h1></div><div class="hright"><span class="sub" id="sub"></span><button class="logoutbtn" id="logoutbtn" type="button" hidden>Log out</button><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
     <nav class="drawer" id="drawer" hidden></nav></header>
-  <main id="view"><p class="empty">Loading…</p></main>
+  <main id="view"><div class="skel" data-loading aria-busy="true"><span class="sr">Loading…</span><section style="display:grid;gap:12px"><i class="sk t" style="width:45%"></i><i class="sk" style="width:85%"></i><i class="sk" style="width:70%"></i><i class="sk btn" style="width:100%;height:48px;margin-top:6px"></i></section></div></main>
 </div>
 <div class="cart" id="cart" hidden></div>
 <div class="toast" id="toast" hidden></div>
