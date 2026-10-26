@@ -64,5 +64,6 @@ export function authMessage(e) {
   if (c.includes("unauthorized-domain") || c.includes("operation-not-allowed") || c.includes("billing"))
     return "Sign-in isn't switched on for this restaurant yet. Join with your first name for now.";
   if (c.includes("requires-recent-login")) return "For your safety, sign in again, then delete your account.";
-  return "Sign-in didn't work. Check your connection and try again.";
+  // Anything else: say so plainly and show Firebase's error code (no personal data), so it can be looked up.
+  return `Sign-in didn't work. Check your connection and try again.${c ? ` (${c.replace(/^auth\//, "")})` : ""}`;
 }
