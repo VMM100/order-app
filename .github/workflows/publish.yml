@@ -94,7 +94,7 @@ jobs:
       - name: Publish database rules
         run: npx --no-install firebase deploy --only firestore:rules --project "$PROJECT" --non-interactive
       - name: Build the site folder
-        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude package.json --exclude package-lock.json --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/ && echo "${GITHUB_SHA::12}" > _site/version.txt && cp _site/version.txt _site/demo/version.txt
+        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude docs --exclude SECURITY.md --exclude CLAUDE.md --exclude package.json --exclude package-lock.json --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/ && echo "${GITHUB_SHA::12}" > _site/version.txt && cp _site/version.txt _site/demo/version.txt
       - name: Make the staging site (first time only)
         run: npx --no-install firebase hosting:sites:create wasabi-tz-staging --project "$PROJECT" --non-interactive || true
       - name: Publish
@@ -139,7 +139,7 @@ jobs:
           url=$(grep -oE 'https://wasabi-ring\.[a-z0-9-]+\.workers\.dev' deploy.txt | head -1)
           echo "### Ring service → $url" >> "$GITHUB_STEP_SUMMARY"
       - name: Build the site folder
-        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude package.json --exclude package-lock.json --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/ && echo "${GITHUB_SHA::12}" > _site/version.txt && cp _site/version.txt _site/demo/version.txt
+        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude docs --exclude SECURITY.md --exclude CLAUDE.md --exclude package.json --exclude package-lock.json --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/ && echo "${GITHUB_SHA::12}" > _site/version.txt && cp _site/version.txt _site/demo/version.txt
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with: { path: _site }
