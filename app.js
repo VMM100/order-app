@@ -1780,7 +1780,8 @@ function ownerScreen(role) {
       <p class="note" style="margin-top:0">These names appear on the waiter phones${owner ? " and the dashboard" : ""}.</p>
       ${S.pins == null ? (loadPins(), "") : ""}
       <div class="grid" style="max-width:640px">${WAITERS.map((w, i) => `<div class="wrow"><div class="vrow"><input class="field" id="wn-${i}" data-f="wname" data-i="${i}" value="${esc(w.name)}" aria-label="Waiter name">
-        <button class="btn danger" data-delw="${i}">${S.armed === "w" + i ? "Tap again" : "Remove"}</button></div>
+        ${S.armed === "w" + i ? `<button class="btn danger" data-delw="${i}">Tap again</button>`
+          : `<button class="iconbtn brandbtn" data-delw="${i}" aria-label="Remove ${esc(w.name)}" title="Remove"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>`}</div>
         <form class="vrow pinset" data-wid="${esc(w.id)}"><span class="pill ${(S.pins || {})[w.id] ? "s-ready" : "s-new"}">${S.pins == null ? "…" : (S.pins || {})[w.id] ? "PIN set" : "No PIN yet"}</span>
           <input class="field num" id="wp-${i}" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="${(S.pins || {})[w.id] ? "New PIN" : "4-digit PIN"}" aria-label="PIN for ${esc(w.name)}">
           <button class="btn">${(S.pins || {})[w.id] ? "Change" : "Set PIN"}</button></form></div>`).join("")}</div>
@@ -2311,7 +2312,11 @@ function accountScreen() {
     paint(`<section>
       ${runs() ? `<div class="soundbar" style="margin-bottom:14px"><span>You also run ${esc(also.join(", "))}.</span><button class="btn" data-act="ac-choose">Switch</button></div>` : ""}
       <div class="acct"><div class="avatar">${esc(((S.profile && S.profile.name) || "?").slice(0, 1).toUpperCase())}</div>
-        <div><b style="font-size:20px">${esc((S.profile && S.profile.name) || "Diner")}</b><div class="note" style="margin:0">${esc(who)}</div></div></div>
+        ${S.editName ? `<form id="acname" class="vrow" style="flex:1;min-width:0"><input class="field" id="acnamein" maxlength="16" autocomplete="given-name" aria-label="Your first name" value="${esc(S.profile.name)}">
+          <button class="btn primary" ${S.busy ? "disabled" : ""}>${S.busy ? "Saving…" : "Save"}</button><button type="button" class="btn ghost" data-act="ac-editname">Cancel</button></form>`
+        : `<div style="min-width:0"><div class="row" style="gap:6px;flex-wrap:nowrap"><b style="font-size:20px">${esc((S.profile && S.profile.name) || "Diner")}</b>
+          <button class="iconbtn dull" data-act="ac-editname" aria-label="Edit your name" title="Edit your name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div><div class="note" style="margin:0">${esc(who)}</div></div>`}</div>
+      ${S.editName ? `<p class="note">Waiters and your friends at the table see this name.</p>${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}` : ""}
       ${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}
       <button class="btn primary big scanbtn" data-scan style="margin-top:18px"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx=".5"/><rect x="13" y="7" width="4" height="4" rx=".5"/><rect x="7" y="13" width="4" height="4" rx=".5"/><path d="M14 14h3v3"/></svg>Scan table QR</button>
       <p class="note" style="text-align:center">At a bar, café or restaurant with Wasabi? Scan the card on your table to order.</p>
@@ -2350,7 +2355,7 @@ function accountScreen() {
         const write = S.profile ? updateDoc(dinerRef(S.user.uid), { name })
           : setDoc(dinerRef(S.user.uid), { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: {}, offerNames: {}, created: Date.now() });
         await Promise.race([write, new Promise((_, no) => setTimeout(() => no(Object.assign(new Error("timeout"), { code: "timeout" })), 12000))]);
-        S.profile = { ...(S.profile || {}), name }; toast(`Hi ${name}`);
+        const was = S.editName; S.profile = { ...(S.profile || {}), name }; S.editName = false; toast(was ? "Name saved" : `Hi ${name}`);
       } catch (err) {
         console.error("Saving name failed", err);
         S.authErr = err && err.code === "timeout" ? "The database isn't answering, so your name wasn't saved yet. Check your connection and try again."
@@ -2372,6 +2377,7 @@ function accountScreen() {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.act === "ac-google" && !S.busy) { S.busy = true; S.authErr = ""; render(); try { await googleSignIn(); } catch (err) { S.authErr = authMessage(err); S.busy = false; render(); } return; }
     if (d.act === "ac-phone") { S.step = "phone"; S.authErr = ""; render(); const i = $("#acphonein"); if (i) i.focus(); return; }
+    if (d.act === "ac-editname") { S.editName = !S.editName; S.authErr = ""; render(); if (S.editName) { const i = $("#acnamein"); if (i) { i.focus(); i.select(); } } return; }
     if (d.act === "ac-back") { S.step = ""; S.authErr = ""; render(); return; }
     if (!S.user) return;
     if (d.act === "ac-guest") { S.guest = true; try { sessionStorage.setItem(guestKey(), "1"); } catch {} render(); return; }

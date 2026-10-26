@@ -425,3 +425,10 @@ body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);bo
 .skel .row{display:flex;gap:8px;flex-wrap:wrap}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 @media (prefers-reduced-motion:no-preference){.skel,.sk{animation:skpulse 1.1s ease-in-out infinite alternate}.skel .sk{animation:none}@keyframes skpulse{to{opacity:.45}}}
+
+/* Round icon buttons: a dull grey pencil (edit my name) and a trash can in the restaurant's colours. */
+.iconbtn{display:inline-grid;place-items:center;flex:none;width:44px;height:44px;border-radius:50%;padding:0;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer}
+.iconbtn.dull{width:32px;height:32px;border-color:transparent;background:none;opacity:.7}
+.iconbtn.dull:hover,.iconbtn.dull:focus-visible{opacity:1;background:var(--line)}
+.iconbtn.brandbtn{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.iconbtn.brandbtn:hover{background:var(--accent);color:var(--accent-ink)}
