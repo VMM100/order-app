@@ -42,19 +42,25 @@ export function parseCsv(text) {
   return rows;
 }
 
+// Excel files are read with read-excel-file (vendor/, MIT; see vendor/SOURCES.md), loaded only when needed.
+// It replaced SheetJS 0.18.5, which has known security flaws and no fixed version on public package sites.
 let xlsxLoad = null;
 const loadXlsx = () => xlsxLoad || (xlsxLoad = new Promise((ok, no) => {
-  const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-  s.onload = () => (window.XLSX ? ok(window.XLSX) : no(new Error("xlsx"))); s.onerror = () => { xlsxLoad = null; no(new Error("xlsx")); };
+  const s = document.createElement("script"); s.src = "vendor/read-excel-file.min.js";
+  s.onload = () => (window.readXlsxFile ? ok(window.readXlsxFile) : no(new Error("xlsx"))); s.onerror = () => { xlsxLoad = null; no(new Error("xlsx")); };
   document.head.appendChild(s);
 }));
+const cellText = (c) => (c == null ? "" : c instanceof Date ? c.toISOString().slice(0, 10) : String(c));
 
-// A chosen file → rows (first sheet for Excel files).
+// A chosen file → rows (first sheet for Excel files). Old .xls files aren't supported: save as .xlsx or CSV.
 export async function readFile(file) {
   const name = (file.name || "").toLowerCase();
-  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-    const X = await loadXlsx(), wb = X.read(await file.arrayBuffer(), { type: "array" });
-    return X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
+  if (name.endsWith(".xls")) throw new Error("Old Excel format");
+  if (name.endsWith(".xlsx")) {
+    // Returns every sheet as [{ sheet, data: rows }]; the menu is on the first one.
+    const read = await loadXlsx(), sheets = await read(file), first = Array.isArray(sheets) ? sheets[0] : null;
+    const rows = first && Array.isArray(first.data) ? first.data : Array.isArray(first) ? sheets : [];
+    return rows.map((r) => r.map(cellText));
   }
   return parseCsv(await file.text());
 }

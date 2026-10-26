@@ -1658,7 +1658,7 @@ function ownerScreen(role) {
         <div class="note" style="margin:2px 0 0">Fill in your whole menu in Excel or Google Sheets (one row per price), then upload it here. The download already has your current menu in it.</div></div>
       <div class="row"><button class="btn" data-act="mdl">Download template</button>
         <label class="btn primary" for="mup">${S.busy === "mup" ? "Reading…" : "Upload template"}</label>
-        <input type="file" id="mup" accept=".csv,.xlsx,.xls,text/csv" hidden></div></div>
+        <input type="file" id="mup" accept=".csv,.xlsx,text/csv" hidden></div></div>
       ${imp && imp.error ? `<div class="impbox"><p class="err" style="margin:0">${esc(imp.error)}</p><button class="btn" data-act="impcancel" style="margin-top:10px">OK</button></div>` : ""}
       ${imp && imp.menu ? `<div class="impbox"><b>Ready to import: ${imp.items} item${imp.items > 1 ? "s" : ""} in ${imp.menu.length} section${imp.menu.length > 1 ? "s" : ""}</b>
         <ul class="implist">${imp.menu.map((x) => `<li>${esc(x.c)} · ${x.items.length} item${x.items.length > 1 ? "s" : ""} · goes to ${esc(STATIONS[x.st] || x.st)}</li>`).join("")}</ul>

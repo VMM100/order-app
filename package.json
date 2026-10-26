@@ -1,0 +1,12 @@
+{
+  "name": "wasabi",
+  "private": true,
+  "description": "Tools used only by the checks and publishing on GitHub (not part of the website). Exact versions; package-lock.json pins every file by fingerprint.",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.1.0",
+    "firebase-tools": "15.34.1",
+    "playwright": "1.64.1",
+    "wrangler": "4.152.0"
+  }
+}

@@ -32,31 +32,32 @@ jobs:
     name: Pages open without errors
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ env.REF }}" }
-      - uses: actions/setup-node@v5
-        with: { node-version: 22 }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: npm }
+      - name: Install the exact tools (package-lock.json)
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Every script parses
         run: node tests/syntax.mjs
       - name: Install a headless browser
-        run: npm install --no-save --no-audit --no-fund playwright@1 && npx playwright install --with-deps chromium
+        run: npx --no-install playwright install --with-deps chromium
       - name: Open the main pages
         run: node tests/smoke.mjs
 
   rules:
     name: Database security tests
     runs-on: ubuntu-latest
-    defaults:
-      run: { working-directory: tests }
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ env.REF }}" }
-      - uses: actions/setup-node@v5
-        with: { node-version: 22 }
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: npm }
+      - name: Install the exact tools (package-lock.json)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with: { distribution: temurin, java-version: 21 }
-      - run: npm install --no-save --no-audit --no-fund firebase-tools@15 @firebase/rules-unit-testing@6 firebase@13
-      - run: ./run.sh
+      - run: ./tests/run.sh
 
   staging:
     name: Publish to staging
@@ -65,9 +66,11 @@ jobs:
     runs-on: ubuntu-latest
     concurrency: { group: staging, cancel-in-progress: true }
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: 22 }
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: npm }
+      - name: Install the exact tools (package-lock.json)
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Publish the ring service (Cloudflare)
         env:
           CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
@@ -77,8 +80,8 @@ jobs:
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$RINGER" ]; then
             echo "::warning title=Ring service not published::Add CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and RINGER_SERVICE_ACCOUNT in GitHub secrets to turn on waiter ringing."; exit 0; fi
-          npx --yes wrangler@3 deploy --name wasabi-ring-staging 2>&1 | tee deploy.txt
-          printf '%s' "$RINGER" | npx --yes wrangler@3 secret put GOOGLE_SERVICE_ACCOUNT --name wasabi-ring-staging
+          npx --no-install wrangler deploy --name wasabi-ring-staging 2>&1 | tee deploy.txt
+          printf '%s' "$RINGER" | npx --no-install wrangler secret put GOOGLE_SERVICE_ACCOUNT --name wasabi-ring-staging
           url=$(grep -oE 'https://wasabi-ring-staging\.[a-z0-9-]+\.workers\.dev' deploy.txt | head -1)
           echo "### Ring service → $url" >> "$GITHUB_STEP_SUMMARY"
       - name: Sign in to Firebase
@@ -89,13 +92,13 @@ jobs:
       # Staging shares the live database, so its rules go out here too. Rules changes must stay backward
       # compatible (only add what's new), so the live site keeps working with them.
       - name: Publish database rules
-        run: npx --yes firebase-tools@15 deploy --only firestore:rules --project "$PROJECT" --non-interactive
+        run: npx --no-install firebase deploy --only firestore:rules --project "$PROJECT" --non-interactive
       - name: Build the site folder
-        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/ && echo "${GITHUB_SHA::12}" > _site/version.txt && cp _site/version.txt _site/demo/version.txt
+        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude package.json --exclude package-lock.json --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/ && echo "${GITHUB_SHA::12}" > _site/version.txt && cp _site/version.txt _site/demo/version.txt
       - name: Make the staging site (first time only)
-        run: npx --yes firebase-tools@15 hosting:sites:create wasabi-tz-staging --project "$PROJECT" --non-interactive || true
+        run: npx --no-install firebase hosting:sites:create wasabi-tz-staging --project "$PROJECT" --non-interactive || true
       - name: Publish
-        run: npx --yes firebase-tools@15 deploy --only hosting:staging --project "$PROJECT" --non-interactive --message "${GITHUB_SHA::7}"
+        run: npx --no-install firebase deploy --only hosting:staging --project "$PROJECT" --non-interactive --message "${GITHUB_SHA::7}"
       - run: echo "### Staging updated → https://wasabi-tz-staging.web.app" >> "$GITHUB_STEP_SUMMARY"
 
   live:
@@ -106,10 +109,12 @@ jobs:
     concurrency: { group: live, cancel-in-progress: false }
     environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ env.REF }}", fetch-depth: 1 }
-      - uses: actions/setup-node@v5
-        with: { node-version: 22 }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: npm }
+      - name: Install the exact tools (package-lock.json)
+        run: npm ci --ignore-scripts --no-audit --no-fund
       # Rules go first, so the live app never runs against rules older than it expects. Rules changes are
       # kept backward compatible, so the app still live meanwhile keeps working. Rollbacks leave rules alone.
       - name: Publish database rules
@@ -119,7 +124,7 @@ jobs:
           # Published every release (Firebase skips it if nothing changed), so rules never fall behind.
           if [ -z "$SA" ]; then echo "::warning title=Rules not published automatically::Add the FIREBASE_SERVICE_ACCOUNT secret, or paste firestore.rules into Firebase → Firestore → Rules and Publish."; exit 0; fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
-          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx --yes firebase-tools@15 deploy --only firestore:rules --project "$PROJECT" --non-interactive
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx --no-install firebase deploy --only firestore:rules --project "$PROJECT" --non-interactive
       - name: Publish the ring service (Cloudflare)
         env:
           CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
@@ -129,17 +134,17 @@ jobs:
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$RINGER" ]; then
             echo "::warning title=Ring service not published::Add CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and RINGER_SERVICE_ACCOUNT in GitHub secrets to turn on waiter ringing."; exit 0; fi
-          npx --yes wrangler@3 deploy --name wasabi-ring 2>&1 | tee deploy.txt
-          printf '%s' "$RINGER" | npx --yes wrangler@3 secret put GOOGLE_SERVICE_ACCOUNT --name wasabi-ring
+          npx --no-install wrangler deploy --name wasabi-ring 2>&1 | tee deploy.txt
+          printf '%s' "$RINGER" | npx --no-install wrangler secret put GOOGLE_SERVICE_ACCOUNT --name wasabi-ring
           url=$(grep -oE 'https://wasabi-ring\.[a-z0-9-]+\.workers\.dev' deploy.txt | head -1)
           echo "### Ring service → $url" >> "$GITHUB_STEP_SUMMARY"
       - name: Build the site folder
-        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/ && echo "${GITHUB_SHA::12}" > _site/version.txt && cp _site/version.txt _site/demo/version.txt
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+        run: rsync -a --exclude .git --exclude .github --exclude tests --exclude node_modules --exclude package.json --exclude package-lock.json --exclude firebase.json --exclude .firebaserc --exclude worker ./ _site/ && echo "${GITHUB_SHA::12}" > _site/version.txt && cp _site/version.txt _site/demo/version.txt
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with: { path: _site }
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
       - name: Tag this version
         if: github.event_name == 'push'
         run: |

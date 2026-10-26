@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Security policy: the only places allowed to run code, load data or show frames in Wasabi. Anything else (an injected script, a changed outside file) is blocked. Keep in sync with vendor/SOURCES.md. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://apis.google.com https://www.google.com https://wasabi-ring.vandanmamlani.workers.dev https://wasabi-ring-staging.vandanmamlani.workers.dev; frame-src https://auth.wasabi.co.tz https://order-app-47367.firebaseapp.com https://www.google.com https://recaptcha.google.com; img-src 'self' data: blob: https://www.gstatic.com https://www.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob: data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>Wasabi · Order at the table, split the bill</title>
 <meta name="description" content="Wasabi lets diners scan, order and split the bill from their own phones. Orders go straight to your kitchen and bar. Made in Dar es Salaam for bars, cafés and restaurants in Tanzania.">
 <meta property="og:title" content="Wasabi · Order at the table, split the bill">
@@ -316,7 +318,7 @@
       b.addEventListener("click", () => { if (window.wasabiBack && window.wasabiBack()) return; if (been && history.length > 1) history.back(); else location.href = up; });
     })();
     // The app: QR code library, then the app itself.
-    const q = document.createElement("script"); q.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"; q.defer = true; document.body.appendChild(q);
+    const q = document.createElement("script"); q.src = "vendor/qrcode.min.js"; q.defer = true; document.body.appendChild(q);
     const a = document.createElement("script"); a.type = "module"; a.src = "app.js"; document.body.appendChild(a);
   } else {
     if (window.IS_SOON) document.getElementById("soon").hidden = false;
