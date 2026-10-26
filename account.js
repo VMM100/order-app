@@ -21,7 +21,9 @@ export async function ensureUser() {
   if (u) return u;
   return (await signInAnonymously(auth)).user;
 }
-export const googleSignIn = () => signInWithPopup(auth, new GoogleAuthProvider());
+// Always show Google's account picker, so a phone signed in to one Google account can still choose
+// another (or a test account), instead of being signed straight in.
+export const googleSignIn = () => { const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: "select_account" }); return signInWithPopup(auth, p); };
 export const signOutUser = () => signOut(auth);
 export const deleteMe = () => deleteUser(auth.currentUser);
 
@@ -62,5 +64,6 @@ export function authMessage(e) {
   if (c.includes("unauthorized-domain") || c.includes("operation-not-allowed") || c.includes("billing"))
     return "Sign-in isn't switched on for this restaurant yet. Join with your first name for now.";
   if (c.includes("requires-recent-login")) return "For your safety, sign in again, then delete your account.";
-  return "Sign-in didn't work. Check your connection and try again.";
+  // Anything else: say so plainly and show Firebase's error code (no personal data), so it can be looked up.
+  return `Sign-in didn't work. Check your connection and try again.${c ? ` (${c.replace(/^auth\//, "")})` : ""}`;
 }

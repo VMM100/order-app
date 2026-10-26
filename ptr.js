@@ -66,7 +66,14 @@
     if (pull < PULL) return reset();
     busy = true; el.classList.add("back", "spin"); pull = PULL; draw();
     arc.setAttribute("stroke-dashoffset", String(C * 0.72)); say.textContent = "Refreshing";
-    setTimeout(() => location.reload(), 450);
+    // Live screens (table, waiter, kitchen, bar) refresh in place: they reconnect and fetch only what
+    // changed. Everything else, or a newly published app version, reloads the page.
+    if (typeof window.wasabiRefresh !== "function") { setTimeout(() => location.reload(), 450); return; }
+    const t0 = Date.now();
+    Promise.resolve().then(() => window.wasabiRefresh()).catch(() => "reload").then((r) => {
+      if (r === "reload") return location.reload();
+      setTimeout(() => { say.textContent = "Up to date"; setTimeout(() => { busy = false; el.classList.remove("spin"); say.textContent = ""; reset(); }, 500); }, Math.max(0, 450 - (Date.now() - t0)));
+    });
   });
   addEventListener("touchcancel", () => { y0 = null; if (!busy) reset(); });
 })();

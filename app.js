@@ -7,11 +7,14 @@
 //   index.html#owner      owner: dashboard, menu, look, staff, who can sign in (Google sign-in)
 //   index.html#manager    manager: menu and staff only (Google sign-in)
 // Who may see and change what is enforced by the database rules in firestore.rules.
-import { db } from "./firebase.js";
+import { db, app as fbApp } from "./firebase.js";
+import { pushState, enablePush, refreshPush, testRing, ringFor } from "./push.js";
 import {
-  doc, collection, query, where, onSnapshot, getDocs, runTransaction,
+  doc, collection, query, where, onSnapshot, getDocs, runTransaction, documentId,
   updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc, collectionGroup,
+  disableNetwork, enableNetwork,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import morphdom from "./vendor/morphdom-esm.js";
 import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
 import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "./account.js";
 import { computeMetrics, sampleData } from "./metrics.js";
@@ -44,9 +47,39 @@ const denied = (e) => String(e && (e.code || e.message)).includes("permission");
 // Re-render without losing what someone is typing.
 function paint(html) {
   const a = document.activeElement, id = a && a.id, pos = a && a.selectionStart;
+  $("#view").dataset.soft = "";
   $("#view").innerHTML = html;
   hydratePhotos();
   if (id) { const el = document.getElementById(id); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} } }
+}
+
+// The diner's table screen: change only what's different (one dish going sold out, a new order line,
+// the waiter on the way), so photos, scrolling and anything being typed stay as they are.
+function paintSoft(html) {
+  const view = $("#view");
+  if (view.dataset.soft !== "1") { paint(html); view.dataset.soft = "1"; return; }
+  morphdom(view, `<main id="view">${html}</main>`, { childrenOnly: true, onBeforeElUpdated(from, to) {
+    if (from.isEqualNode(to)) return false;
+    if (from === document.activeElement && (from.tagName === "INPUT" || from.tagName === "TEXTAREA")) return false;
+    // Photos already shown stay shown (the new HTML doesn't carry the loaded picture).
+    if (from.tagName === "IMG" && from.dataset.phDone && from.dataset.photo === to.dataset.photo) {
+      to.dataset.phDone = from.dataset.phDone; const src = from.getAttribute("src"); if (src) to.setAttribute("src", src);
+    }
+    if (from.classList && from.classList.contains("ph")) ["loaded", "none"].forEach((c) => from.classList.contains(c) && to.classList.add(c));
+    return true;
+  } });
+  hydratePhotos();
+}
+// Pull down to refresh on live screens (table, waiter, kitchen, bar): reconnect and fetch only what
+// changed since, instead of reloading the page. A newly published version of the app still reloads.
+let APP_VERSION = null;
+const appVersion = () => fetch(new URL("version.txt", location.href).href + "?" + Date.now(), { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).then((t) => t.trim()).catch(() => "");
+appVersion().then((v) => { APP_VERSION = v || null; });
+async function softRefresh() {
+  const v = await appVersion();
+  if (APP_VERSION && v && v !== APP_VERSION) return "reload";
+  await disableNetwork(db); await enableNetwork(db);
+  return true;
 }
 
 // ---------- the ☰ menu in the header ----------
@@ -173,6 +206,11 @@ const tableLink = (n, k) => `${BASE}?r=${RID}&t=${n}&k=${k}`;
 // The database can't store a list inside a list, so prices are saved as {l, p} pairs.
 const cfgRef = () => doc(db, "restaurants", RID);
 let MENU = START_MENU, WAITERS = START_WAITERS, SHARED = [], CFG_SAVED = false, CFG_STALE = false;
+// Sold out tonight: names from restaurants/{rid}/live/stock (fast, small), plus any old "out" flag saved
+// inside the menu itself (oldOut). it.out is what every screen shows.
+let STOCK_OUT = new Set();
+const applyStock = () => MENU.forEach((c) => c.items.forEach((it) => { it.out = !!it.oldOut || STOCK_OUT.has(it.n); }));
+const stockRef = () => rdoc("live", "stock");
 // A restaurant's logo until its owner uploads one (or removes it, which saves "" rather than nothing).
 // Paths starting with img/ are files in this app; anything else is a photo id in the database.
 const DEFAULT_LOGOS = { "crafty-dees": "img/logos/crafty-dees.png" };
@@ -183,26 +221,44 @@ let TABLES = TABLE_COUNT, PAUSED = false;
 const cfgListeners = new Set();
 // Resolves once the restaurant settings (menu, shared tables…) have loaded, or failed to.
 let cfgLoaded; const cfgReady = new Promise((r) => (cfgLoaded = r));
-const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
+const menuFromDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: (c.items || []).map((it) => ({ ...it, oldOut: !!it.out, v: (it.v || []).map((x) => [x.l || "", Number(x.p) || 0]) })) }));
 const menuToDb = (secs) => secs.map((c) => ({ c: c.c, st: c.st, items: c.items.map((it) => {
   const o = { n: it.n, v: it.v.map(([l, p]) => ({ l: l || "", p: Number(p) || 0 })) };
-  if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (it.out) o.out = true; if (it.img) o.img = it.img; return o; }) }));
+  if (it.d) o.d = it.d; if (it.m) o.m = it.m; if (legacyOut(it)) o.out = true; if (it.img) o.img = it.img; return o; }) }));
+// Only the old in-menu flag is saved with the menu; tonight's sold-out list lives in live/stock.
+const legacyOut = (it) => ("oldOut" in it ? it.oldOut : !!it.out);
 // New restaurants start with two empty sections; the demo restaurant starts with Crafty Dee's menu.
 const starterMenu = () => (RID === RESTAURANT_ID ? START_MENU : [{ c: "Drinks", st: "bar", items: [] }, { c: "Food", st: "kitchen", items: [] }]);
-let cfgStarted = false;
+let cfgStarted = false, cfgTries = 0, PAUSED_AT = 0;
+function listenConfig() {
+  onSnapshot(cfgRef(), (snap) => {
+    step("settings arrived");
+    // Ordering was shown as off, but the settings came through after all: start again cleanly.
+    if (PAUSED) { location.reload(); return; }
+    if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
+    applyStock(); applyBrand();
+    cfgLoaded(); cfgListeners.forEach((f) => f());
+  }, async (e) => {
+    // A refusal can be a hiccup (sign-in still settling, a new rules version rolling out). Ask again twice,
+    // after making sure this phone is signed in, before telling diners ordering is off.
+    if (denied(e) && cfgTries < 2) { cfgTries++; step("settings refused, asking again"); try { await ensureUser(); } catch {} setTimeout(listenConfig, 800 * cfgTries); return; }
+    if (denied(e)) { PAUSED = true; PAUSED_AT = Date.now(); step("settings refused"); }
+    cfgLoaded(); cfgListeners.forEach((f) => f());
+  });
+}
 function startConfig() {
   if (cfgStarted || !RID) return; cfgStarted = true;
   if (RID !== RESTAURANT_ID) { MENU = starterMenu(); WAITERS = []; }
-  onSnapshot(cfgRef(), (snap) => {
-    PAUSED = false;
-    if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
-    applyBrand();
-    cfgLoaded(); cfgListeners.forEach((f) => f());
-  }, (e) => { if (denied(e)) PAUSED = true; cfgLoaded(); cfgListeners.forEach((f) => f()); });
+  listenConfig();
+  // Sold-out changes arrive on their own: only this small list, never the whole menu.
+  onSnapshot(stockRef(), (snap) => {
+    STOCK_OUT = new Set(Object.keys((snap.exists() && snap.data().out) || {}));
+    applyStock(); cfgListeners.forEach((f) => f());
+  }, () => {});
 }
 // prices: "item|option" → price and station, for available items only. The database rules check every
 // order against it, so nobody can order something sold out or at a price they typed themselves.
-const priceMap = (secs) => { const m = {}; secs.forEach((c) => c.items.forEach((it) => { if (!it.out) it.v.forEach(([l, p]) => (m[it.n + "|" + (l || "")] = { p: Number(p) || 0, st: c.st })); })); return m; };
+const priceMap = (secs) => { const m = {}; secs.forEach((c) => c.items.forEach((it) => { if (!legacyOut(it)) it.v.forEach(([l, p]) => (m[it.n + "|" + (l || "")] = { p: Number(p) || 0, st: c.st })); })); return m; };
 const saveConfig = () => setDoc(cfgRef(), { sections: menuToDb(MENU), waiters: WAITERS, shared: SHARED, brand: BRAND, prices: priceMap(MENU), tables: TABLES, updated: Date.now() });
 
 // ---------- branding: name, logo and two colours chosen by the owner ----------
@@ -269,16 +325,101 @@ function loadFonts(id, keys) {
 
 // ---------- photos (menu items and logo) ----------
 // Stored as small compressed images in their own database documents, loaded once per phone.
-const photoCache = new Map();
+// Speed: photos load only as they come near the screen, and the ones needed together arrive in one
+// request (up to 30 at a time), instead of one request per dish.
+const photoCache = new Map(), photoWant = new Set();
+let photoTimer = null;
+function photoFor(id) {
+  if (photoCache.has(id)) return photoCache.get(id);
+  let done; const p = new Promise((r) => (done = r)); p.done = done;
+  photoCache.set(id, p); photoWant.add(id);
+  clearTimeout(photoTimer); photoTimer = setTimeout(fetchPhotos, 25);
+  return p;
+}
+function fetchPhotos() {
+  const ids = [...photoWant]; photoWant.clear();
+  for (let i = 0; i < ids.length; i += 30) {
+    const chunk = ids.slice(i, i + 30);
+    getDocs(query(rcol("photos"), where(documentId(), "in", chunk)))
+      .then((s) => { const got = new Map(s.docs.map((d) => [d.id, d.data().data])); chunk.forEach((id) => photoCache.get(id).done(got.get(id) || null)); })
+      .catch(() => chunk.forEach((id) => { photoCache.get(id).done(null); photoCache.delete(id); }));   // try again next time
+  }
+}
+async function showPhoto(img) {
+  const id = img.dataset.photo, src = await photoFor(id);
+  if (src && img.dataset.photo === id) { img.src = src; img.closest(".ph")?.classList.add("loaded"); } else if (!src) img.closest(".ph")?.classList.add("none");
+}
+const photoSeen = "IntersectionObserver" in window
+  ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { photoSeen.unobserve(e.target); showPhoto(e.target); } }), { rootMargin: "800px 0px" })
+  : null;
 function hydratePhotos() {
-  document.querySelectorAll("img[data-photo]").forEach(async (img) => {
+  document.querySelectorAll("img[data-photo]").forEach((img) => {
     const id = img.dataset.photo; if (!id || img.dataset.phDone === id) return;
     img.dataset.phDone = id;
     if (isFileLogo(id)) { img.src = id; img.closest(".ph")?.classList.add("loaded"); return; }
-    if (!photoCache.has(id)) photoCache.set(id, getDoc(rdoc("photos", id)).then((s) => (s.exists() ? s.data().data : null)).catch(() => null));
-    const src = await photoCache.get(id);
-    if (src && img.dataset.photo === id) { img.src = src; img.closest(".ph")?.classList.add("loaded"); } else if (!src) img.closest(".ph")?.classList.add("none");
+    if (photoSeen) photoSeen.observe(img); else showPhoto(img);
   });
+}
+// ---------- QR codes in the restaurant's look ----------
+// Dots in the restaurant's dark colour, the three corner squares in its accent colour, and its logo on a
+// white badge in the middle. Uses the highest error correction (30%), so the logo covering the centre
+// still scans. Colours are darkened if needed so every phone camera reads them against white.
+function qrColours() {
+  const fresh = !BRAND.c1 && RID && RID !== RESTAURANT_ID;
+  const c1 = BRAND.c1 || (fresh ? "#9cc43c" : "#a8650f"), c2 = BRAND.c2 || (fresh ? "#4a6716" : "#3f5a2c");
+  const deepen = (c, min) => { let out = c; for (let t = 0.1; contrast(out, "#ffffff") < min && t <= 1; t += 0.1) out = mix(c, "#000000", t); return out; };
+  return { dot: deepen(c2, 7), eye: deepen(c1, 4.5), eyeDot: deepen(c2, 7) };
+}
+async function qrLogo() {
+  if (!BRAND.logo) return null;
+  const src = isFileLogo(BRAND.logo) ? BRAND.logo : await photoFor(BRAND.logo);
+  if (!src) return null;
+  return new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
+}
+async function brandQr(el, text, size) {
+  if (!el || !window.QRCode) return;
+  // The library works out the code's grid; we draw it ourselves.
+  const tmp = document.createElement("div");
+  const q = new QRCode(tmp, { text, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.H });
+  const m = q && q._oQRCode;
+  if (!m || typeof m.getModuleCount !== "function") { el.innerHTML = ""; new QRCode(el, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.H }); return; }
+  const n = m.getModuleCount(), quiet = 3, cells = n + quiet * 2, scale = 3;
+  const px = Math.floor((size * scale) / cells), W = px * cells;
+  const cv = document.createElement("canvas"); cv.width = cv.height = W;
+  cv.style.width = cv.style.height = size + "px"; cv.setAttribute("role", "img"); cv.setAttribute("aria-label", "QR code");
+  const g = cv.getContext("2d"), C = qrColours();
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, W);
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  const at = (k) => (k + quiet) * px;
+  // Centre badge: about a fifth of the code, kept clear of dots.
+  const badge = Math.max(5, Math.round(n * 0.22)) | 1, b0 = (n - badge) >> 1, b1 = b0 + badge - 1;
+  const inEye = (r, c) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
+  const inBadge = (r, c) => r >= b0 && r <= b1 && c >= b0 && c <= b1;
+  g.fillStyle = C.dot;
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    if (!m.isDark(r, c) || inEye(r, c) || inBadge(r, c)) continue;
+    rr(at(c) + px * 0.04, at(r) + px * 0.04, px * 0.92, px * 0.92, px * 0.26); g.fill();
+  }
+  // Corner squares: a rounded ring in the accent colour around a rounded dot.
+  [[0, 0], [0, n - 7], [n - 7, 0]].forEach(([r, c]) => {
+    g.fillStyle = C.eye; rr(at(c), at(r), px * 7, px * 7, px * 2); g.fill();
+    g.fillStyle = "#ffffff"; rr(at(c) + px, at(r) + px, px * 5, px * 5, px * 1.3); g.fill();
+    g.fillStyle = C.eyeDot; rr(at(c) + px * 2, at(r) + px * 2, px * 3, px * 3, px * 0.9); g.fill();
+  });
+  el.innerHTML = ""; el.appendChild(cv);
+  // Logo (or the restaurant's initial) on a white rounded badge.
+  const bx = at(b0), bw = px * badge, pad = px * 0.6;
+  g.fillStyle = "#ffffff"; rr(bx, bx, bw, bw, px * 1.4); g.fill();
+  const logo = await qrLogo();
+  if (logo) {
+    const box = bw - pad * 2, k = Math.min(box / logo.naturalWidth, box / logo.naturalHeight);
+    const w = logo.naturalWidth * k, h = logo.naturalHeight * k;
+    g.save(); rr(bx + pad, bx + pad, box, box, px); g.clip(); g.drawImage(logo, bx + (bw - w) / 2, bx + (bw - h) / 2, w, h); g.restore();
+  } else {
+    g.fillStyle = C.eye; rr(bx + pad, bx + pad, bw - pad * 2, bw - pad * 2, px); g.fill();
+    g.fillStyle = "#ffffff"; g.font = `700 ${Math.round(bw * 0.5)}px system-ui, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(((BRAND.name || "W").trim()[0] || "W").toUpperCase(), bx + bw / 2, bx + bw / 2 + bw * 0.03);
+  }
 }
 async function resizeImage(file, max, keepAlpha) {
   const url = URL.createObjectURL(file);
@@ -306,6 +447,9 @@ async function savePhoto(dataUrl, old) {
 // tables the owner marks as shared can hold several groups, each with its own code and bill.
 const groupRef = (sid) => rdoc("groups", sid);
 const isShared = (n) => SHARED.includes(Number(n));
+// A diner's name as it is now (they can change it at the table); orders and alerts keep the name
+// they were made with, used when the table has closed.
+const nowName = (g, pid, was) => (g && g.people && g.people[pid] && g.people[pid].name) || was || "A guest";
 const gname = (g) => (g && g.label ? `${g.label}'s group` : "New group");
 // "Table 8", or "Table 8 · Amani's group" when the table has more than one group or is shared.
 const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []).filter((x) => x.table === g.table && x.open).length > 1 ? ` · ${gname(g)}` : "");
@@ -313,6 +457,8 @@ const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []
 // Diners can't browse groups or codes. To see a table they hold a pass (passes/{their sign-in}),
 // which the database only accepts with the table's QR key or an open group's code.
 const passRef = (u) => rdoc("passes", u);
+// invites/{code} → which restaurant a table code belongs to (for codes typed on the front page's scanner).
+const inviteRef = (c) => doc(db, "invites", String(c));
 const codeRef = (c) => rdoc("codes", String(c));
 const newCode = () => String(1000 + Math.floor(Math.random() * 9000));
 const newGroup = (n, code) => ({ table: Number(n), session: `${n}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, code,
@@ -332,7 +478,7 @@ function tableGroup(n, proof) {
       if (cur) { const g = await tx.get(groupRef(cur)); if (g.exists() && g.data().open) { sid = cur; tx.set(passRef(me), { ...proof, session: cur, t: Date.now() }); return; } }
       const g = newGroup(n, code); sid = g.session;
       tx.set(groupRef(sid), g); tx.set(tableRef(n), { table: Number(n), current: sid });
-      tx.set(codeRef(code), { session: sid, table: Number(n) }); tx.set(passRef(me), { ...proof, session: sid, t: Date.now() });
+      tx.set(codeRef(code), { session: sid, table: Number(n) }); tx.set(inviteRef(code), { rid: RID }); tx.set(passRef(me), { ...proof, session: sid, t: Date.now() });
     });
     return sid;
   });
@@ -342,7 +488,7 @@ function startGroup(n, proof) {
   const me = auth.currentUser.uid;
   return withFreshCode(async (code) => {
     const g = newGroup(n, code), b = writeBatch(db);
-    b.set(groupRef(g.session), g); b.set(codeRef(code), { session: g.session, table: Number(n) }); b.set(passRef(me), { ...proof, session: g.session, t: Date.now() });
+    b.set(groupRef(g.session), g); b.set(codeRef(code), { session: g.session, table: Number(n) }); b.set(inviteRef(code), { rid: RID }); b.set(passRef(me), { ...proof, session: g.session, t: Date.now() });
     await b.commit(); return g.session;
   });
 }
@@ -375,12 +521,28 @@ async function togglePaid(sid, pid, now) { try { await updateDoc(groupRef(sid), 
 
 applyBrand();
 
-// If a screen is still on "Loading…" after 10 seconds, the connection probably stalled
+// Start-up trace: each step a screen waits for is noted with its time, so a stuck screen can say exactly
+// where it stopped (shown on "Still connecting…" and in the browser console).
+const BOOT = { t0: performance.now(), steps: [] };
+function step(name) { BOOT.steps.push([name, Math.round(performance.now() - BOOT.t0)]); }
+async function stallReport() {
+  const last = BOOT.steps[BOOT.steps.length - 1], net = navigator.onLine ? "connected" : "offline";
+  let google = "not checked";
+  try { const t = performance.now(); await Promise.race([fetch("https://firestore.googleapis.com/", { mode: "no-cors", cache: "no-store" }),
+      new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 4000))]); google = `reachable (${Math.round(performance.now() - t)} ms)`; }
+  catch { google = "not reachable"; }
+  return { waitingFor: last ? last[0] : "starting", sinceSec: last ? Math.round((performance.now() - BOOT.t0 - last[1]) / 1000) : 0,
+    internet: net, database: google, signedIn: !!(auth.currentUser), steps: BOOT.steps.map(([n, ms]) => `${n} ${ms}ms`).join(" · ") };
+}
+
+// If a screen is still loading (a skeleton) after 10 seconds, the connection probably stalled
 // (it can happen when several live screens start at once on one device). Offer a reload,
 // and reload by itself once if nobody taps.
 setTimeout(() => {
-  const v = $("#view"); if (!v || v.textContent.trim() !== "Loading…") return;
-  v.innerHTML = `<section><p class="empty">Still connecting…</p><button class="btn primary big" onclick="location.reload()">Reload</button></section>`;
+  const v = $("#view"); if (!v || !(v.firstElementChild && v.firstElementChild.hasAttribute("data-loading"))) return;
+  v.innerHTML = `<section><p class="empty">Still connecting…</p><button class="btn primary big" onclick="location.reload()">Reload</button><p class="note" id="stallwhy" style="text-align:center">Checking what's slow…</p></section>`;
+  stallReport().then((r) => { console.warn("Wasabi start-up stalled", r); const el = document.getElementById("stallwhy");
+    if (el) el.textContent = `Waiting for: ${r.waitingFor} (${r.sinceSec}s) · Internet: ${r.internet} · Database: ${r.database} · Signed in: ${r.signedIn ? "yes" : "no"}`; });
   let once = false; try { once = sessionStorage.getItem("dees-autoreload") === "1"; sessionStorage.setItem("dees-autoreload", "1"); } catch {}
   if (!once) setTimeout(() => location.reload(), 5000);
 }, 10000);
@@ -466,7 +628,9 @@ function blockedHtml(st, name) {
   return `<section><div class="label" style="margin-top:0">${t[0]}</div><p>${t[1]}</p></section>`;
 }
 // What diners and staff phones see when the restaurant isn't running (they can't see why).
-const pausedHtml = () => `<section><p class="empty">Ordering by phone isn't available here right now.<br>Please order with a member of staff.</p></section>`;
+const pausedHtml = () => `<section><p class="empty">Ordering by phone isn't available here right now.<br>Please order with a member of staff.</p>
+  <p style="text-align:center"><button class="btn" onclick="location.reload()">Try again</button></p>
+  <p class="note" style="text-align:center;opacity:.6">Ref ${esc(RID)} · ${PAUSED_AT ? new Date(PAUSED_AT).toLocaleTimeString("en-GB") : "-"} · ${navigator.onLine ? "online" : "offline"}</p></section>`;
 
 // ================= SIGN-IN FOR OWNERS, MANAGERS AND STAFF =================
 async function isCompanyUser(u) {
@@ -478,9 +642,11 @@ async function isCompanyUser(u) {
 async function adminRole(u) {
   if (!isAccount(u) || !u.email || !RID) return null;
   const em = u.email.toLowerCase(); let role = null;
-  try { const a = await getDoc(doc(db, "accounts", RID)); if (a.exists()) { ACCOUNT = a.data(); if (ACCOUNT.ownerEmail === em) role = "owner"; } } catch {}
-  if (!role) { try { if ((await getDoc(rdoc("admins", em))).exists()) role = "manager"; } catch {} }
-  IS_CO = await isCompanyUser(u);
+  // All three lookups at once: one wait instead of three in a row.
+  const [a, m, co] = await Promise.all([getDoc(doc(db, "accounts", RID)).catch(() => null), getDoc(rdoc("admins", em)).catch(() => null), isCompanyUser(u)]);
+  if (a && a.exists()) { ACCOUNT = a.data(); if (ACCOUNT.ownerEmail === em) role = "owner"; }
+  if (!role && m && m.exists()) role = "manager";
+  IS_CO = co;
   if (!role && IS_CO) role = "company";
   return role;
 }
@@ -504,7 +670,7 @@ function staffGate(go) {
   const tok = params.get("s");
   if (!RID) RID = store.get("dees-rid");
   if (tok && RID) { store.set("dees-staff-" + RID, tok); store.set("dees-rid", RID); history.replaceState(null, "", `${BASE}?r=${RID}${location.hash}`); }
-  paint(`<p class="empty">Loading…</p>`);
+  paint(skPage());
   (async () => {
     const notSet = (t) => paint(`<section><div class="label" style="margin-top:0">This phone isn't set up for staff</div>
       <p>${t ? "The staff link on this phone has been replaced." : "Staff screens only open on restaurant phones."} Ask the owner or manager to open <b>Setup</b> and scan the <b>staff QR code</b> with this phone.</p>
@@ -532,8 +698,8 @@ function adminGate(page, go) {
   const G = { busy: false, err: "", u: null, done: false };
   const signupLink = `<p class="note">New to ${esc(COMPANY.name)}? <a href="${BASE}#signup">Register your restaurant</a>.</p>`;
   async function check() {
-    paint(`<p class="empty">Loading…</p>`);
-    G.u = await authReady();
+    paint(skPage());
+    step("sign-in"); G.u = await authReady(); step("sign-in done");
     if (!isAccount(G.u) || !G.u.email) return show(`<section><div class="label" style="margin-top:0">${title} sign-in</div>
       <p>Sign in with the Google account registered for your restaurant.</p>
       <button class="btn primary big" data-act="admin-in" ${G.busy ? "disabled" : ""}>${G.busy ? "Signing in…" : "Sign in with Google"}</button>${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${signupLink}</section>`);
@@ -549,15 +715,15 @@ function adminGate(page, go) {
           : `<p><b>${who}</b> doesn't run a restaurant on ${esc(COMPANY.name)} yet.</p><p>Register your restaurant, or ask your restaurant's owner to add this email as a manager.</p>`}
         <div class="row" style="margin-top:14px"><a class="btn primary" href="${BASE}#signup">Register a restaurant</a>${other}</div></section>`);
     }
-    const role = await adminRole(G.u);
+    step("checking your access"); const role = await adminRole(G.u); step("access checked");
     if (!role) return show(`<section><div class="label" style="margin-top:0">Not an owner or manager here</div>
       <p><b>${who}</b> isn't on this restaurant's list. Ask the owner to add this email under <b>Owner → Staff</b>.</p>${other}${signupLink}</section>`);
     if (role === "manager" && page === "owner") return show(`<section><div class="label" style="margin-top:0">Managers use the manager page</div>
       <p>You're signed in as a manager (${who}). <a href="${BASE}?r=${RID}#manager">Open the manager page</a>.</p></section>`);
     const st = subState(ACCOUNT);
     if (role !== "company" && !st.live) return show(blockedHtml(st, (ACCOUNT && ACCOUNT.name) || RID) + `<section>${other}</section>`);
-    startConfig();
-    await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]);
+    startConfig(); step("restaurant settings");
+    await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]); step("settings loaded");
     G.done = true; go(role === "company" ? "owner" : role);
   }
   const show = (html) => paint(html);
@@ -672,6 +838,7 @@ function stickerPeel(box, still) {
 }
 
 function dinerScreen() {
+  window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   welcomeSplash();
   const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "",
     user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "", uid: null, proof: null, switching: false };
@@ -705,11 +872,13 @@ function dinerScreen() {
   // code (a friend's invite), or a guest coming back to the group they already joined.
   async function start() {
     const c = params.get("c"), k = params.get("k");
+    // A friend's code typed on the front page (?c=1234, no restaurant yet): find the restaurant, then join.
+    if (!RID && c) return joinByInvite(c);
     if (!RID) { $("#cart").hidden = true; return paint(`<section><p class="empty">Scan the QR code on your table to see the menu and order.</p>
       <p class="note" style="text-align:center">Run a restaurant? <a href="${BASE}#signup">Register it with ${esc(COMPANY.name)}</a> · <a href="${BASE}#owner">Owner sign-in</a></p></section>`); }
     startConfig();
-    try { S.uid = (await ensureUser()).uid; } catch (e) { return paint(errorBox(e)); }
-    await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]);
+    step("sign-in"); try { S.uid = (await ensureUser()).uid; } catch (e) { return paint(errorBox(e)); }
+    step("menu and settings"); await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]); step("checking your table");
     if (PAUSED) { $("#cart").hidden = true; return paint(pausedHtml()); }
     if (!S.n && c) return findByCode(c);
     if (!S.n) return codeEntry();
@@ -739,11 +908,27 @@ function dinerScreen() {
       return codeEntry(S.n);
     } catch (e) { paint(errorBox(e)); }
   }
+  async function joinByInvite(c) {
+    $("#cart").hidden = true; paint(`<p class="empty">Finding your friends…</p>`);
+    const again = (msg) => paint(`<section><div class="label">Join your friends</div><p class="err">${esc(msg)}</p>
+      <form id="invform" class="grid"><input class="field num" id="invin" inputmode="numeric" maxlength="4" placeholder="Their 4-digit code" autocomplete="off" value="${esc(c)}">
+        <button class="btn primary big">Join their table</button></form>
+      <p class="note">The code is on your friend's phone under ☰. Or <button class="linkbtn" data-scan>scan the QR code on the table</button>.</p></section>`);
+    if (!/^\d{4}$/.test(String(c).trim())) return again("Codes are 4 digits. Check the number with your friend.");
+    try {
+      await ensureUser();
+      const inv = await getDoc(inviteRef(String(c).trim()));
+      if (!inv.exists() || !inv.data().rid) return again("No open table with that code. Check the number on your friend's phone.");
+      location.replace(`${BASE}?r=${encodeURIComponent(inv.data().rid)}&c=${encodeURIComponent(String(c).trim())}`);
+    } catch (e) { again("Couldn't check that code. Check your connection and try again."); }
+  }
+  document.addEventListener("submit", (e) => { if (e.target.id !== "invform") return; e.preventDefault(); const v = ($("#invin").value || "").trim(); joinByInvite(v); });
   function attach(sid) {
-    S.sid = sid; S.access = true; S.err = "";
+    step("loading your table");
+    S.sid = sid; S.access = true; S.err = ""; S.gLoaded = false;
     subGroup && subGroup(); subLines && subLines(); subAlerts && subAlerts();
     subGroup = onSnapshot(groupRef(sid), (snap) => {
-      S.g = snap.data() || null;
+      S.g = snap.data() || null; S.gLoaded = true;
       const saved = store.get(meKey());
       S.me = S.g && saved && saved.session === sid && saved.pid === S.uid && S.g.people && S.g.people[saved.pid] ? saved : null;
       render();
@@ -814,10 +999,15 @@ function dinerScreen() {
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
       <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
         ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}
-        <button class="btn primary big">Join ${unit}</button></form>${err}</section>`;
+        <button class="btn primary big">Join ${unit}</button></form>${err}
+      <div class="orline"><span>or</span></div>
+      <button class="btn big" data-act="signout">Join as a guest instead</button>
+      <p class="note">Just a first name, no account. This signs your account out on this phone.</p></section>`;
     if (S.user && S.profile && S.profile.name) return `<section>${bar}
       <button class="btn primary big" data-act="joinme" style="margin-top:16px">Join as ${esc(S.profile.name)}</button>
-      <p class="note">Not ${esc(S.profile.name)}? <button class="linkbtn" data-act="signout">Sign out</button></p>${err}</section>`;
+      <div class="orline"><span>or</span></div>
+      <button class="btn big" data-act="signout">Join as a guest instead</button>
+      <p class="note">Just a first name, no account. This signs your account out on this phone.</p>${err}</section>`;
     // Most people just type their name, so that comes first; signing in is the optional extra.
     return `<section>${bar}<h2 class="jtitle">Join the ${unit}</h2>
       <form id="joinform" class="grid"><label class="flabel" for="namein">Your first name <span>Just your first name, no account needed</span></label>
@@ -842,13 +1032,16 @@ function dinerScreen() {
   async function joinAs(name, u) {
     const pid = auth.currentUser.uid, person = { name, t: Date.now(), uid: pid, acct: isAccount(auth.currentUser) }, patch = {};
     patch[`people.${pid}`] = person; if (!S.g.label) patch.label = name;
+    const first = !Object.keys(S.g.people || {}).length && !S.g.waiter;
     await updateDoc(groupRef(S.sid), patch);
+    if (first) ringFor(groupRef(S.sid).path);
     store.set(meKey(), { pid, name, session: S.sid }); S.me = { pid, name, session: S.sid };
     store.set("dees-lasttable", location.href); render();
   }
   function render() {
     if (!S.n || !S.access) return;
     const shared = isShared(S.n), g = S.g;
+    if (!S.gLoaded) { $("#cart").hidden = true; return paint(skMenu()); }
     if (!g || !g.open) {
       $("#cart").hidden = true;
       return paint(`<section><p class="empty">${shared ? "Your group's bill has been closed" : "This table has been closed"}. Thanks for visiting!</p>${S.viaKey
@@ -881,6 +1074,7 @@ function dinerScreen() {
     // ☰: inviting friends, the account and help. Waiter, Call waiter and Bill please stay on the page.
     setMenu([
       { html: `<b>${esc(S.me.name)}</b> at Table ${esc(S.n)}${shared ? ` · ${esc(gname(g))}` : ""}<br>Friends join with code <b class="code num">${esc(g.code)}</b><div style="margin-top:8px"><button class="btn small primary" data-act="share">Share invite</button></div>` },
+      { label: "Change my name", sub: `Your table and waiter see you as ${S.me.name}`, run: () => { S.renaming = true; S.help = false; render(); window.scrollTo(0, 0); const i = $("#renamein"); if (i) { i.focus(); i.select(); } } },
       ...(S.user ? [{ label: "My account", sub: "Your visits and WhatsApp offers", href: BASE + "#account" }] : []),
       { label: "How it works", sub: "Ordering, the bill and your waiter", run: () => { S.help = true; render(); window.scrollTo(0, 0); } },
     ]);
@@ -890,7 +1084,12 @@ function dinerScreen() {
         <li><b>Call waiter</b> or <b>Bill please</b> alerts your waiter, and you'll see when they're on the way.</li>
         <li><b>Bill</b> shows what each person owes. Pay your waiter as usual.</li>
         <li>Friends can join with the code under ☰ → Share invite.</li></ol></div>` : "";
-    paint(`<section class="dsec">${help}
+    // Change my name: a small card at the top, like How it works.
+    const rename = S.renaming ? `<div class="helpcard"><div class="trow"><b>Change my name</b><button class="btn small ghost" data-act="renameclose">Cancel</button></div>
+      <form id="renameform" class="grid" style="margin-top:8px"><label class="flabel" for="renamein">Your first name <span>Your table and waiter see this</span></label>
+        <input class="field" id="renamein" maxlength="16" autocomplete="given-name" value="${esc(S.me.name)}">
+        <button class="btn primary big">Save name</button></form></div>` : "";
+    paintSoft(`<section class="dsec">${rename}${help}
       <div class="tcard">
         <div class="trow"><div class="who2"><span>Waiter</span> <b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned"}</b></div>
           <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
@@ -980,6 +1179,17 @@ function dinerScreen() {
       try { await phoneConfirm(code); } catch (err) { S.authErr = authMessage(err); S.busy = false; render(); return; }
       S.busy = false;
     }
+    // Change my name at the table: only this diner's own entry in the group changes (the database
+    // rules allow nothing else). Orders already placed show the new name on staff screens too.
+    if (e.target.id === "renameform") {
+      const name = $("#renamein").value.trim().slice(0, 16), me = S.me, p = S.g && S.g.people && me && S.g.people[me.pid];
+      if (!name || !p) return;
+      if (name === me.name) { S.renaming = false; return render(); }
+      try { await updateDoc(groupRef(S.sid), { [`people.${me.pid}`]: { ...p, name } });
+        S.me = { ...me, name }; store.set(meKey(), S.me); S.renaming = false; toast(`Your table now sees you as ${name}`); render(); }
+      catch (err) { fail(err); }
+      return;
+    }
     if (e.target.id === "profileform") {
       const name = $("#profilein").value.trim(); if (!name || !S.user) return;
       const on = !!($("#offersin") && $("#offersin").checked);
@@ -1001,7 +1211,7 @@ function dinerScreen() {
     else if (d.act === "cart") { S.cartOpen = !S.cartOpen; renderCart(); }
     else if (d.split) setSplit(S.sid, d.split);
     else if (d.alert) {
-      try { await addDoc(rcol("alerts"), { table: Number(S.n), session: S.sid, type: d.alert, pid: S.me.pid, pname: S.me.name, t: Date.now(), ack: null, ackBy: null, done: false });
+      try { const ar = await addDoc(rcol("alerts"), { table: Number(S.n), session: S.sid, type: d.alert, pid: S.me.pid, pname: S.me.name, t: Date.now(), ack: null, ackBy: null, done: false }); ringFor(ar.path);
         toast(S.g.waiter ? `${wname(S.g.waiter)} has been notified` : "All waiters notified"); } catch (err) { fail(err); }
     }
     else if (d.act === "place" && S.cart.length && !S.placing) {
@@ -1014,6 +1224,7 @@ function dinerScreen() {
       S.placing = false; render();
     }
     else if (d.act === "helpclose") { S.help = false; render(); }
+    else if (d.act === "renameclose") { S.renaming = false; render(); }
     else if (d.act === "share") {
       const link = `${BASE}?r=${RID}&c=${S.g.code}`, what = isShared(S.n) ? "group" : "table";
       const txt = `Join our ${what} at ${rname()}: ${link} (code ${S.g.code}, works until the ${what} closes)`;
@@ -1029,7 +1240,7 @@ function dinerScreen() {
       S.busy = false; render();
     }
     else if (d.act === "joinme" && S.profile) { try { await joinAs(S.profile.name, S.user); } catch (err) { fail(err); } }
-    else if (d.act === "signout") { try { await signOutUser(); } catch {} S.step = ""; render(); }
+    else if (d.act === "signout") { try { await signOutUser(); } catch {} S.step = ""; S.user = null; S.profile = null; S.name = ""; render(); }
     else if (d.act === "usual") { usualFrom(S.visits).forEach((u) => S.cart.push({ ...u })); toast("Your usual is in the basket"); renderCart(); }
     else if (d.act === "newgroup" && S.viaKey) { S.choosing = false; try { attach(await startGroup(S.n, S.proof)); } catch (err) { fail(err); } }
     else if (d.act === "newsession" && S.viaKey) { S.access = false; S.sid = null; S.g = null; S.me = null; store.set(meKey(), null); start(); }
@@ -1041,10 +1252,11 @@ function dinerScreen() {
 
 // ================= STATION (kitchen / bar / grill) =================
 function stationScreen(st) {
+  window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st] + " screen"; document.title = STATIONS[st] + " · " + rname();
   const S = { lines: [], groups: {}, all: [] }; const notify = watcher();
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => {
-    S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
+    S.loaded = true; S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
     notify(S.lines.filter((l) => l.s === "new").map((l) => l.batch)); render();
   }, (e) => paint(errorBox(e)));
   onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.all = s.docs.map((d) => d.data()); S.groups = {}; S.all.forEach((g) => (S.groups[g.session] = g)); render(); });
@@ -1057,7 +1269,7 @@ function stationScreen(st) {
       const mins = Math.max(0, Math.floor((Date.now() - bl[0].t) / 60000)), lim = st === "bar" ? [5, 10] : [15, 25];
       const late = s === "ready" ? "" : mins >= lim[1] ? " late" : mins >= lim[0] ? " warn" : "";
       return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="age num${late}" title="Waiting ${mins} min">${mins}<small> min</small></span></header>
-        <div class="note" style="margin:2px 0 0">${esc(bl[0].pname)} · waiter ${w ? esc(wname(w)) : "not assigned yet"}</div>
+        <div class="note" style="margin:2px 0 0">${esc(nowName(g, bl[0].pid, bl[0].pname))} · waiter ${w ? esc(wname(w)) : "not assigned yet"}</div>
         <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}</span>${l.s === "ready"
           ? `<span class="pill s-ready">Ready</span>` : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">Ready</button>`}</li>`).join("")}</ul>${note ? `<div class="nt">${esc(note.note)}</div>` : ""}
         <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
@@ -1065,7 +1277,7 @@ function stationScreen(st) {
     });
     setMenu([{ html: `<b>${esc(STATIONS[st])} screen</b><br>${esc(rname())}. Orders for the ${esc(STATIONS[st].toLowerCase())} appear here.` },
       ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : [])]);
-    paint(soundBar() + (tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
+    paint(soundBar() + (!S.loaded ? skTickets(4) : tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
   }
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
@@ -1073,12 +1285,13 @@ function stationScreen(st) {
     if (d.act === "testsound") beep();
     if (d.adv) { b.disabled = true; const batch = writeBatch(db);
       const now = Date.now();
-      S.lines.filter((l) => l.batch === d.adv && (d.to === "preparing" ? l.s === "new" : l.s !== "ready")).forEach((l) =>
+      const moving = S.lines.filter((l) => l.batch === d.adv && (d.to === "preparing" ? l.s === "new" : l.s !== "ready"));
+      moving.forEach((l) =>
         batch.update(rdoc("lines", l.id), d.to === "preparing" ? { s: "preparing", tPrep: now } : { s: "ready", tReady: now, tPrep: l.tPrep || now }));
-      try { await batch.commit(); } catch (err) { fail(err); b.disabled = false; } }
+      try { await batch.commit(); if (d.to !== "preparing" && moving.length) ringFor(rdoc("lines", moving[0].id).path, moving.length); } catch (err) { fail(err); b.disabled = false; } }
     // One dish ready on its own: the waiter is alerted for just that dish.
     if (d.ready) { const l = S.lines.find((x) => x.id === d.ready); if (!l) return; b.disabled = true; const now = Date.now();
-      try { await updateDoc(rdoc("lines", l.id), { s: "ready", tReady: now, tPrep: l.tPrep || now }); } catch (err) { fail(err); b.disabled = false; } }
+      try { await updateDoc(rdoc("lines", l.id), { s: "ready", tReady: now, tPrep: l.tPrep || now }); ringFor(rdoc("lines", l.id).path); } catch (err) { fail(err); b.disabled = false; } }
   });
   setInterval(render, 30000);
   cfgListeners.add(render);
@@ -1090,16 +1303,29 @@ function stationScreen(st) {
 // alert and serving actions from the waiter on shift. Owners and managers can work as any waiter.
 const SHIFT_MS = 16 * 3600e3;
 function waiterScreen(boss) {
+  window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Waiter"; document.title = "Waiter · " + rname();
   const S = { me: boss ? store.get("dees-waiter-" + RID) : null, since: null, picking: null, pinErr: "", busy: false, endArmed: false,
     groups: [], lines: [], alerts: [], open: null, confirm: null, pin: "", shake: false };
   const myRef = () => rdoc("staff", auth.currentUser.uid);
+  // Ringing with the screen off (push.js): offered once a shift starts, on the waiter's own phone.
+  const pushRef = () => rdoc("push", auth.currentUser.uid);
+  const pushUrl = () => `${location.origin}${location.pathname}?r=${encodeURIComponent(RID)}#waiter`;
+  let ring = pushState(), ringBusy = false;
+  const keepRing = () => { if (S.me && !boss && ring === "on") refreshPush(fbApp, pushRef(), pushUrl()); };
+  // Always say where ringing stands, so nobody wonders whether it's on.
+  const ringBar = () => !S.me || ring === "unsupported" ? ""
+    : boss ? `<div class="soundbar"><span><b>This phone won't ring with the screen off</b> while you're signed in as owner or manager. Waiters' own phones ring.</span></div>`
+    : ring === "on" ? `<div class="soundbar"><span><b>Rings with the screen off.</b> Calls, bill requests and ready orders ring this phone, even when it's locked.</span><button class="btn" data-act="testring">Test ring</button></div>`
+    : ring === "blocked"
+    ? `<div class="soundbar"><span><b>Notifications are blocked</b>, so this phone can't ring with the screen off. In Chrome: ⋮ → Settings → Site settings → Notifications → allow this site, then reload.</span></div>`
+    : `<div class="soundbar"><span><b>Ring this phone when the screen is off.</b> Calls, bill requests and ready orders ring even when it's locked.</span><button class="btn primary" data-act="ring" ${ringBusy ? "disabled" : ""}>${ringBusy ? "Turning on…" : "Turn on"}</button></div>`;
   async function loadShift() {
     if (boss) return;
     try { const d = (await getDoc(myRef())).data() || {};
       const ok = d.waiter && d.shift && Date.now() - d.shift < SHIFT_MS && WAITERS.some((w) => w.id === d.waiter);
       S.me = ok ? d.waiter : null; S.since = ok ? d.shift : null; } catch { S.me = null; }
-    update();
+    keepRing(); update();
   }
   async function endShift(msg) {
     S.me = null; S.since = null; S.endArmed = false; S.picking = null; render();
@@ -1109,7 +1335,7 @@ function waiterScreen(boss) {
   // A shift that has run 16 hours ends by itself.
   setInterval(() => { if (!boss && S.since && Date.now() - S.since >= SHIFT_MS) endShift("Your shift has ended. Start a new one to keep working."); }, 60000);
   const notify = watcher();
-  onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.groups = s.docs.map((d) => d.data()).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
+  onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.gotGroups = true; S.groups = s.docs.map((d) => d.data()).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => { S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })); update(); });
   onSnapshot(query(rcol("alerts"), where("done", "==", false)), (s) => { S.alerts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.t - b.t); update(); });
   // Bill totals need every line of the group, including served ones.
@@ -1152,13 +1378,14 @@ function waiterScreen(boss) {
           run: () => { if (!S.endArmed) { S.endArmed = true; setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); render(); }
             else { const mine = S.groups.filter((g) => g.waiter === S.me).length; endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); } } }] : []),
       ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : []),
+      ...(!boss && ring === "on" ? [{ label: "Test ring", sub: "Rings when the screen is off", keep: true, run: () => testRing(wname(S.me)).catch(() => toast("Couldn't show a test ring.")) }] : []),
       { html: othersList.length ? `<b>Other waiters' tables</b><br>${othersList.map((g) => `${esc(name(g))}: ${esc(wname(g.waiter))}`).join("<br>")}` : "<b>Other waiters' tables</b><br>None right now" },
     ]);
     const free = S.groups.filter((g) => !g.waiter && seated(g));
     const mine = S.groups.filter((g) => g.waiter === S.me);
     const others = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
     // A guest's call or bill request sits at the top of their table's card.
-    const alertRow = (a, g) => `<div class="arow"><div><b>${ALERT[a.type]}</b> <span class="note" style="margin:0">from ${esc(a.pname)} · ${ago(a.t)}</span></div>
+    const alertRow = (a, g) => `<div class="arow"><div><b>${ALERT[a.type]}</b> <span class="note" style="margin:0">from ${esc(nowName(g, a.pid, a.pname))} · ${ago(a.t)}</span></div>
       <div class="row">${a.ack ? `<span class="pill s-preparing">On the way</span><button class="btn primary" data-done="${a.id}">${a.type === "bill" ? "Bill delivered" : "Done"}</button>`
         : `<button class="btn primary" data-ack="${a.id}">On my way</button>`}${a.type === "bill" && g.waiter === S.me && S.open !== g.session ? `<button class="btn" data-open="${g.session}">Open bill</button>` : ""}</div></div>`;
     const busy = (g) => S.alerts.filter(live(g)).some((a) => !a.ack) * 2 + S.lines.some((l) => live(g)(l) && l.s === "ready");
@@ -1173,14 +1400,14 @@ function waiterScreen(boss) {
       return `<article class="ticket${al.some((a) => !a.ack) ? " alert" : ""}"><header><b>${esc(name(g))}</b><span class="note" style="margin:0">code ${esc(g.code)}</span></header>
         ${al.map((a) => alertRow(a, g)).join("")}
         <p class="note" style="margin:4px 0 0">${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "No guests yet"}</p>
-        ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(l.pname)} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
+        ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
         <div class="acts"><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${g.session}">Hand over</button>
           ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>
         ${open ? billHtml(g, billLines, true) : ""}</article>`;
     }).join("");
-    paint(`<section>${pick}${soundBar()}
+    paint(`<section>${pick}${ringBar()}${soundBar()}
       ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
-      <div class="label">My tables</div>${mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
+      <div class="label">My tables</div>${!S.gotGroups ? skTickets(2) : mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
     </section>`);
   }
   // The sign-in card: a standard two-step sign-in (who are you, then PIN) in the restaurant's look.
@@ -1205,7 +1432,7 @@ function waiterScreen(boss) {
     const pin = S.pin, w = S.picking; if (!w || S.busy || !/^\d{4}$/.test(pin)) return;
     S.busy = true; S.pinErr = ""; render();
     try { const now = Date.now(); await setDoc(myRef(), { token: store.get("dees-staff-" + RID), t: now, waiter: w, pin, shift: now });
-      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}!`); update(); return; }
+      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}!`); keepRing(); update(); return; }
     catch (err) { S.pinErr = denied(err) ? "That PIN didn't work. Try again, or ask the owner or manager." : "Couldn't connect. Try again."; S.pin = ""; S.shake = true; }
     S.busy = false; render();
   }
@@ -1224,7 +1451,14 @@ function waiterScreen(boss) {
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     try {
-      if (d.act === "sound") { await enableSound(); render(); }
+      if (d.act === "testring") testRing(wname(S.me)).catch(() => toast("Couldn't show a test ring."));
+      else if (d.act === "ring") { ringBusy = true; render();
+        try { ring = await enablePush(fbApp, pushRef(), pushUrl());
+          toast(ring === "on" ? "This phone will ring for your tables, even with the screen off" : ring === "blocked" ? "Notifications are blocked in Chrome's settings" : "Ringing not turned on"); }
+        catch (err) { console.error("Turning on ringing failed", err);
+          toast(denied(err) ? "Ringing isn't allowed for this phone yet. Ask the owner to make sure it's set up as a staff phone." : `Couldn't turn on ringing (${(err && (err.code || err.message)) || "error"}). Try again.`); }
+        ringBusy = false; render(); }
+      else if (d.act === "sound") { await enableSound(); render(); }
       else if (d.act === "testsound") beep();
       else if (d.me && boss) { S.me = d.me; store.set("dees-waiter-" + RID, d.me); update(); }
       else if (d.pickme) { S.picking = d.pickme; S.pin = ""; S.pinErr = ""; render(); }
@@ -1320,7 +1554,7 @@ function setupScreen(role) {
     const screens = [["waiter", "Waiter"], ...Object.entries(STATIONS)];
     const tableCard = (n) => `<div class="qr"><div class="box" id="qr${n}"></div><b>Table ${n}</b>
       <button class="chip sharetog" data-share="${n}" aria-pressed="${isShared(n)}">${isShared(n) ? "Shared table" : "Normal table"}</button>
-      ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : `<span class="note">Loading…</span>`}
+      ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : skInline(40)}
       <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
     bossMenu(role, [{ label: armed ? "Tap again to erase all orders" : "Reset demo", sub: armed ? "Orders, alerts and history go; menu and staff stay" : "Clear orders and history before a demo", danger: true, keep: !armed,
       run: () => { if (!armed) { armed = true; render(); setTimeout(() => { armed = false; render(); }, 4000); } else resetDemo(); } }]);
@@ -1332,15 +1566,15 @@ function setupScreen(role) {
       <p class="note">Mark big communal tables as <b>Shared</b>: several groups can then order there, each with its own code and bill. On normal tables everyone who scans joins the same bill.</p>
       <button class="btn" data-act="rotate">${rot ? "Tap again: every printed table card will stop working" : "Make new codes for all tables"}</button>
       <div class="label">Staff phones · scan once with each phone</div>
-      <div class="qrs">${screens.map(([k, v]) => `<div class="qr sqr"><div class="box" id="sqr-${k}"></div><b>${esc(v)}</b>${staffTok ? `<a class="note" href="${staffLink(k)}">Open here</a>` : `<span class="note">Loading…</span>`}</div>`).join("")}</div>
+      <div class="qrs">${screens.map(([k, v]) => `<div class="qr sqr"><div class="box" id="sqr-${k}"></div><b>${esc(v)}</b>${staffTok ? `<a class="note" href="${staffLink(k)}">Open here</a>` : skInline(60)}</div>`).join("")}</div>
       <p class="note">Each waiter scans the <b>Waiter</b> code once with their own phone. After that they start each shift with their name and PIN (set the PINs under Owner → Staff). The kitchen, bar and grill phones scan their own code once. Keep these codes away from guests.</p>
       <p class="note">If a phone is lost or someone leaves, make new staff codes: every staff phone is signed out and scans again.</p>
       <button class="btn" data-act="rotstaff">${rotStaff ? "Tap again: every staff phone must scan again" : "Make new staff codes"}</button>
       <div class="label">Owner and manager pages</div>
       <div class="links">${IS_CO ? link(BASE + "demo/", "Live demo (company only): one QR code, everyone picks a role, separate from this restaurant") : ""}${link(BASE + "?r=" + RID + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "?r=" + RID + "#manager", "Manager (menu and staff)")}</div>
       <p class="note">These open with the owner's or a manager's Google sign-in. The owner adds managers under Owner → Staff.</p></section>`);
-    const draw = () => { for (let i = 1; i <= TABLES; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length && keys[i]) new QRCode(el, { text: tableLink(i, keys[i]), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }
-      screens.forEach(([k]) => { const el = document.getElementById("sqr-" + k); if (el && !el.childNodes.length && staffTok) new QRCode(el, { text: staffLink(k), width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M }); }); };
+    const draw = () => { for (let i = 1; i <= TABLES; i++) { const el = document.getElementById("qr" + i); if (el && !el.childNodes.length && keys[i]) brandQr(el, tableLink(i, keys[i]), 132); }
+      screens.forEach(([k]) => { const el = document.getElementById("sqr-" + k); if (el && !el.childNodes.length && staffTok) brandQr(el, staffLink(k), 132); }); };
     if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true });
   }
   // A sheet of table cards to print and cut out: name, table number, QR, one line of instructions.
@@ -1350,11 +1584,12 @@ function setupScreen(role) {
     sheet.innerHTML = Array.from({ length: TABLES }, (_, i) => `<div class="pcard"><div class="pname">${esc(rname())}</div><div class="ptable">Table ${i + 1}</div>
       <div class="pqr" id="pqr${i + 1}"></div><div class="phow">Scan to see the menu, order,<br>call your waiter and split the bill</div></div>`).join("");
     document.body.appendChild(sheet);
-    for (let i = 1; i <= TABLES; i++) { try { new QRCode(document.getElementById("pqr" + i), { text: tableLink(i, keys[i]), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M }); } catch {} }
+    // Wait until every code (and its logo) is drawn before opening the print dialog.
+    const drawn = Array.from({ length: TABLES }, (_, i) => brandQr(document.getElementById("pqr" + (i + 1)), tableLink(i + 1, keys[i + 1]), 220).catch(() => {}));
     document.body.classList.add("printing");
     const done = () => { document.body.classList.remove("printing"); sheet.remove(); };
     window.addEventListener("afterprint", done, { once: true });
-    setTimeout(() => { try { window.print(); } catch { done(); } }, 300);
+    Promise.all(drawn).then(() => setTimeout(() => { try { window.print(); } catch { done(); } }, 150));
   }
   document.addEventListener("click", async (e) => {
     const ot = e.target.closest("button[data-otab]");
@@ -1442,7 +1677,7 @@ function ownerScreen(role) {
     paint(subBanner() + tabBar(TABS, S.tab) + `
       ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
     const qr = document.getElementById("wlqr");
-    if (qr && S.wtok) { const draw = () => { if (!qr.childNodes.length) new QRCode(qr, { text: waiterLink(), width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); };
+    if (qr && S.wtok) { const draw = () => { if (!qr.childNodes.length) brandQr(qr, waiterLink(), 160); };
       if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true }); }
   }
 
@@ -1454,7 +1689,7 @@ function ownerScreen(role) {
         <div class="note" style="margin:2px 0 0">Fill in your whole menu in Excel or Google Sheets (one row per price), then upload it here. The download already has your current menu in it.</div></div>
       <div class="row"><button class="btn" data-act="mdl">Download template</button>
         <label class="btn primary" for="mup">${S.busy === "mup" ? "Reading…" : "Upload template"}</label>
-        <input type="file" id="mup" accept=".csv,.xlsx,.xls,text/csv" hidden></div></div>
+        <input type="file" id="mup" accept=".csv,.xlsx,text/csv" hidden></div></div>
       ${imp && imp.error ? `<div class="impbox"><p class="err" style="margin:0">${esc(imp.error)}</p><button class="btn" data-act="impcancel" style="margin-top:10px">OK</button></div>` : ""}
       ${imp && imp.menu ? `<div class="impbox"><b>Ready to import: ${imp.items} item${imp.items > 1 ? "s" : ""} in ${imp.menu.length} section${imp.menu.length > 1 ? "s" : ""}</b>
         <ul class="implist">${imp.menu.map((x) => `<li>${esc(x.c)} · ${x.items.length} item${x.items.length > 1 ? "s" : ""} · goes to ${esc(STATIONS[x.st] || x.st)}</li>`).join("")}</ul>
@@ -1532,7 +1767,7 @@ function ownerScreen(role) {
 
   // ----- staff -----
   function staffTab() {
-    const wl = S.wtok == null ? (loadWLink(), `<p class="note">Loading…</p>`)
+    const wl = S.wtok == null ? (loadWLink(), skRows(1))
       : !S.wtok ? `<p class="note">Couldn't load the link. Check the connection and open this tab again.</p>`
       : `<div class="vrow"><input class="field" id="wlinkin" readonly value="${esc(waiterLink())}" aria-label="Waiter sign-in link"><button class="btn" data-act="wlcopy">Copy</button></div>
         <div class="row" style="margin-top:8px"><button class="btn primary" data-act="wlshare">Send to a waiter</button><button class="btn ghost" data-act="wlqr">${S.wqr ? "Hide QR code" : "Show QR code"}</button></div>
@@ -1553,7 +1788,7 @@ function ownerScreen(role) {
       <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name"><button class="btn primary">Add</button></form>
       ${owner ? `<div class="label">Owner and managers</div>
       <p class="note" style="margin-top:0">They sign in with Google. Managers can edit the menu and staff and open Setup; the owner also sees the dashboard and look, and adds or removes managers.</p>
-      ${S.admins == null ? (loadAdmins(), `<p class="note">Loading…</p>`) : `<div class="grid" style="max-width:520px">${S.admins.map((a) => `<div class="vrow"><span class="field" style="overflow:hidden;text-overflow:ellipsis">${esc(a.email)}${a.email === myEmail ? " (you)" : ""}</span>
+      ${S.admins == null ? (loadAdmins(), skRows(2)) : `<div class="grid" style="max-width:520px">${S.admins.map((a) => `<div class="vrow"><span class="field" style="overflow:hidden;text-overflow:ellipsis">${esc(a.email)}${a.email === myEmail ? " (you)" : ""}</span>
         <span class="pill ${a.role === "owner" ? "s-ready" : "s-preparing"}">${a.role === "owner" ? "Owner" : "Manager"}</span>
         ${a.email === myEmail || a.role === "owner" ? "" : `<button class="btn danger" data-deladmin="${esc(a.email)}">${S.armed === "a" + a.email ? "Tap again" : "Remove"}</button>`}</div>`).join("")}</div>`}
       <form id="addadmin" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="adminemail" type="email" autocomplete="off" placeholder="New manager's Google email">
@@ -1587,10 +1822,12 @@ function ownerScreen(role) {
       <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${esc(lab(r))}</span></div>`).join("")}</div>`;
   }
   function dashTab() {
-    const periods = [["today", "Today"], ["7", "7 days"], ["30", "30 days"], ["all", "All time"]];
+    // No "All time" for now: it downloaded every order ever placed, which gets slow and costly as history grows.
+    // Longer ranges come back with daily summaries (see docs/security/Security Checklist.md → scaling).
+    const periods = [["today", "Today"], ["7", "7 days"], ["30", "30 days"]];
     const head = `<div class="periods">${periods.map(([k, l]) => `<button class="chip" aria-pressed="${S.period === k}" data-period="${k}">${l}</button>`).join("")}
       <button class="btn ghost small hide-phone" data-act="reload">${S.loading ? "Loading…" : "Refresh"}</button></div>`;
-    if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : `<p class="empty">Loading numbers…</p>`); }
+    if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : skKpis()); }
     const m = S.m;
     const sampleNote = m.sample ? `<div class="soundbar" style="margin-top:12px"><span>Includes <b>sample data</b> for demonstration, not real sales.</span><button class="btn" data-act="unsample">${S.busy === "unsample" ? "Removing…" : "Remove sample data"}</button></div>` : "";
     if (!m.items) return head + `<section><p class="empty">No orders in this period yet.<br>Numbers appear here as soon as diners order.</p>
@@ -1716,7 +1953,12 @@ function ownerScreen(role) {
       catch { const i = $("#wlinkin"); if (i) { i.focus(); i.select(); } toast("Select the link and copy it."); }
       return; }
     if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; render(); }
-    else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii]; it.out = !it.out; render(); save(it.out ? `${it.n} marked sold out` : `${it.n} back on the menu`); }
+    else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii], want = !it.out, msg = want ? `${it.n} marked sold out` : `${it.n} back on the menu`;
+      // Only the small sold-out list changes. An old sold-out flag saved inside the menu is cleared with one full save.
+      const clearOld = !want && it.oldOut; it.oldOut = clearOld ? false : !!it.oldOut;
+      if (want) STOCK_OUT.add(it.n); else STOCK_OUT.delete(it.n); applyStock(); render();
+      try { await setDoc(stockRef(), { out: { [it.n]: want ? true : deleteField() }, t: Date.now() }, { merge: true });
+        if (clearOld) await saveConfig(); toast(msg); } catch (err) { fail(err); } }
     else if (d.edit !== undefined) { S.edit = d.edit || null; render(); }
     else if (d.addv) { const [si, ii] = ix(d.addv); MENU[si].items[ii].v.push(["", MENU[si].items[ii].v.at(-1)[1]]); render(); save(); }
     else if (d.rmv) { const [si, ii, vi] = ix(d.rmv); MENU[si].items[ii].v.splice(vi, 1); render(); save(); }
@@ -1733,7 +1975,7 @@ function ownerScreen(role) {
     else if (d.act === "resetcolors") { BRAND = { ...BRAND, c1: null, c2: null }; applyBrand(); render(); save("Original colours back"); }
     else if (d.act === "rmlogo") { const old = BRAND.logo; BRAND = { ...BRAND, logo: "" }; applyBrand(); render(); await save("Logo removed"); if (old && !isFileLogo(old)) deleteDoc(rdoc("photos", old)).catch(() => {}); }
     else if (d.rmphoto) { const [si, ii] = ix(d.rmphoto), it = MENU[si].items[ii], old = it.img; delete it.img; render(); await save("Photo removed"); deleteDoc(rdoc("photos", old)).catch(() => {}); }
-    else if (d.period) { S.period = d.period; S.m = null; S.err = null; render(); }
+    else if (d.period) { S.period = d.period === "all" ? "30" : d.period; S.m = null; S.err = null; render(); }
     else if (d.act === "reload") { S.m = null; S.err = null; render(); }
     else if (d.act === "sample" && !S.busy) {
       S.busy = "sample"; render();
@@ -1779,15 +2021,16 @@ function companyScreen() {
   wasabiPage();
   const C = { u: null, ok: false, claimed: true, list: [], team: [], filter: "all", busy: "", err: "", armed: null, edit: null };
   async function check() {
-    paint(`<p class="empty">Loading…</p>`);
+    paint(skPage());
     C.u = await authReady(); C.ok = await isCompanyUser(C.u);
     if (!C.ok) { try { C.claimed = (await getDoc(doc(db, "meta", "company"))).exists(); } catch { C.claimed = true; } return render(); }
     await load();
   }
   async function load() {
     try {
-      C.list = (await getDocs(collection(db, "accounts"))).docs.map((d) => ({ rid: d.id, ...d.data() }));
-      C.team = (await getDocs(collection(db, "company"))).docs.map((d) => ({ email: d.id, ...d.data() }));
+      const [list, team] = await Promise.all([getDocs(collection(db, "accounts")), getDocs(collection(db, "company"))]);
+      C.list = list.docs.map((d) => ({ rid: d.id, ...d.data() }));
+      C.team = team.docs.map((d) => ({ email: d.id, ...d.data() }));
     } catch (e) { C.err = denied(e) ? "This account can't read the company records." : "Couldn't load. Check the connection."; }
     render();
   }
@@ -1915,7 +2158,7 @@ function signupScreen() {
   wasabiPage();
   const U = { u: null, mine: [], busy: false, err: "", done: null, form: false };
   async function check() {
-    paint(`<p class="empty">Loading…</p>`);
+    paint(skPage());
     U.u = await authReady();
     if (isAccount(U.u) && U.u.email) U.mine = (await myRestaurants(U.u)).filter((m) => m.role === "owner");
     render();
@@ -2056,7 +2299,7 @@ function accountScreen() {
   function render() {
     $("#sub").textContent = S.user && !(runs() && !S.guest) ? "My account" : "Sign in";
     document.title = $("#sub").textContent + " · " + COMPANY.name;
-    if (S.loading) return paint(`<p class="empty">Loading…</p>`);
+    if (S.loading) return paint(skCards(2));
     if (!S.user) return paint(signInHtml());
     // First sign-in: ask everyone for their first name once, before anything else.
     if (!(S.profile && S.profile.name)) return paint(nameHtml());
@@ -2103,10 +2346,16 @@ function accountScreen() {
       const name = $("#acnamein").value.trim(); if (!name) { S.authErr = "Enter your first name."; return render(); }
       S.busy = true; S.authErr = ""; render();
       try {
-        if (S.profile) await updateDoc(dinerRef(S.user.uid), { name });
-        else await setDoc(dinerRef(S.user.uid), { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: {}, offerNames: {}, created: Date.now() });
+        // Never wait forever: if the database doesn't answer in 12 seconds, say so instead of "Saving…".
+        const write = S.profile ? updateDoc(dinerRef(S.user.uid), { name })
+          : setDoc(dinerRef(S.user.uid), { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: {}, offerNames: {}, created: Date.now() });
+        await Promise.race([write, new Promise((_, no) => setTimeout(() => no(Object.assign(new Error("timeout"), { code: "timeout" })), 12000))]);
         S.profile = { ...(S.profile || {}), name }; toast(`Hi ${name}`);
-      } catch (err) { S.authErr = "Couldn't save your name. Check your connection and try again."; }
+      } catch (err) {
+        console.error("Saving name failed", err);
+        S.authErr = err && err.code === "timeout" ? "The database isn't answering, so your name wasn't saved yet. Check your connection and try again."
+          : denied(err) ? "This account isn't allowed to save a name here. Try signing out and in again." : "Couldn't save your name. Check your connection and try again.";
+      }
       S.busy = false; render(); return; }
     if (e.target.id === "acphone") { e.preventDefault();
       S.phone = $("#acphonein").value; const full = normalisePhone(S.phone);
@@ -2143,6 +2392,47 @@ function accountScreen() {
   });
   render();
 }
+
+// ---------- skeletons: grey shapes where content is about to appear ----------
+// Each is shaped like what it stands in for, so nothing jumps when the real content arrives. They pulse
+// gently (still, for people who turn motion off). Screen readers hear "Loading…"; data-loading tells the
+// start-up watchdog the screen is still waiting.
+function SK(c = "", st = "") { return `<i class="sk ${c}"${st ? ` style="${st}"` : ""}></i>`; }
+function skel(inner) { return `<div class="skel" data-loading aria-busy="true"><span class="sr">Loading…</span>${inner}</div>`; }
+// Function declarations (not consts) so screens drawn before this point in the file can use them.
+function skRep(n, f) { return Array.from({ length: n }, (_, i) => f(i)).join(""); }
+// A diner's menu: category chips, then dishes with a photo and price buttons.
+function skMenu() {
+  return skel(`<div class="row" style="margin:6px 0 14px">${skRep(4, (i) => SK("pill", `width:${[64, 82, 58, 74][i]}px`))}</div>`
+    + skRep(5, (i) => `<div class="item withph"><div class="itxt">${SK("t", `width:${[52, 38, 60, 45, 56][i]}%`)}${SK("", `width:${[80, 66, 74, 58, 70][i]}%`)}</div>
+      <div class="ph">${SK("fill")}</div><div class="vars">${SK("btn")}${i % 2 ? SK("btn") : ""}</div></div>`));
+}
+// Order tickets (kitchen, bar, waiter tables).
+function skTickets(n = 4) {
+  return skel(`<section class="grid">${skRep(n, (i) => `<article class="ticket"><header>${SK("t", "width:40%")}${SK("", "width:44px")}</header>
+    <div style="display:grid;gap:8px;margin:12px 0">${SK("", `width:${[70, 55, 64, 48][i % 4]}%`)}${SK("", `width:${[50, 62, 40, 58][i % 4]}%`)}</div>${SK("btn", "width:96px")}</article>`)}</section>`);
+}
+// A list of rows with a button at the end (staff, managers, links).
+function skRows(n = 3) {
+  return skel(`<div class="grid" style="max-width:520px">${skRep(n, (i) => `<div class="vrow">${SK("field", `width:${[78, 64, 72][i % 3]}%`)}${SK("btn", "width:72px")}</div>`)}</div>`);
+}
+// Dashboard: number tiles, then a chart and a list.
+function skKpis() {
+  return skel(`<div class="kpis">${skRep(4, () => `<div class="kpi">${SK("", "width:60%")}${SK("t", "width:70%;height:26px;margin-top:8px")}</div>`)}</div>
+    <div class="ticket" style="margin-top:14px">${SK("fill", "height:160px")}</div>
+    <div class="ticket" style="margin-top:10px;display:grid;gap:10px">${skRep(4, (i) => SK("", `width:${[72, 60, 66, 50][i]}%`))}</div>`);
+}
+// Cards with a title, a couple of lines and buttons (company list, account, sign-in checks).
+function skCards(n = 3) {
+  return skel(`<section class="grid">${skRep(n, (i) => `<article class="ticket"><header>${SK("t", `width:${[46, 38, 52][i % 3]}%`)}${SK("pill", "width:80px")}</header>
+    ${SK("", "width:62%;margin-top:10px")}<div class="row" style="margin-top:12px">${SK("btn", "width:110px")}${SK("btn", "width:90px")}</div></article>`)}</section>`);
+}
+// Any page before we know exactly what it will show.
+function skPage() {
+  return skel(`<section style="display:grid;gap:12px">${SK("t", "width:45%")}${SK("", "width:85%")}${SK("", "width:70%")}${SK("btn", "width:100%;height:48px;margin-top:6px")}</section>`);
+}
+// A small grey bar inside a line of text.
+function skInline(w = 60) { return `<i class="sk" style="display:inline-block;width:${w}px;vertical-align:middle" aria-label="Loading"></i>`; }
 
 function errorBox(e) {
   return `<section><div class="err">${denied(e)

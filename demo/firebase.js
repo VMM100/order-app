@@ -1,6 +1,6 @@
 // Firebase connection. This config is meant to be public; access is controlled by Firestore security rules.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import { initializeFirestore, memoryLocalCache } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA1AC8HPl9IZxf9tlb3fjoLB_mpCSx8L3g",
@@ -15,4 +15,6 @@ const firebaseConfig = {
 // its own named app, so each keeps its own sign-in, even across reloads.
 const as = new URLSearchParams(location.search).get("as");
 export const app = as ? initializeApp(firebaseConfig, "as-" + as) : initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// Fall back to plain requests on networks that hold back the live connection (some mobile networks and
+// proxies do): without this, updates such as "on the way" can arrive late, all at once with the next one.
+export const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true, localCache: memoryLocalCache() });

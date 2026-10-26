@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Security policy: the only places allowed to run code, load data or show frames in Wasabi. Anything else (an injected script, a changed outside file) is blocked. Keep in sync with vendor/SOURCES.md. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://apis.google.com https://www.google.com https://wasabi-ring.vandanmamlani.workers.dev https://wasabi-ring-staging.vandanmamlani.workers.dev; frame-src https://auth.wasabi.co.tz https://order-app-47367.firebaseapp.com https://www.google.com https://recaptcha.google.com; img-src 'self' data: blob: https://www.gstatic.com https://www.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob: data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- Wasabi live demo: a separate copy of the app (files in demo/). Paths resolve from the site root. -->
 <base href="/">
 <title>Live demo · Wasabi</title>
@@ -12,13 +14,13 @@
 <link rel="apple-touch-icon" href="img/brand/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="demo/styles.css?v=1">
+<link rel="stylesheet" href="demo/styles.css?v=3">
 </head>
 <body>
 <div class="wrap" id="wrap">
   <header class="top"><div class="brand"><button class="backbtn" id="backbtn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><img id="brandlogo" alt="" hidden><h1 id="brandname"></h1></div><div class="hright"><span class="sub" id="sub"></span><button class="logoutbtn" id="logoutbtn" type="button" hidden>Log out</button><button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="drawer" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></div>
     <nav class="drawer" id="drawer" hidden></nav></header>
-  <main id="view"><p class="empty">Loading…</p></main>
+  <main id="view"><div class="skel" data-loading aria-busy="true"><span class="sr">Loading…</span><section style="display:grid;gap:12px"><i class="sk t" style="width:45%"></i><i class="sk" style="width:85%"></i><i class="sk" style="width:70%"></i><i class="sk btn" style="width:100%;height:48px;margin-top:6px"></i></section></div></main>
 </div>
 <div class="cart" id="cart" hidden></div>
 <div class="toast" id="toast" hidden></div>
@@ -44,8 +46,8 @@
     }
   })();
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="vendor/qrcode.min.js" defer></script>
 <script type="module" src="demo/app.js?v=2"></script>
-<script src="demo/ptr.js?v=1" defer></script>
+<script src="demo/ptr.js?v=2" defer></script>
 </body>
 </html>

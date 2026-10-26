@@ -1,0 +1,8 @@
+# Cloudflare Worker: the Wasabi ring service (see ring.js). Published by .github/workflows/publish.yml.
+name = "wasabi-ring"
+main = "ring.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[observability]
+enabled = true
