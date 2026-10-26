@@ -555,8 +555,10 @@ const view = location.hash.slice(1);
 
 // ---------- logging out (every page you reach after signing in) ----------
 // A Log out button sits in the header while a real account (Google or phone) is signed in on the
-// Sign in, owner, manager, Tables & QR and company pages. It goes back to the sign-in options. On those
-// pages (except Tables & QR, whose back goes to the owner page) the back arrow asks first, then logs out.
+// Sign in, owner, manager, Tables & QR and company pages. It goes back to the sign-in options.
+// The back arrow: on the owner, manager and company pages it goes back to the "Continue as" choices
+// (guest, owner, company…) without logging out; on Sign in itself it asks, then logs out; Tables & QR
+// goes back to the owner page.
 const LOGIN_PAGES = ["account", "owner", "manager", "setup", "company"];
 let SIGNED_IN = false;
 async function logOut() {
@@ -583,6 +585,7 @@ if (LOGIN_PAGES.includes(view)) {
   if (lb) lb.addEventListener("click", async () => { if (await askLogOut()) logOut(); });
   window.wasabiBack = () => {
     if (!SIGNED_IN || view === "setup") return false;
+    if (view !== "account") { location.href = `${BASE}?choose=1#account`; return true; }
     askLogOut().then((yes) => { if (yes) logOut(); });
     return true;
   };
@@ -2235,11 +2238,14 @@ function accountScreen() {
   const S = { user: null, profile: null, visits: [], loading: true, armed: false, err: "",
     step: "", phone: "", phoneFull: "", busy: false, authErr: "", roles: [], co: false, guest: false };
   const guestKey = () => "wasabi-guest-" + (S.user ? S.user.uid : "");
+  const CHOOSE = params.get("choose") === "1";
+  if (CHOOSE) history.replaceState(null, "", `${BASE}#account`);
   onUser(async (u) => {
     if (u && !isAccount(u)) u = null;   // the quiet sign-in every phone has isn't an account
     S.user = u || null; S.loading = !!u; S.step = ""; S.busy = false; S.roles = []; S.co = false; S.guest = false;
     if (u) {
-      try { S.guest = sessionStorage.getItem(guestKey()) === "1"; } catch {}
+      // Arriving from an owner or company page's back arrow (?choose=1): show the choices, not the guest view.
+      try { if (CHOOSE) sessionStorage.removeItem(guestKey()); S.guest = sessionStorage.getItem(guestKey()) === "1"; } catch {}
       // Show what this phone knew last time straight away (where this account can go), then check.
       const memo = "wasabi-acct-" + u.uid;
       try { const c = JSON.parse(localStorage.getItem(memo) || "null"); if (c && ((c.roles || []).length || c.co) && !S.guest) { S.roles = c.roles || []; S.co = !!c.co; S.loading = false; } } catch {}
