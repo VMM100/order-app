@@ -169,7 +169,7 @@ const rdoc = (name, id) => doc(db, "demo", RID, name, String(id));
 const tableRef = (n) => rdoc("tables", n);
 // Diner accounts work across every restaurant on the platform. diners/{uid} is the profile;
 // each visit is a document in visits, labelled with its restaurant (rid).
-const dinersCol = collection(db, "diners"), visitsCol = collection(db, "visits");
+const visitsCol = collection(db, "visits");
 const dinerRef = (u) => doc(db, "diners", u);
 // Consent to WhatsApp offers is per restaurant. Every yes or no is logged (diners/{uid}/consents) with the
 // exact words the diner saw, when, and where, as proof under Tanzania's Personal Data Protection Act.

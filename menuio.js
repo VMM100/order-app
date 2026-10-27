@@ -4,7 +4,7 @@
 // Download is a CSV file (opens in Excel, Google Sheets and Numbers). Upload takes CSV or Excel (.xlsx);
 // Excel files are read with SheetJS, loaded only when one is uploaded.
 
-export const HEAD = ["Section", "Goes to", "Item", "Option", "Price (TSh)", "Description", "Tag", "Sold out"];
+const HEAD = ["Section", "Goes to", "Item", "Option", "Price (TSh)", "Description", "Tag", "Sold out"];
 const EXAMPLE = [
   ["Drinks", "Bar", "Fresh juice", "", "5000", "Passion, mango or orange", "", "no"],
   ["Drinks", "Bar", "Draught lager", "Half 250ml", "6000", "", "ABV 4.5%", "no"],
@@ -28,7 +28,7 @@ export function menuToCsv(menu, stations) {
 }
 
 // CSV text → rows. Handles quotes, commas or semicolons (Excel in some countries), and Windows line ends.
-export function parseCsv(text) {
+function parseCsv(text) {
   text = text.replace(/^﻿/, "");
   const first = text.split(/\r?\n/, 1)[0] || "", sep = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ";" : ",";
   const rows = []; let row = [], val = "", q = false;

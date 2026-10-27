@@ -7,16 +7,16 @@ import { setDoc } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-fires
 
 // Web Push public key: Firebase console → Project settings → Cloud Messaging → Web Push certificates.
 // Empty means ringing isn't switched on yet, and the waiter screen doesn't offer it.
-export const VAPID_KEY = "BFcm12BhAaP0Kf3f4ihfFiIoYQcGNEkEc-CwftZZR7jfL9LjHef1x4YY7h0fIuznx2kp5__tnEos23raRcQBZhs";
+const VAPID_KEY = "BFcm12BhAaP0Kf3f4ihfFiIoYQcGNEkEc-CwftZZR7jfL9LjHef1x4YY7h0fIuznx2kp5__tnEos23raRcQBZhs";
 // The ring service (worker/ring.js on Cloudflare), e.g. "https://wasabi-ring.NAME.workers.dev".
 // Empty: nothing is sent. The staging site uses its own copy (wasabi-ring-staging).
 const RING_LIVE = "https://wasabi-ring.vandanmamlani.workers.dev";
-export const RING_URL = RING_LIVE && /staging|localhost/.test(location.hostname) ? RING_LIVE.replace("//wasabi-ring.", "//wasabi-ring-staging.") : RING_LIVE;
+const RING_URL = RING_LIVE && /staging|localhost/.test(location.hostname) ? RING_LIVE.replace("//wasabi-ring.", "//wasabi-ring-staging.") : RING_LIVE;
 
 const SW_URL = new URL("./sw.js", import.meta.url);
 let reg = null, messaging = null;
 
-export function pushAvailable() {
+function pushAvailable() {
   return !!VAPID_KEY && window.isSecureContext && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 // "on" (allowed), "off" (not asked yet), "blocked" (refused in browser settings) or "unsupported".
