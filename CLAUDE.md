@@ -13,3 +13,9 @@ Ground rules in short:
   never Friday/Saturday night). The live demo is a separate copy in `demo/`: change both when a fix applies to both.
 - No secrets in code. No loading code from public CDNs: vendor it, pin it, list it in vendor/SOURCES.md.
 - Show user text with `esc()`. Never log personal data.
+- Never delete or rename anything called from outside this code without asking Vandan first. That means: link
+  formats on printed QR codes and shared links (`?r ?t ?k ?c ?s ?as ?join ?choose ?name` and the `#screen` names),
+  forwarding pages (`demo.html`, `404.html`), the ring service address and the database paths it reads
+  (`alerts`, `lines`, `groups`, `staff`, `push`, `rung`), notification links, `sw.js`, `version.txt`,
+  `robots.txt`, `sitemap.xml`, `privacy.html`, `CNAME`, and database collections or fields the live site uses.
+  Before removing code: list it with proof that nothing uses it, commit, then delete in a separate commit.
