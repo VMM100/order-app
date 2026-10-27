@@ -1864,14 +1864,14 @@ function ownerScreen(role) {
           <input class="field num" id="wp-${i}" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="${(S.pins || {})[w.id] ? "New PIN" : "4-digit PIN"}" aria-label="PIN for ${esc(w.name)}">
           <button class="btn">${(S.pins || {})[w.id] ? "Change" : "Set PIN"}</button></form></div>`).join("")}</div>
       <p class="note">Each waiter starts a shift on their own phone with their name and PIN. Tell them their PIN in person. Changing a PIN ends that waiter's current shift.</p>
-      <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name"><button class="btn primary">Add</button></form>
+      <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name" aria-label="New waiter's name"><button class="btn primary">Add</button></form>
       ${S.wErr ? `<p class="err" role="alert">${esc(S.wErr)}</p>` : ""}
       ${owner ? `<div class="label">Owner and managers</div>
       <p class="note" style="margin-top:0">They sign in with Google. Managers can edit the menu and staff and open Setup; the owner also sees the dashboard and look, and adds or removes managers.</p>
       ${S.admins == null ? (loadAdmins(), skRows(2)) : `<div class="grid" style="max-width:520px">${S.admins.map((a) => `<div class="vrow"><span class="field" style="overflow:hidden;text-overflow:ellipsis">${esc(a.email)}${a.email === myEmail ? " (you)" : ""}</span>
         <span class="pill ${a.role === "owner" ? "s-ready" : "s-preparing"}">${a.role === "owner" ? "Owner" : "Manager"}</span>
         ${a.email === myEmail || a.role === "owner" ? "" : `<button class="btn danger" data-deladmin="${esc(a.email)}">${S.armed === "a" + a.email ? "Tap again" : "Remove"}</button>`}</div>`).join("")}</div>`}
-      <form id="addadmin" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="adminemail" type="email" autocomplete="off" placeholder="New manager's Google email">
+      <form id="addadmin" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="adminemail" type="email" autocomplete="off" placeholder="New manager's Google email" aria-label="New manager's Google email">
         <button class="btn primary">Add</button></form>
       <p class="note">Waiter, kitchen, bar and grill phones don't need an account: they scan the staff code on the Setup page.</p>
       <div class="label">Subscription</div>
@@ -2141,7 +2141,7 @@ function companyScreen() {
         <button class="btn ghost" data-own="${a.rid}">Change owner</button>
         <a class="btn ghost" href="${BASE}?r=${esc(a.rid)}#owner">Open</a>
         <a class="btn ghost" href="${BASE}demo/">Live demo</a></div>
-      ${C.edit === a.rid ? `<form class="vrow ownform" data-rid="${a.rid}" style="margin-top:8px"><input class="field" type="email" id="own-${a.rid}" placeholder="New owner's Google email" value="${esc(a.ownerEmail)}"><button class="btn primary">Save owner</button></form>
+      ${C.edit === a.rid ? `<form class="vrow ownform" data-rid="${a.rid}" style="margin-top:8px"><input class="field" type="email" id="own-${a.rid}" placeholder="New owner's Google email" aria-label="New owner's Google email" value="${esc(a.ownerEmail)}"><button class="btn primary">Save owner</button></form>
         <p class="note">The new owner signs in with this Google account. The old owner loses access straight away. Managers stay.</p>` : ""}
       ${a.status === "suspended" && st.kind !== "suspended" ? "" : a.status === "active" && !st.live ? `<p class="note">Switched on but unpaid: record a payment to start it again.</p>` : ""}</article>`;
   }
@@ -2173,13 +2173,13 @@ function companyScreen() {
       <div class="grid" style="margin-top:10px">${shown.map(card).join("") || `<p class="note">None.</p>`}</div>
       <p class="note">Payments add a month or a year from the paid-until date (or from today if it has passed). After the paid-until date a restaurant keeps working for ${COMPANY.graceDays} days with a warning, then stops until paid. Pause stops it straight away. Nothing is ever deleted.</p>
       <div class="label">Add a restaurant yourself</div>
-      <form id="coadd" class="grid" style="max-width:520px"><input class="field" id="coname" placeholder="Restaurant name" maxlength="60">
-        <input class="field" id="coemail" type="email" placeholder="Owner's Google email">
+      <form id="coadd" class="grid" style="max-width:520px"><input class="field" id="coname" placeholder="Restaurant name" aria-label="Restaurant name" maxlength="60">
+        <input class="field" id="coemail" type="email" placeholder="Owner's Google email" aria-label="Owner's Google email">
         <div class="vrow"><label class="note" for="codays" style="margin:0">Free trial days</label><input class="field num" id="codays" inputmode="numeric" value="30"></div>
         <button class="btn primary">Add and switch on</button></form>
       <div class="label">Company team</div>
       <div class="grid" style="max-width:520px">${C.team.map((t) => `<div class="vrow"><span class="field">${esc(t.email)}${t.email === C.u.email ? " (you)" : ""}</span>${t.email === C.u.email ? "" : `<button class="btn danger" data-deltm="${esc(t.email)}">${C.armed === "tm" + t.email ? "Tap again" : "Remove"}</button>`}</div>`).join("")}</div>
-      <form id="coteam" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="cotm" type="email" placeholder="Partner's Google email"><button class="btn">Add</button></form>
+      <form id="coteam" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="cotm" type="email" placeholder="Partner's Google email" aria-label="Partner's Google email"><button class="btn">Add</button></form>
     </section>`);
   }
   const acc = (rid) => doc(db, "accounts", rid);
