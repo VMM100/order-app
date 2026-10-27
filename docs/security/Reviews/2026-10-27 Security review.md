@@ -9,20 +9,25 @@ from where an attacker gets in to what they reach, then an attempt to disprove i
 
 ## Summary
 
-| ID | Severity | Finding | Status |
+| ID | Severity | Finding | Status (27 Oct, afternoon) |
 |---|---|---|---|
-| H1 | **High** | Anyone online can guess a 4-digit table code and join any open table | Confirmed |
-| M1 | Medium | Anyone can use up the free daily database allowance (or run up the bill on Blaze) | Likely |
-| L1 | Low | Some diner-written fields have no size or type limit | Confirmed |
-| L2 | Low | Menu template download can carry spreadsheet formulas | Confirmed |
-| L3 | Low | The company founder's email is publicly readable | Confirmed |
-| L4 | Low | Demo rooms can be listed and written by any visitor while open | Confirmed |
-| L5 | Low | Publish workflow: rollback input goes straight into a shell line; checks run with write permissions | Confirmed |
-| L6 | Low | Ring notifications accept a link to any `*.web.app` site | Confirmed |
+| H1 | **High** | Anyone online can guess a 4-digit table code and join any open table | **Fixed** (option A, approved by Vandan): database rules live; app on staging |
+| M1 | Medium | Anyone can use up the free daily database allowance (or run up the bill on Blaze) | **Partly fixed**: ring service limited to 60 requests/min per address. Still open: Blaze + budget alert (Vandan), App Check (build list) |
+| L1 | Low | Some diner-written fields have no size or type limit | **Fixed** (rules live) |
+| L2 | Low | Menu template download can carry spreadsheet formulas | **Fixed** on staging |
+| L3 | Low | The company founder's email is publicly readable | **Fixed**: rule live; the email is removed the next time the company page is opened (staging app) |
+| L4 | Low | Demo rooms can be listed and written by any visitor while open | **Fixed** (rules live) |
+| L5 | Low | Publish workflow: rollback input goes straight into a shell line; checks run with write permissions | **Fixed** on staging |
+| L6 | Low | Ring notifications accept a link to any `*.web.app` site | **Fixed** (staging ring service) |
 
 Already known and tracked in the Security Checklist (not repeated here): waiter PINs stored as plain
 numbers, no lock-out after wrong PINs, `'unsafe-inline'` in the page security policy, 13 advisories
 in the test and publishing tools.
+
+**How H1 was fixed:** a friend's code now only lets someone *ask* to join. The people already at the table
+see "Juma wants to join · Let in / No"; until someone taps Let in, the code holder can't see names or
+orders, order, or call the waiter (`joins/{uid}` in `firestore.rules`, 6 new rules tests, 70 in all).
+The table QR still joins straight away, because it proves the person is at the table.
 
 ## Findings
 
