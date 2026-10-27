@@ -10,7 +10,8 @@ Ground rules in short:
 - `firestore.rules` is the security. New data → new rules + tests in the same change. Keep `firestore.rules`
   identical on `staging` and `main` (shared database); rules changes only add.
 - Work on `staging`; `main` is live and only changes when Vandan says "put it live" (morning/early afternoon,
-  never Friday/Saturday night). The live demo is a separate copy in `demo/`: change both when a fix applies to both.
+  never Friday/Saturday night). The live demo (`demo/`) shares the main modules; only `demo/app.js`
+  (and its index and styles) are the demo's own copies: change both when a fix to `app.js` applies to both.
 - No secrets in code. No loading code from public CDNs: vendor it, pin it, list it in vendor/SOURCES.md.
 - Show user text with `esc()`. Never log personal data.
 - Never delete or rename anything called from outside this code without asking Vandan first. That means: link
