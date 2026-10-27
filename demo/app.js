@@ -245,6 +245,7 @@ function listenConfig() {
     step("settings arrived");
     // Ordering was shown as off, but the settings came through after all: start again cleanly.
     if (PAUSED) { location.reload(); return; }
+    if (snap.exists() && snap.data().ended) return demoEnded();   // DEMO: the presenter ended this room
     if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
     applyStock(); applyBrand();
     cfgLoaded(); cfgListeners.forEach((f) => f());
@@ -602,7 +603,8 @@ const params = new URLSearchParams(location.search);
 const DEMO_HOURS = 12, DEMO_TABLE = 8;   // DEMO: rooms stay open 12 hours; everyone sits at table 8
 // DEMO router: no room → the presenter's QR page; ?join=1 → pick a role; otherwise the usual screens,
 // with the owner page open to anyone in the room (no sign-in).
-if (!RID) presenterScreen();
+if (params.get("ended")) endedScreen();
+else if (!RID) presenterScreen();
 else if (params.get("join")) roleScreen();
 else if (STATIONS[view] || view === "waiter") staffGate((boss) => (view === "waiter" ? waiterScreen(boss) : stationScreen(view)));
 else if (["owner", "manager", "setup"].includes(view)) (async () => { paint(skPage()); await ensureUser(); startConfig();
@@ -2506,7 +2508,42 @@ function presenterScreen() {
       if (params.get("new")) history.replaceState(null, "", BASE);
     }
     const join = `${BASE}?r=${room.id}&join=1&k=${room.k}`, ends = new Date(room.t + DEMO_HOURS * 3600e3);
-    paint(`<section class="dpres">
+    // Two tabs: this room's QR and script, and every open demo table (all rooms) with a way to end them.
+    const P = { tab: "room", rooms: [], tables: {}, armed: null }, subs = {};
+    const hhmm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    onSnapshot(query(collection(db, "demo"), where("created", ">", Date.now() - DEMO_HOURS * 3600e3)), (s) => {
+      P.rooms = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((r) => !r.ended).sort((a, b) => b.created - a.created);
+      P.rooms.forEach((r) => { if (subs[r.id]) return;
+        subs[r.id] = onSnapshot(query(collection(db, "demo", r.id, "groups"), where("open", "==", true)), (g) => { P.tables[r.id] = g.docs.map((x) => x.data()); if (P.tab === "tables") draw(); }, () => {}); });
+      if (P.tab === "tables") draw();
+    }, () => {});
+    const tablesHtml = () => !P.rooms.length ? `<p class="empty">No demo rooms are open right now.</p>` : `<div class="grid">${P.rooms.map((r) => {
+      const ts = P.tables[r.id] || [];
+      return `<article class="ticket${ts.length ? " preparing" : ""}"><header><b>Room ${esc(r.id)}${r.id === room.id ? " · this screen" : ""}</b><span class="note" style="margin:0">started ${hhmm(r.created)}</span></header>
+        ${ts.length ? ts.map((g) => `<div class="oline"><span class="l">Table ${esc(g.table)} · ${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "nobody seated yet"}</span><span class="note num">code ${esc(g.code || "")}</span></div>`).join("")
+          : `<p class="note">No table open.</p>`}
+        <div class="acts"><button class="btn danger" data-endroom="${esc(r.id)}">${P.armed === r.id ? "Tap again: end this demo for everyone" : ts.length ? "Close table and end demo" : "End demo"}</button></div></article>`; }).join("")}</div>`;
+    async function endRoom(id) {
+      const b = writeBatch(db), now = Date.now();
+      (P.tables[id] || []).forEach((g) => { b.update(doc(db, "demo", id, "groups", g.session), { open: false, closed: now }); if (g.code) b.delete(doc(db, "demo", id, "codes", String(g.code))); });
+      b.update(doc(db, "demo", id), { ended: now });
+      await b.commit();
+      if (id === room.id) { store.set("wasabi-demo-room", null); location.replace(`${BASE}?ended=1`); return; }
+      toast("Demo ended"); P.armed = null; draw();
+    }
+    function draw() {
+      paint(`<div class="seg" role="tablist" style="max-width:420px;margin:0 0 16px">${[["room", "This demo"], ["tables", `Open tables${P.rooms.length ? ` (${P.rooms.reduce((n, r) => n + (P.tables[r.id] || []).length, 0)})` : ""}`]].map(([k, l]) => `<button role="tab" aria-pressed="${P.tab === k}" data-ptab="${k}">${l}</button>`).join("")}</div>`
+        + (P.tab === "room" ? roomHtml() : `<section><div class="label" style="margin-top:0">Open demo tables</div>
+          <p class="note" style="margin-top:0">Every live demo room started in the last ${DEMO_HOURS} hours. Ending a demo closes its table and sends every phone and screen in it to a "Demo ended" page.</p>${tablesHtml()}</section>`));
+      if (P.tab === "room") drawQr();
+    }
+    document.addEventListener("click", async (e) => {
+      const t = e.target.closest("[data-ptab]"); if (t) { P.tab = t.dataset.ptab; P.armed = null; return draw(); }
+      const x = e.target.closest("[data-endroom]"); if (!x) return; const id = x.dataset.endroom;
+      if (P.armed !== id) { P.armed = id; draw(); setTimeout(() => { if (P.armed === id) { P.armed = null; draw(); } }, 4000); return; }
+      try { x.disabled = true; await endRoom(id); } catch (err) { fail(err); P.armed = null; draw(); }
+    });
+    const roomHtml = () => (`<section class="dpres">
       <div class="dqr"><h2>Scan to join the demo</h2><p class="note" style="margin:4px 0 14px">Then pick a role: diner, waiter, bar, kitchen or owner</p>
         <div class="qrbig" id="dqr"></div>
         <p class="note">Room <b class="num">${esc(room.id)}</b> · table ${DEMO_TABLE} · open until ${ends.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p></div>
@@ -2517,10 +2554,10 @@ function presenterScreen() {
           <li>A diner taps <b>Bill please</b>; the waiter is on the way</li><li>Split the bill, then open the owner dashboard</li></ol>
         <div class="row" style="margin-top:14px"><a class="btn primary" href="${BASE}?r=${room.id}#owner">Open owner dashboard here</a>
           <button class="btn" data-act="dcopy">Copy join link</button><button class="btn ghost" data-act="dnew">Start a new room</button></div>
-        <p class="note">No sign-in for anyone. Everything happens in this room only, with Crafty Dee's menu; real restaurants are never touched. The room closes by itself after ${DEMO_HOURS} hours.</p>
+        <p class="note">No sign-in for anyone. Everything happens in this room only, with Crafty Dee's menu; real restaurants are never touched. The room closes by itself after ${DEMO_HOURS} hours, or end it any time under <b>Open tables</b>.</p>
       </div></section>`);
-    const draw = () => { const el = document.getElementById("dqr"); if (el && !el.childNodes.length && window.QRCode) brandQr(el, join, 512); };
-    if (window.QRCode) draw(); else addEventListener("load", draw, { once: true });
+    const drawQr = () => { const el = document.getElementById("dqr"); if (el && !el.childNodes.length && window.QRCode) brandQr(el, join, 512); };
+    draw(); if (!window.QRCode) addEventListener("load", drawQr, { once: true });
     document.addEventListener("click", async (e) => {
       const b = e.target.closest("button[data-act]"); if (!b) return;
       if (b.dataset.act === "dcopy") { try { await navigator.clipboard.writeText(join); toast("Join link copied"); } catch { toast(join); } }
@@ -2529,8 +2566,27 @@ function presenterScreen() {
     });
   })().catch((e) => paint(denied(e) ? `<section><div class="err">The demo can't open a room yet: the database doesn't allow demo rooms. Publish the latest rules (firestore.rules) in Firebase → Firestore → Rules, then reload this page.</div></section>` : errorBox(e)));
 }
+// DEMO: the presenter ended this room. Every screen in it forgets the room and shows "Demo ended".
+function demoEnded() {
+  try {
+    Object.keys(localStorage).filter((k) => k.includes(RID) || k.endsWith("wasabi-demo-join")).forEach((k) => localStorage.removeItem(k));
+    const mine = store.get("wasabi-demo-room"); if (mine && mine.id === RID) store.set("wasabi-demo-room", null);
+  } catch {}
+  location.replace(`${BASE}?ended=1`);
+}
+function endedScreen() {
+  wasabiPage(); $("#sub").textContent = "Live demo"; document.title = "Demo ended · " + COMPANY.name;
+  const cart = $("#cart"); if (cart) cart.hidden = true;
+  history.replaceState(null, "", BASE);
+  paint(`<section style="text-align:center;padding-top:36px"><h2 class="jtitle">Demo ended</h2>
+    <p>Thanks for trying Wasabi. This demo is closed and everything in it has been reset.</p>
+    <p class="note">Want Wasabi at your bar, café or restaurant? Visit <a href="https://wasabi.co.tz/">wasabi.co.tz</a>.</p>
+    <div id="endco" style="margin-top:18px"></div></section>`);
+  authReady().then(async (u) => { if (await isCompanyUser(u)) { const el = document.getElementById("endco"); if (el) el.innerHTML = `<a class="btn primary big" href="${BASE}?new=1">Start a new demo</a>`; } }).catch(() => {});
+}
 // What the QR opens on each phone: pick a role.
 function roleScreen() {
+  startConfig();   // so this screen also notices when the demo is ended
   $("#sub").textContent = "Live demo"; document.title = "Pick a role · " + rname();
   const k = params.get("k") || "", ic = (d) => `<span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
   const staff = (screen) => `${BASE}?r=${RID}&s=demo#${screen}`;

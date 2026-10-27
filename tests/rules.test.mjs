@@ -623,6 +623,22 @@ test("demo: a room can't take over a code a real restaurant table is using, and 
   const r = await seatAt("d3", 5, "5-a", "2468");
   await assertFails(r.doc("invites/2468").set({ rid: "r1" }));
 });
+test("demo: only the company can end a room; after that nothing in it changes", async () => {
+  await assertSucceeds(boss().doc("demo/room7").set(room()));
+  const d = diner("d1");
+  await assertSucceeds(d.doc("demo/room7/groups/8-a").set(newGroup("8-a", 8, "1357")));
+  await assertSucceeds(d.doc("demo/room7/codes/1357").set({ session: "8-a", table: 8 }));
+  await assertFails(d.doc("demo/room7").update({ ended: 1 }));                     // a visitor can't end it
+  const b = boss().batch();
+  b.update(boss().doc("demo/room7/groups/8-a"), { open: false, closed: 2 });
+  b.delete(boss().doc("demo/room7/codes/1357"));
+  b.update(boss().doc("demo/room7"), { ended: 2 });
+  await assertSucceeds(b.commit());
+  await assertFails(d.doc("demo/room7/lines/l1").set({ table: 8, session: "8-a", n: "Pilsner", s: "new", t: 1 }));
+  await assertFails(d.doc("demo/room7").update({ updated: 3 }));
+  await assertFails(boss().doc("demo/room7").update({ ended: null }));
+  await assertSucceeds(d.doc("demo/room7").get());                                 // screens can still see it ended
+});
 test("demo: a room can't reach real restaurants", async () => {
   await assertSucceeds(boss().doc("demo/room4").set(room()));
   await assertFails(diner("p1").doc(`${R}/lines/x`).set({ table: 4 }));
