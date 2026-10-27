@@ -59,9 +59,19 @@ service cloud.firestore {
       function codeOpenAfter(rid) { return existsAfter(/databases/$(database)/documents/restaurants/$(rid)/codes/$(code)); }
       function validInvite() { return signedIn() && request.resource.data.keys().hasOnly(['rid'])
         && request.resource.data.rid is string && request.resource.data.rid.size() <= 64 && codeOpenAfter(request.resource.data.rid); }
+      // Live demo rooms use the same code book, pointing at the room instead of a restaurant.
+      function demoCodeOpen(room) { return exists(/databases/$(database)/documents/demo/$(room)/codes/$(code)); }
+      function validDemoInvite() { return signedIn() && request.resource.data.keys().hasOnly(['demo'])
+        && request.resource.data.demo is string && request.resource.data.demo.size() <= 12
+        && demoOpen(request.resource.data.demo)
+        && existsAfter(/databases/$(database)/documents/demo/$(request.resource.data.demo)/codes/$(code)); }
+      // Is the code still in use where it points now? Then only that same restaurant or room may rewrite it.
+      function inUse() { return resource.data.get('rid', null) != null ? codeOpen(resource.data.rid) : demoCodeOpen(resource.data.demo); }
+      function sameTarget() { return resource.data.get('rid', '') == request.resource.data.get('rid', '-')
+        || resource.data.get('demo', '') == request.resource.data.get('demo', '-'); }
       allow get: if signedIn();
-      allow create: if validInvite();
-      allow update: if validInvite() && (resource.data.rid == request.resource.data.rid || !codeOpen(resource.data.rid));
+      allow create: if validInvite() || validDemoInvite();
+      allow update: if (validInvite() || validDemoInvite()) && (sameTarget() || !inUse());
     }
 
     match /meta/company {

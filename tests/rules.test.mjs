@@ -595,6 +595,34 @@ test("demo: rooms can't be listed by visitors, and writes are capped", async () 
   await assertFails(diner("d1").doc("demo/room4/lines/x").set(big));
   await assertFails(diner("d1").doc("demo/room4").set(big, { merge: true }));
 });
+test("demo: a room's table code goes in the shared code book, so the main scanner finds it", async () => {
+  await assertSucceeds(boss().doc("demo/room5").set(room()));
+  const d = diner("d1"), b = d.batch();
+  b.set(d.doc("demo/room5/groups/8-a"), newGroup("8-a", 8, "4321"));
+  b.set(d.doc("demo/room5/codes/4321"), { session: "8-a", table: 8 });
+  b.set(d.doc("invites/4321"), { demo: "room5" });
+  await assertSucceeds(b.commit());
+  const hit = await assertSucceeds(diner("f1").doc("invites/4321").get());
+  if (hit.data().demo !== "room5") throw new Error("invite should point at the room");
+  // Not without the code itself, not for a closed room, not with extra fields.
+  await assertFails(d.doc("invites/9876").set({ demo: "room5" }));
+  await assertFails(d.doc("invites/4321").set({ demo: "room5", rid: "r1" }));
+  await env.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc("demo/oldroom").set(room(Date.now() - 13 * 3600e3)); await ctx.firestore().doc("demo/oldroom/codes/5555").set({ session: "8-z", table: 8 }); });
+  await assertFails(d.doc("invites/5555").set({ demo: "oldroom" }));
+});
+test("demo: a room can't take over a code a real restaurant table is using, and vice versa", async () => {
+  await seatAt("d1");   // restaurant r1, code 1234, open
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc("invites/1234").set({ rid: "r1" }));
+  await assertSucceeds(boss().doc("demo/room6").set(room()));
+  const d = diner("d2"), b = d.batch();
+  b.set(d.doc("demo/room6/codes/1234"), { session: "8-a", table: 8 });
+  b.set(d.doc("invites/1234"), { demo: "room6" });
+  await assertFails(b.commit());
+  // A demo room's open code can't be taken over by a restaurant either.
+  await env.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc("demo/room6/codes/2468").set({ session: "8-b", table: 8 }); await ctx.firestore().doc("invites/2468").set({ demo: "room6" }); });
+  const r = await seatAt("d3", 5, "5-a", "2468");
+  await assertFails(r.doc("invites/2468").set({ rid: "r1" }));
+});
 test("demo: a room can't reach real restaurants", async () => {
   await assertSucceeds(boss().doc("demo/room4").set(room()));
   await assertFails(diner("p1").doc(`${R}/lines/x`).set({ table: 4 }));
