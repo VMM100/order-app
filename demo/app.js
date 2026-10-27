@@ -467,6 +467,8 @@ const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []
 // Diners can't browse groups or codes. To see a table they hold a pass (passes/{their sign-in}),
 // which the database only accepts with the table's QR key or an open group's code.
 const passRef = (u) => rdoc("passes", u);
+// A friend's request to join with the table code; someone at the table answers it.
+const joinRef = (u) => rdoc("joins", u);
 const codeRef = (c) => rdoc("codes", String(c));
 // Shared code book, so a friend can type a demo table's code on the main site's scanner and land in this room.
 const inviteRef = (c) => doc(db, "invites", String(c));
@@ -850,14 +852,16 @@ function dinerScreen() {
   window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   welcomeSplash();
   const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "",
-    user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "", uid: null, proof: null, switching: false };
+    user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "", uid: null, proof: null, switching: false,
+    ask: null, pendingName: null, joins: [] };
   // Every diner's phone is signed in, at least quietly (anonymously). Diners who sign in with their
   // phone number or Google get their profile and their visits to this restaurant loaded too.
   onUser(async (u) => {
     if (!u) { if (S.uid) ensureUser().catch(() => {}); return; }   // signed out: back to a quiet sign-in
     const changed = S.uid && S.uid !== u.uid; S.uid = u.uid;
     // A new sign-in means a new identity: carry the table pass over to it before anything else.
-    if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid); attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
+    if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid);
+      if (S.proof.via === "code") askToJoin(S.sid, S.proof.table, (S.me && S.me.name) || S.name); else attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
     S.user = isAccount(u) ? u : null; S.profile = null; S.visits = [];
     // While the saved profile loads, show a skeleton, not the first-name question (it would flash up and vanish).
     if (S.user) { S.profileLoading = true; try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
@@ -870,7 +874,7 @@ function dinerScreen() {
   });
   // On the demo page several diners share one browser, so each gets its own slot (?as=1, ?as=2).
   const meKey = () => `dees-me-${RID}-${S.n}${params.get("as") ? "-" + params.get("as") : ""}`;
-  let subGroup = null, subLines = null, subAlerts = null;
+  let subGroup = null, subLines = null, subAlerts = null, subMine = null, subJoins = null, joinsFailed = false;
   // The pass: proof of the table QR key or a friend's code, pointing at the group being joined.
   async function writePass(session) {
     const p = { ...S.proof, t: Date.now() }; if (session) p.session = session;
@@ -911,7 +915,8 @@ function dinerScreen() {
       // No QR key or code in the link: a guest coming back to the group this phone joined.
       if (saved && saved.session) {
         const p = await getDoc(passRef(S.uid));
-        if (p.exists() && p.data().session === saved.session) { const { t, session, ...proof } = p.data(); S.proof = proof; S.viaKey = proof.via === "key"; return attach(saved.session); }
+        if (p.exists() && p.data().session === saved.session) { const { t, session, ...proof } = p.data(); S.proof = proof; S.viaKey = proof.via === "key";
+          return proof.via === "key" ? attach(saved.session) : askToJoin(saved.session, proof.table, saved.name); }
       }
       return codeEntry(S.n);
     } catch (e) { paint(errorBox(e)); }
@@ -927,6 +932,7 @@ function dinerScreen() {
     step("loading your table");
     S.sid = sid; S.access = true; S.err = ""; S.gLoaded = false;
     subGroup && subGroup(); subLines && subLines(); subAlerts && subAlerts();
+    subJoins && subJoins(); subJoins = null; joinsFailed = false; S.joins = []; S.ask = null;
     subGroup = onSnapshot(groupRef(sid), (snap) => {
       S.g = snap.data() || null; S.gLoaded = true; registerCode(S.g);
       const saved = store.get(meKey());
@@ -955,8 +961,61 @@ function dinerScreen() {
       const as = params.get("as");
       history.replaceState(null, "", `${BASE}?r=${RID}&t=${table}&c=${c}${as ? "&as=" + as : ""}`);
       params.set("t", table); params.set("c", c); params.delete("k"); S.n = String(table); S.choosing = false;
-      $("#sub").textContent = `Table ${S.n}`; attach(session);
+      askToJoin(session, table);
     } catch (e) { paint(errorBox(e)); }
+  }
+  // A friend's code doesn't let you in by itself: the table gets "Juma wants to join" and someone there
+  // taps Let in. (Anyone could guess a 4-digit code; only the QR on the table proves you're there.)
+  async function askToJoin(session, table, name) {
+    S.sid = session; S.access = false; S.err = ""; $("#cart").hidden = true; setMenu([]);
+    $("#sub").textContent = `Table ${table}`;
+    subMine && subMine(); subMine = null;
+    let mine = null;
+    try { const j = await getDoc(joinRef(S.uid)); mine = j.exists() && j.data().session === session ? j.data() : null; } catch {}
+    if (mine && mine.ok) return attach(session);
+    S.ask = { session, table: Number(table), name: name || (mine && mine.name) || S.name || (S.profile && S.profile.name) || "", state: mine && !mine.no ? "waiting" : mine && mine.no ? "no" : "form" };
+    if (S.ask.state === "waiting") watchAsk();
+    else if (name && S.ask.state === "form") return sendAsk();   // signed in mid-meal: ask again under the new sign-in
+    renderAsk();
+  }
+  async function sendAsk() {
+    const a = S.ask; if (!a) return;
+    try { await setDoc(joinRef(S.uid), { session: a.session, table: a.table, name: a.name, t: Date.now(), ok: false }); a.state = "waiting"; watchAsk(); renderAsk(); }
+    catch (err) { if (!denied(err)) return fail(err); S.ask = null; S.err = "This invite has expired. Ask your friend for the new code."; codeEntry(String(a.table)); }
+  }
+  function watchAsk() {
+    subMine && subMine();
+    subMine = onSnapshot(joinRef(S.uid), (snap) => {
+      const j = snap.data(), a = S.ask; if (!a || !j || j.session !== a.session) return;
+      if (j.ok) { subMine && subMine(); subMine = null; S.pendingName = a.name; toast("You're in"); try { navigator.vibrate?.(200); } catch {} attach(a.session); }
+      else if (j.no && a.state !== "no") { a.state = "no"; renderAsk(); }
+    }, () => {});
+  }
+  function renderAsk() {
+    const a = S.ask; if (!a) return;
+    if (a.state === "waiting") return paint(`<section class="askwait" aria-live="polite"><div class="label">Table ${esc(a.table)}</div>
+      <h2 class="jtitle">Asking the table to let you in…</h2>
+      <p>Your friends will see <b>${esc(a.name)} wants to join</b> on their phones. This screen moves on as soon as one of them taps <b>Let in</b>.</p>
+      <div class="askdots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <button class="btn ghost" data-act="askcancel">Cancel</button></section>`);
+    paint(`<section><div class="label">Table ${esc(a.table)}</div><h2 class="jtitle">Ask to join</h2>
+      ${a.state === "no" ? `<p class="err">The table didn't let you in. Check it's the right code, or ask your friend to let you in when you ask again.</p>`
+        : `<p style="margin-top:0">Your friends get a message and let you in with one tap.</p>`}
+      <form id="askform" class="grid"><label class="flabel" for="askin">Your first name <span>So your friends know it's you</span></label>
+        <input class="field" id="askin" maxlength="16" autocomplete="given-name" placeholder="e.g. Amani" value="${esc(a.name)}">
+        <button class="btn primary big">${a.state === "no" ? "Ask again" : "Ask to join"}</button></form>
+      <p class="note">Sitting at the table? Scan its QR code to join straight away.</p></section>`);
+  }
+  // People at the table see requests from friends using the code, and answer them.
+  function watchJoins() {
+    if (subJoins || joinsFailed || !S.sid) return;
+    let first = true;
+    subJoins = onSnapshot(query(rcol("joins"), where("session", "==", S.sid)), (s) => {
+      const seen = new Set(S.joins.map((j) => j.id));
+      S.joins = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((j) => !j.ok && !j.no);
+      if (!first && S.joins.some((j) => !seen.has(j.id))) { try { navigator.vibrate?.([200, 100, 200]); } catch {} }
+      first = false; render();
+    }, () => { subJoins = null; joinsFailed = true; });
   }
   function codeEntry(n) {
     $("#cart").hidden = true;
@@ -1046,7 +1105,13 @@ function dinerScreen() {
         ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
         : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
-    if (!S.me) { $("#cart").hidden = true; setMenu([]); return paint(joinScreen(g, shared)); }
+    // Just let in with a friend's code: join with the name they asked with, no second form.
+    if (!S.me && S.pendingName && !S.autoJoin) { const n = S.pendingName; S.pendingName = null; S.autoJoin = true;
+      joinAs(n, S.user).catch((err) => { fail(err); }).finally(() => { S.autoJoin = false; render(); }); return paint(skMenu()); }
+    if (!S.me) { $("#cart").hidden = true; setMenu([]); return paint(S.autoJoin ? skMenu() : joinScreen(g, shared)); }
+    watchJoins();
+    const asks = S.joins.map((j) => `<div class="joinask" role="alert"><span><b>${esc(j.name)}</b> wants to join your ${shared ? "group" : "table"}</span>
+      <span class="row"><button class="btn small primary" data-letin="${esc(j.id)}">Let in</button><button class="btn small ghost" data-letno="${esc(j.id)}">No</button></span></div>`).join("");
     const open = S.alerts.filter((a) => !a.done);
     const banners = open.filter((a) => a.ack).map((a) => `<div class="ontheway" role="status"><span>${esc(wname(a.ackBy) || "Your waiter")} ${a.type === "bill" ? "is bringing your bill" : "is on the way to your table"}</span><span class="note">${ago(a.ack)}</span></div>`).join("");
     const tabs = [["menu", "Menu"], ["orders", `${shared ? "Our order" : "Table order"}${S.lines.length ? ` (${S.lines.length})` : ""}`], ["bill", "Bill"]];
@@ -1081,7 +1146,7 @@ function dinerScreen() {
         <li>Everyone at the table orders on their own phone. See it all under <b>Table order</b>.</li>
         <li><b>Call waiter</b> or <b>Bill please</b> alerts your waiter, and you'll see when they're on the way.</li>
         <li><b>Bill</b> shows what each person owes. Pay your waiter as usual.</li>
-        <li>Friends can join with the code under ☰ → Share invite.</li></ol></div>` : "";
+        <li>Friends can join with the code under ☰ → Share invite. You'll get a message to let them in.</li></ol></div>` : "";
     // Change my name: a small card at the top, like How it works.
     const rename = S.renaming ? `<div class="helpcard"><div class="trow"><b>Change my name</b><button class="btn small ghost" data-act="renameclose">Cancel</button></div>
       <form id="renameform" class="grid" style="margin-top:8px"><label class="flabel" for="renamein">Your first name <span>Your table and waiter see this</span></label>
@@ -1093,7 +1158,7 @@ function dinerScreen() {
           <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
             return `<button class="btn small${a ? "" : " primary"}" data-alert="${k}" ${a ? "disabled" : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
       </div>
-      ${banners}${welcomeCard()}
+      ${asks}${banners}${welcomeCard()}
       <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
       ${body}</section>`);
     renderCart();
@@ -1155,6 +1220,8 @@ function dinerScreen() {
 
   document.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (e.target.id === "askform") { const a = S.ask; if (!a) return; const name = $("#askin").value.trim(); if (!name) return toast("Enter your first name");
+      a.name = name; S.name = name; return sendAsk(); }
     if (e.target.id === "codeform") {
       const c = $("#codein").value.trim(); if (c.length !== 4) return;
       if (S.choosing) return findByCode(c, S.n);
@@ -1200,6 +1267,10 @@ function dinerScreen() {
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.tab) { S.tab = d.tab; render(); window.scrollTo(0, 0); }
+    else if (d.letin || d.letno) { const id = d.letin || d.letno, who = (S.joins.find((j) => j.id === id) || {}).name || "They";
+      try { await updateDoc(joinRef(id), d.letin ? { ok: true, by: S.uid, at: Date.now() } : { no: true, by: S.uid, at: Date.now() }); toast(d.letin ? `${who} can join now` : "Not let in"); }
+      catch (err) { fail(err); } }
+    else if (d.act === "askcancel") { const a = S.ask; S.ask = null; subMine && subMine(); subMine = null; deleteDoc(joinRef(S.uid)).catch(() => {}); S.err = ""; codeEntry(a ? String(a.table) : S.n); }
     else if (d.cat) { S.cat = +d.cat; markCat(); jumpTo(S.cat); }
     else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c]?.items[i]; if (!it || it.out || !it.v[v]) return render(); const [l, p] = it.v[v];
       S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}${l ? " · " + l : ""}`); S.bump = d.add; render(); S.bump = null; }
