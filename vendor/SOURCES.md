@@ -38,3 +38,11 @@ Known advisories (26 Oct 2026, npm audit): 13 (6 high, 7 moderate), all inside t
 firebase-tools and wrangler releases (grpc-js, undici, uuid, opentelemetry, gaxios). No fixed versions exist
 yet. They affect servers handling untrusted network traffic; here the tools only run briefly on GitHub to
 test and publish our own code. GitHub's Dependabot alerts flag fixes when they ship.
+
+## Reference material (text only; never on the website, never run)
+
+Kept in `docs/`, which publishing leaves out, so none of it is served on wasabi.co.tz.
+
+| Folder | What it is | Source and version | Licence | Fingerprint | Checked |
+| --- | --- | --- | --- | --- | --- |
+| docs/marketing/vendor/marketingskills/ | Marketing guidance for AI assistants (social, copywriting, ad creative, launch, psychology…); used to plan and write Wasabi's marketing | github.com/coreyhaines31/marketingskills, tag v2.13.5, commit 17772c7a80b7b8c7a47af30f648374cd8bd8adc5 | MIT | 885b7d4eb601d382 (SHA-256 of MANIFEST.sha256, which fingerprints every file) | 27 Oct 2026: only the 296 skill .md files and LICENSE copied; the repo's scripts, CLIs, JS snippets and workflows left out. Text scanned: no hidden or bidirectional characters, no instructions to override an assistant, no shell commands it asks to run. It lists 4 paid partners and has 1 referral link, so treat its tool recommendations as possibly sponsored. Update by copying a newer tag the same way and redoing these checks |
