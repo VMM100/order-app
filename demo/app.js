@@ -2018,6 +2018,8 @@ function companyScreen() {
     paint(skPage());
     C.u = await authReady(); C.ok = await isCompanyUser(C.u);
     if (!C.ok) { try { C.claimed = (await getDoc(doc(db, "meta", "company"))).exists(); } catch { C.claimed = true; } return render(); }
+    // The public "company claimed" marker used to hold the claimer's email: keep only that it's claimed.
+    getDoc(doc(db, "meta", "company")).then((m) => { if (m.exists() && "by" in m.data()) return setDoc(doc(db, "meta", "company"), { claimed: true, t: Date.now() }); }).catch(() => {});
     await load();
   }
   async function load() {

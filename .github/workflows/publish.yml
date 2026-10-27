@@ -18,10 +18,10 @@ on:
         description: "Roll back: version tag to put live (e.g. live-2026-10-24-0930). Leave empty to republish the latest main."
         required: false
 
+# Read-only by default (the checks, including those run for pull requests). Only "Publish live" gets
+# write access: to push the version tag and publish GitHub Pages.
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 env:
   REF: ${{ inputs.version || github.sha }}
@@ -105,6 +105,10 @@ jobs:
     name: Publish live
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: [pages, rules]
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     concurrency: { group: live, cancel-in-progress: false }
     environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
@@ -152,4 +156,6 @@ jobs:
           git tag "$tag" && git push origin "$tag"
           echo "### Live → https://wasabi.co.tz (version $tag)" >> "$GITHUB_STEP_SUMMARY"
       - if: github.event_name == 'workflow_dispatch'
-        run: echo "### Live → https://wasabi.co.tz (put back to ${{ inputs.version || 'latest main' }})" >> "$GITHUB_STEP_SUMMARY"
+        # The typed version goes in through an environment variable, never pasted into the command itself.
+        env: { WANT: "${{ inputs.version || 'latest main' }}" }
+        run: echo "### Live → https://wasabi.co.tz (put back to $WANT)" >> "$GITHUB_STEP_SUMMARY"

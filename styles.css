@@ -438,3 +438,12 @@ body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);bo
 body{overflow-x:clip}
 header.top{background:transparent;border-bottom-color:transparent}
 header.top::before{content:"";position:absolute;inset:0 calc(50% - 50vw);background:var(--bg);border-bottom:1px solid var(--line);z-index:-1;pointer-events:none}
+
+/* A friend asked to join with the code: someone at the table lets them in. */
+.joinask{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--accent);color:var(--fg)}
+.joinask .row{display:flex;gap:8px}
+.askwait{text-align:center}
+.askwait .btn{margin-top:14px}
+.askdots{display:flex;justify-content:center;gap:8px;margin:18px 0 4px}
+.askdots i{width:10px;height:10px;border-radius:50%;background:var(--accent)}
+@media (prefers-reduced-motion:no-preference){.askdots i{animation:askdot 1.2s ease-in-out infinite}.askdots i:nth-child(2){animation-delay:.2s}.askdots i:nth-child(3){animation-delay:.4s}@keyframes askdot{0%,80%,100%{opacity:.25}40%{opacity:1}}}
