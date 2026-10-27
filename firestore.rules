@@ -33,6 +33,12 @@ service cloud.firestore {
       return signedIn() && room.size() <= 12
         && getAfter(/databases/$(database)/documents/demo/$(room)).data.created + 12 * 60 * 60 * 1000 > request.time.toMillis();
     }
+    // A room the presenter has ended (ended set): nothing in it changes any more.
+    // (A room being created in the same batch doesn't exist yet, so it can't be ended.)
+    function demoNotEnded(room) {
+      let p = /databases/$(database)/documents/demo/$(room);
+      return !exists(p) || get(p).data.get('ended', null) == null;
+    }
     match /demo/{room} {
       // A room is found by its (random) name only: nobody can list the rooms.
       allow get: if signedIn();
@@ -41,12 +47,15 @@ service cloud.firestore {
       allow create: if isCompany() && room.size() <= 12 && request.resource.data.created is int
         && request.resource.data.created > request.time.toMillis() - 60000 && request.resource.data.created < request.time.toMillis() + 60000;
       allow update: if demoOpen(room) && request.resource.data.created == resource.data.created
-        && request.resource.data.keys().size() <= 40;
+        && request.resource.data.keys().size() <= 40
+        && resource.data.get('ended', null) == null
+        // Only the company team can end a room (Open tables on the presenter page).
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ended']) || isCompany());
       // {sub}/ first: a bare {rest=**} would also match the room itself and skip the create check.
       match /{sub}/{rest=**} {
         allow read: if signedIn();
-        allow delete: if demoOpen(room);
-        allow create, update: if demoOpen(room) && request.resource.data.keys().size() <= 40;
+        allow delete: if demoOpen(room) && demoNotEnded(room);
+        allow create, update: if demoOpen(room) && demoNotEnded(room) && request.resource.data.keys().size() <= 40;
       }
     }
 
@@ -63,7 +72,7 @@ service cloud.firestore {
       function demoCodeOpen(room) { return exists(/databases/$(database)/documents/demo/$(room)/codes/$(code)); }
       function validDemoInvite() { return signedIn() && request.resource.data.keys().hasOnly(['demo'])
         && request.resource.data.demo is string && request.resource.data.demo.size() <= 12
-        && demoOpen(request.resource.data.demo)
+        && demoOpen(request.resource.data.demo) && demoNotEnded(request.resource.data.demo)
         && existsAfter(/databases/$(database)/documents/demo/$(request.resource.data.demo)/codes/$(code)); }
       // Is the code still in use where it points now? Then only that same restaurant or room may rewrite it.
       function inUse() { return resource.data.get('rid', null) != null ? codeOpen(resource.data.rid) : demoCodeOpen(resource.data.demo); }
