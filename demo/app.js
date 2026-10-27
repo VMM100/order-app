@@ -13,21 +13,23 @@
 //   index.html#owner      owner: dashboard, menu, look, staff, who can sign in (Google sign-in)
 //   index.html#manager    manager: menu and staff only (Google sign-in)
 // Who may see and change what is enforced by the database rules in firestore.rules.
-import { db, app as fbApp } from "./firebase.js";
-import { pushState, enablePush, refreshPush, testRing, ringFor } from "./push.js";
+// The live demo shares the main app's modules (sign-in, database, ringing, menu, numbers…); only this
+// file is the demo's own.
+import { db, app as fbApp } from "../firebase.js";
+import { pushState, enablePush, refreshPush, testRing, ringFor } from "../push.js";
 import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction, documentId,
   updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc, collectionGroup,
   disableNetwork, enableNetwork,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import morphdom from "../vendor/morphdom-esm.js";
-import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
-import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "./account.js";
-import { computeMetrics, sampleData } from "./metrics.js";
-import { genericPhoto } from "./photos.js";
-import { COMPANY } from "./platform.js";
-import { menuToCsv, readFile, rowsToMenu, mergeMenu } from "./menuio.js";
-import { wasabiLockup, wasabiLeaf } from "./brand.js";
+import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "../menu.js";
+import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "../account.js";
+import { computeMetrics, sampleData } from "../metrics.js";
+import { genericPhoto } from "../photos.js";
+import { COMPANY } from "../platform.js";
+import { menuToCsv, readFile, rowsToMenu, mergeMenu } from "../menuio.js";
+import { wasabiLockup, wasabiLeaf } from "../brand.js";
 
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
