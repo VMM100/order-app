@@ -34,7 +34,11 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/demo/$(room)).data.created + 12 * 60 * 60 * 1000 > request.time.toMillis();
     }
     // A room the presenter has ended (ended set): nothing in it changes any more.
-    function demoNotEnded(room) { return get(/databases/$(database)/documents/demo/$(room)).data.get('ended', null) == null; }
+    // (A room being created in the same batch doesn't exist yet, so it can't be ended.)
+    function demoNotEnded(room) {
+      let p = /databases/$(database)/documents/demo/$(room);
+      return !exists(p) || get(p).data.get('ended', null) == null;
+    }
     match /demo/{room} {
       // A room is found by its (random) name only: nobody can list the rooms.
       allow get: if signedIn();

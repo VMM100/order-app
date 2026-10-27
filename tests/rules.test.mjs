@@ -629,10 +629,10 @@ test("demo: only the company can end a room; after that nothing in it changes", 
   await assertSucceeds(d.doc("demo/room7/groups/8-a").set(newGroup("8-a", 8, "1357")));
   await assertSucceeds(d.doc("demo/room7/codes/1357").set({ session: "8-a", table: 8 }));
   await assertFails(d.doc("demo/room7").update({ ended: 1 }));                     // a visitor can't end it
-  const b = boss().batch();
-  b.update(boss().doc("demo/room7/groups/8-a"), { open: false, closed: 2 });
-  b.delete(boss().doc("demo/room7/codes/1357"));
-  b.update(boss().doc("demo/room7"), { ended: 2 });
+  const co = boss(), b = co.batch();
+  b.update(co.doc("demo/room7/groups/8-a"), { open: false, closed: 2 });
+  b.delete(co.doc("demo/room7/codes/1357"));
+  b.update(co.doc("demo/room7"), { ended: 2 });
   await assertSucceeds(b.commit());
   await assertFails(d.doc("demo/room7/lines/l1").set({ table: 8, session: "8-a", n: "Pilsner", s: "new", t: 1 }));
   await assertFails(d.doc("demo/room7").update({ updated: 3 }));
