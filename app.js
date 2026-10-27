@@ -937,13 +937,20 @@ function dinerScreen() {
     } catch (e) { again("Couldn't check that code. Check your connection and try again."); }
   }
   document.addEventListener("submit", (e) => { if (e.target.id !== "invform") return; e.preventDefault(); const v = ($("#invin").value || "").trim(); joinByInvite(v); });
+  // Tables opened before codes were recorded in the shared code book (or reused since) get recorded the
+  // first time someone opens them, so friends can type the code on the front page. Best effort.
+  let codeChecked = null;
+  async function registerCode(g) {
+    if (!g || !g.open || !g.code || codeChecked === g.session) return; codeChecked = g.session;
+    try { const inv = await getDoc(inviteRef(g.code)); if (!inv.exists() || inv.data().rid !== RID) await setDoc(inviteRef(g.code), { rid: RID }); } catch {}
+  }
   function attach(sid) {
     step("loading your table");
     S.sid = sid; S.access = true; S.err = ""; S.gLoaded = false;
     subGroup && subGroup(); subLines && subLines(); subAlerts && subAlerts();
     subJoins && subJoins(); subJoins = null; joinsFailed = false; S.joins = []; S.ask = null;
     subGroup = onSnapshot(groupRef(sid), (snap) => {
-      S.g = snap.data() || null; S.gLoaded = true;
+      S.g = snap.data() || null; S.gLoaded = true; registerCode(S.g);
       const saved = store.get(meKey());
       S.me = S.g && saved && saved.session === sid && saved.pid === S.uid && S.g.people && S.g.people[saved.pid] ? saved : null;
       render();
