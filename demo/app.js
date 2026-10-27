@@ -855,8 +855,9 @@ function dinerScreen() {
     // A new sign-in means a new identity: carry the table pass over to it before anything else.
     if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid); attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
     S.user = isAccount(u) ? u : null; S.profile = null; S.visits = [];
-    if (S.user) { try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
-      S.visits = (await myVisits(u.uid)).filter((v) => v.rid === RID); } catch {} }
+    // While the saved profile loads, show a skeleton, not the first-name question (it would flash up and vanish).
+    if (S.user) { S.profileLoading = true; try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
+      S.visits = (await myVisits(u.uid)).filter((v) => v.rid === RID); } catch {} S.profileLoading = false; }
     const justSignedIn = S.step === "code" || S.step === "phone" || S.step === "google";
     if (justSignedIn) S.step = S.user && !(S.profile && S.profile.name) ? "name" : "";
     // Signed in just now and already known: join straight away, no extra tap.
@@ -984,6 +985,7 @@ function dinerScreen() {
       <form id="smsform" class="grid"><input class="field num" id="smsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="6-digit code">
         <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Checking…" : "Confirm"}</button></form>${err}
       <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="resend">Send a new code</button>${back}</div></section>`;
+    if (S.user && S.profileLoading) return skPage();
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
       <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
         ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}

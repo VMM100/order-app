@@ -855,8 +855,9 @@ function dinerScreen() {
     // A new sign-in means a new identity: carry the table pass over to it before anything else.
     if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid); attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
     S.user = isAccount(u) ? u : null; S.profile = null; S.visits = [];
-    if (S.user) { try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
-      S.visits = (await myVisits(u.uid)).filter((v) => v.rid === RID); } catch {} }
+    // While the saved profile loads, show a skeleton, not the first-name question (it would flash up and vanish).
+    if (S.user) { S.profileLoading = true; try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
+      S.visits = (await myVisits(u.uid)).filter((v) => v.rid === RID); } catch {} S.profileLoading = false; }
     const justSignedIn = S.step === "code" || S.step === "phone" || S.step === "google";
     if (justSignedIn) S.step = S.user && !(S.profile && S.profile.name) ? "name" : "";
     // Signed in just now and already known: join straight away, no extra tap.
@@ -1001,6 +1002,7 @@ function dinerScreen() {
       <form id="smsform" class="grid"><input class="field num" id="smsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="6-digit code">
         <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Checking…" : "Confirm"}</button></form>${err}
       <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="resend">Send a new code</button>${back}</div></section>`;
+    if (S.user && S.profileLoading) return skPage();
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
       <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
         ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}
@@ -2242,13 +2244,15 @@ function accountScreen() {
   if (CHOOSE) history.replaceState(null, "", `${BASE}#account`);
   onUser(async (u) => {
     if (u && !isAccount(u)) u = null;   // the quiet sign-in every phone has isn't an account
-    S.user = u || null; S.loading = !!u; S.step = ""; S.busy = false; S.roles = []; S.co = false; S.guest = false;
+    S.user = u || null; S.profile = null; S.loading = !!u; S.step = ""; S.busy = false; S.roles = []; S.co = false; S.guest = false;
     if (u) {
       // Arriving from an owner or company page's back arrow (?choose=1): show the choices, not the guest view.
       try { if (CHOOSE) sessionStorage.removeItem(guestKey()); S.guest = sessionStorage.getItem(guestKey()) === "1"; } catch {}
       // Show what this phone knew last time straight away (where this account can go), then check.
       const memo = "wasabi-acct-" + u.uid;
-      try { const c = JSON.parse(localStorage.getItem(memo) || "null"); if (c && ((c.roles || []).length || c.co) && !S.guest) { S.roles = c.roles || []; S.co = !!c.co; S.loading = false; } } catch {}
+      // Only with the first name remembered too: otherwise the "What's your first name?" page would flash up
+      // for a moment before the saved name arrives. Without it, the skeleton stays until everything is in.
+      try { const c = JSON.parse(localStorage.getItem(memo) || "null"); if (c && c.name && ((c.roles || []).length || c.co) && !S.guest) { S.roles = c.roles || []; S.co = !!c.co; S.profile = { ...(S.profile || {}), name: c.name }; S.loading = false; } } catch {}
       render();
       // Everything at once: profile, visits, restaurants run and company membership.
       const [p, visits, roles, co] = await Promise.all([
@@ -2258,7 +2262,7 @@ function accountScreen() {
       S.profile = p && p.exists() ? p.data() : null; S.visits = visits || [];
       S.err = visits ? "" : "Couldn't load your visits. Check your connection.";
       S.roles = roles; S.co = co;
-      try { localStorage.setItem(memo, JSON.stringify({ roles: roles.map(({ rid, name, role }) => ({ rid, name, role })), co })); } catch {}
+      try { localStorage.setItem(memo, JSON.stringify({ roles: roles.map(({ rid, name, role }) => ({ rid, name, role })), co, name: (S.profile && S.profile.name) || "" })); } catch {}
     }
     S.loading = false; render();
   });
