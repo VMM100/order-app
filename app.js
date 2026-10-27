@@ -17,7 +17,7 @@ import {
 import morphdom from "./vendor/morphdom-esm.js";
 import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
 import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "./account.js";
-import { computeMetrics, sampleData } from "./metrics.js";
+import { computeMetrics } from "./metrics.js";
 import { genericPhoto } from "./photos.js";
 import { COMPANY } from "./platform.js";
 import { menuToCsv, readFile, rowsToMenu, mergeMenu } from "./menuio.js";
@@ -1610,7 +1610,7 @@ const tabBar = (tabs, cur) => `<div class="seg tabs" role="tablist" style="max-w
 function setupScreen(role) {
   $("#wrap").classList.add("wide"); $("#sub").textContent = role === "owner" ? "Owner" : "Manager"; document.title = "Tables & QR · " + rname();
   const link = (h, l) => `<div><div class="note" style="margin:0">${l}</div><a href="${h}">${esc(h)}</a></div>`;
-  let armed = false, rot = false, keys = {}, staffTok = null, rotStaff = false, rekey = null;
+  let rot = false, keys = {}, staffTok = null, rotStaff = false, rekey = null;
   const unlocked = true;   // only owners and managers reach this screen (see adminGate)
   // The staff link's secret token. Phones that opened the link stay signed in until it is replaced.
   const staffRef = rdoc("secrets", "staff");
@@ -1634,8 +1634,7 @@ function setupScreen(role) {
       <button class="chip sharetog" data-share="${n}" aria-pressed="${isShared(n)}">${isShared(n) ? "Shared table" : "Normal table"}</button>
       ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : skInline(40)}
       <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
-    bossMenu(role, [{ label: armed ? "Tap again to erase all orders" : "Reset demo", sub: armed ? "Orders, alerts and history go; menu and staff stay" : "Clear orders and history before a demo", danger: true, keep: !armed,
-      run: () => { if (!armed) { armed = true; render(); setTimeout(() => { armed = false; render(); }, 4000); } else resetDemo(); } }]);
+    bossMenu(role);
     paint(subBanner() + tabBar(ownerTabs(role), "tables") + `<section><h2 class="ptitle">Tables and QR codes</h2><p class="note" style="margin-top:0">Diners scan these.</p>
       <div class="row"><button class="btn" data-tables="-1" aria-label="One table fewer">−</button><b class="num">${TABLES} tables</b><button class="btn" data-tables="1" aria-label="One more table">+</button>
         <button class="btn primary" data-act="print" ${Object.keys(keys).length < TABLES ? "disabled" : ""}>Print table cards</button></div>
@@ -1690,20 +1689,6 @@ function setupScreen(role) {
     if (r && unlocked) { if (!rot) { rot = true; render(); setTimeout(() => { rot = false; render(); }, 4000); return; }
       rot = false; keys = {}; render(); await loadKeys(true); toast("New QR codes made. Reprint them for the tables."); return; }
   });
-  // Reset demo (from ☰): clears orders, alerts, tables, groups, history, codes and passes. Menu and staff stay.
-  async function resetDemo() {
-    armed = false; toast("Erasing…");
-    try {
-      for (const col of [rcol("lines"), rcol("alerts"), rcol("tables"), rcol("groups"), rcol("sessions"), rcol("codes"), rcol("passes")]) {
-        const s = await getDocs(col); let batch = writeBatch(db), n = 0;
-        for (const d of s.docs) { batch.delete(d.ref); if (++n % 400 === 0) { await batch.commit(); batch = writeBatch(db); } }
-        await batch.commit();
-      }
-      try { Object.keys(localStorage).filter((k) => k.startsWith("dees-me-" + RID + "-")).forEach((k) => localStorage.removeItem(k)); } catch {}
-      toast("Demo reset");
-    } catch (err) { fail(err); }
-    armed = false; render();
-  }
   render();
   loadKeys(false); loadStaff(false);
   cfgListeners.add(() => render());
@@ -1910,9 +1895,7 @@ function ownerScreen(role) {
     if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : skKpis()); }
     const m = S.m;
     const sampleNote = m.sample ? `<div class="soundbar" style="margin-top:12px"><span>Includes <b>sample data</b> for demonstration, not real sales.</span><button class="btn" data-act="unsample">${S.busy === "unsample" ? "Removing…" : "Remove sample data"}</button></div>` : "";
-    if (!m.items) return head + `<section><p class="empty">No orders in this period yet.<br>Numbers appear here as soon as diners order.</p>
-      <div style="text-align:center"><button class="btn" data-act="sample">${S.busy === "sample" ? "Adding…" : "Fill with a sample week for a demo"}</button>
-      <p class="note">Sample orders are clearly marked and can be removed in one tap.</p></div></section>`;
+    if (!m.items) return head + `<section><p class="empty">No orders in this period yet.<br>Numbers appear here as soon as diners order.</p></section>`;
     const kpi = (v, l, sub) => `<div class="kpi"><div class="kv num">${v}</div><div class="kl">${l}</div>${sub ? `<div class="note" style="margin:2px 0 0">${sub}</div>` : ""}</div>`;
     const hours = m.byHour.filter((h) => h.items); const h0 = hours.length ? hours[0].h : 12, h1 = hours.length ? hours.at(-1).h : 22;
     const hourRows = m.byHour.filter((h) => h.h >= h0 && h.h <= h1);
@@ -1946,11 +1929,6 @@ function ownerScreen(role) {
         ${m.best.slice(0, 10).map((b) => `<tr><td>${esc(b.n)}</td><td class="opt">${esc(STATIONS[b.st] || "")}</td><td class="num">${fmt(b.qty)}</td><td class="num">${fmt(b.revenue)}</td></tr>`).join("")}
       </tbody></table></div>
       <p class="note">Updated ${S.loaded ? ago(S.loaded) : ""}. <button class="linkbtn" data-act="reload">Refresh</button></p></section>`;
-  }
-  async function writeAll(col, rows, idOf) {
-    let batch = writeBatch(db), n = 0;
-    for (const r of rows) { batch.set(idOf ? rdoc(col, idOf(r)) : doc(rcol(col)), r); if (++n % 400 === 0) { await batch.commit(); batch = writeBatch(db); } }
-    await batch.commit();
   }
 
   // ----- events -----
@@ -2062,13 +2040,6 @@ function ownerScreen(role) {
     else if (d.rmphoto) { const [si, ii] = ix(d.rmphoto), it = MENU[si].items[ii], old = it.img; delete it.img; render(); await save("Photo removed"); deleteDoc(rdoc("photos", old)).catch(() => {}); }
     else if (d.period) { S.period = d.period === "all" ? "30" : d.period; S.m = null; S.err = null; render(); }
     else if (d.act === "reload") { S.m = null; S.err = null; render(); }
-    else if (d.act === "sample" && !S.busy) {
-      S.busy = "sample"; render();
-      try { const x = sampleData(MENU, WAITERS, 7);
-        await writeAll("lines", x.lines); await writeAll("alerts", x.alerts); await writeAll("sessions", x.sessions, (r) => r.session);
-        toast("Sample week added"); } catch (err) { fail(err); }
-      S.busy = ""; S.m = null; render();
-    }
     else if (d.act === "unsample" && !S.busy) {
       S.busy = "unsample"; render();
       try { for (const col of [rcol("lines"), rcol("alerts"), rcol("sessions")]) {
