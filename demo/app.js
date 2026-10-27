@@ -13,21 +13,23 @@
 //   index.html#owner      owner: dashboard, menu, look, staff, who can sign in (Google sign-in)
 //   index.html#manager    manager: menu and staff only (Google sign-in)
 // Who may see and change what is enforced by the database rules in firestore.rules.
-import { db, app as fbApp } from "./firebase.js";
-import { pushState, enablePush, refreshPush, testRing, ringFor } from "./push.js";
+// The live demo shares the main app's modules (sign-in, database, ringing, menu, numbers…); only this
+// file is the demo's own.
+import { db, app as fbApp } from "../firebase.js";
+import { pushState, enablePush, refreshPush, testRing, ringFor } from "../push.js";
 import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction, documentId,
   updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc, collectionGroup,
   disableNetwork, enableNetwork,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import morphdom from "../vendor/morphdom-esm.js";
-import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
-import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "./account.js";
-import { computeMetrics, sampleData } from "./metrics.js";
-import { genericPhoto } from "./photos.js";
-import { COMPANY } from "./platform.js";
-import { menuToCsv, readFile, rowsToMenu, mergeMenu } from "./menuio.js";
-import { wasabiLockup, wasabiLeaf } from "./brand.js";
+import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "../menu.js";
+import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "../account.js";
+import { computeMetrics, sampleData } from "../metrics.js";
+import { genericPhoto } from "../photos.js";
+import { COMPANY } from "../platform.js";
+import { menuToCsv, readFile, rowsToMenu, mergeMenu } from "../menuio.js";
+import { wasabiLockup, wasabiLeaf } from "../brand.js";
 
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
@@ -169,7 +171,7 @@ const rdoc = (name, id) => doc(db, "demo", RID, name, String(id));
 const tableRef = (n) => rdoc("tables", n);
 // Diner accounts work across every restaurant on the platform. diners/{uid} is the profile;
 // each visit is a document in visits, labelled with its restaurant (rid).
-const dinersCol = collection(db, "diners"), visitsCol = collection(db, "visits");
+const visitsCol = collection(db, "visits");
 const dinerRef = (u) => doc(db, "diners", u);
 // Consent to WhatsApp offers is per restaurant. Every yes or no is logged (diners/{uid}/consents) with the
 // exact words the diner saw, when, and where, as proof under Tanzania's Personal Data Protection Act.
@@ -243,6 +245,7 @@ function listenConfig() {
     step("settings arrived");
     // Ordering was shown as off, but the settings came through after all: start again cleanly.
     if (PAUSED) { location.reload(); return; }
+    if (snap.exists() && snap.data().ended) return demoEnded();   // DEMO: the presenter ended this room
     if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
     applyStock(); applyBrand();
     cfgLoaded(); cfgListeners.forEach((f) => f());
@@ -465,7 +468,11 @@ const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []
 // Diners can't browse groups or codes. To see a table they hold a pass (passes/{their sign-in}),
 // which the database only accepts with the table's QR key or an open group's code.
 const passRef = (u) => rdoc("passes", u);
+// A friend's request to join with the table code; someone at the table answers it.
+const joinRef = (u) => rdoc("joins", u);
 const codeRef = (c) => rdoc("codes", String(c));
+// Shared code book, so a friend can type a demo table's code on the main site's scanner and land in this room.
+const inviteRef = (c) => doc(db, "invites", String(c));
 const newCode = () => String(1000 + Math.floor(Math.random() * 9000));
 const newGroup = (n, code) => ({ table: Number(n), session: `${n}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, code,
   opened: Date.now(), waiter: null, people: {}, split: "order", paid: {}, open: true, label: null });
@@ -484,7 +491,7 @@ function tableGroup(n, proof) {
       if (cur) { const g = await tx.get(groupRef(cur)); if (g.exists() && g.data().open) { sid = cur; tx.set(passRef(me), { ...proof, session: cur, t: Date.now() }); return; } }
       const g = newGroup(n, code); sid = g.session;
       tx.set(groupRef(sid), g); tx.set(tableRef(n), { table: Number(n), current: sid });
-      tx.set(codeRef(code), { session: sid, table: Number(n) }); tx.set(passRef(me), { ...proof, session: sid, t: Date.now() });
+      tx.set(codeRef(code), { session: sid, table: Number(n) }); tx.set(inviteRef(code), { demo: RID }); tx.set(passRef(me), { ...proof, session: sid, t: Date.now() });
     });
     return sid;
   });
@@ -494,7 +501,7 @@ function startGroup(n, proof) {
   const me = auth.currentUser.uid;
   return withFreshCode(async (code) => {
     const g = newGroup(n, code), b = writeBatch(db);
-    b.set(groupRef(g.session), g); b.set(codeRef(code), { session: g.session, table: Number(n) }); b.set(passRef(me), { ...proof, session: g.session, t: Date.now() });
+    b.set(groupRef(g.session), g); b.set(codeRef(code), { session: g.session, table: Number(n) }); b.set(inviteRef(code), { demo: RID }); b.set(passRef(me), { ...proof, session: g.session, t: Date.now() });
     await b.commit(); return g.session;
   });
 }
@@ -596,7 +603,8 @@ const params = new URLSearchParams(location.search);
 const DEMO_HOURS = 12, DEMO_TABLE = 8;   // DEMO: rooms stay open 12 hours; everyone sits at table 8
 // DEMO router: no room → the presenter's QR page; ?join=1 → pick a role; otherwise the usual screens,
 // with the owner page open to anyone in the room (no sign-in).
-if (!RID) presenterScreen();
+if (params.get("ended")) endedScreen();
+else if (!RID) presenterScreen();
 else if (params.get("join")) roleScreen();
 else if (STATIONS[view] || view === "waiter") staffGate((boss) => (view === "waiter" ? waiterScreen(boss) : stationScreen(view)));
 else if (["owner", "manager", "setup"].includes(view)) (async () => { paint(skPage()); await ensureUser(); startConfig();
@@ -846,14 +854,16 @@ function dinerScreen() {
   window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   welcomeSplash();
   const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "",
-    user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "", uid: null, proof: null, switching: false };
+    user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "", uid: null, proof: null, switching: false,
+    ask: null, pendingName: null, joins: [] };
   // Every diner's phone is signed in, at least quietly (anonymously). Diners who sign in with their
   // phone number or Google get their profile and their visits to this restaurant loaded too.
   onUser(async (u) => {
     if (!u) { if (S.uid) ensureUser().catch(() => {}); return; }   // signed out: back to a quiet sign-in
     const changed = S.uid && S.uid !== u.uid; S.uid = u.uid;
     // A new sign-in means a new identity: carry the table pass over to it before anything else.
-    if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid); attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
+    if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid);
+      if (S.proof.via === "code") askToJoin(S.sid, S.proof.table, (S.me && S.me.name) || S.name); else attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
     S.user = isAccount(u) ? u : null; S.profile = null; S.visits = [];
     // While the saved profile loads, show a skeleton, not the first-name question (it would flash up and vanish).
     if (S.user) { S.profileLoading = true; try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
@@ -866,7 +876,7 @@ function dinerScreen() {
   });
   // On the demo page several diners share one browser, so each gets its own slot (?as=1, ?as=2).
   const meKey = () => `dees-me-${RID}-${S.n}${params.get("as") ? "-" + params.get("as") : ""}`;
-  let subGroup = null, subLines = null, subAlerts = null;
+  let subGroup = null, subLines = null, subAlerts = null, subMine = null, subJoins = null, joinsFailed = false;
   // The pass: proof of the table QR key or a friend's code, pointing at the group being joined.
   async function writePass(session) {
     const p = { ...S.proof, t: Date.now() }; if (session) p.session = session;
@@ -907,17 +917,26 @@ function dinerScreen() {
       // No QR key or code in the link: a guest coming back to the group this phone joined.
       if (saved && saved.session) {
         const p = await getDoc(passRef(S.uid));
-        if (p.exists() && p.data().session === saved.session) { const { t, session, ...proof } = p.data(); S.proof = proof; S.viaKey = proof.via === "key"; return attach(saved.session); }
+        if (p.exists() && p.data().session === saved.session) { const { t, session, ...proof } = p.data(); S.proof = proof; S.viaKey = proof.via === "key";
+          return proof.via === "key" ? attach(saved.session) : askToJoin(saved.session, proof.table, saved.name); }
       }
       return codeEntry(S.n);
     } catch (e) { paint(errorBox(e)); }
+  }
+  // Tables opened before codes were recorded in the shared code book (or reused since) get recorded the
+  // first time someone opens them, so friends can type the code on the front page. Best effort.
+  let codeChecked = null;
+  async function registerCode(g) {
+    if (!g || !g.open || !g.code || codeChecked === g.session) return; codeChecked = g.session;
+    try { const inv = await getDoc(inviteRef(g.code)); if (!inv.exists() || inv.data().demo !== RID) await setDoc(inviteRef(g.code), { demo: RID }); } catch {}
   }
   function attach(sid) {
     step("loading your table");
     S.sid = sid; S.access = true; S.err = ""; S.gLoaded = false;
     subGroup && subGroup(); subLines && subLines(); subAlerts && subAlerts();
+    subJoins && subJoins(); subJoins = null; joinsFailed = false; S.joins = []; S.ask = null;
     subGroup = onSnapshot(groupRef(sid), (snap) => {
-      S.g = snap.data() || null; S.gLoaded = true;
+      S.g = snap.data() || null; S.gLoaded = true; registerCode(S.g);
       const saved = store.get(meKey());
       S.me = S.g && saved && saved.session === sid && saved.pid === S.uid && S.g.people && S.g.people[saved.pid] ? saved : null;
       render();
@@ -944,15 +963,68 @@ function dinerScreen() {
       const as = params.get("as");
       history.replaceState(null, "", `${BASE}?r=${RID}&t=${table}&c=${c}${as ? "&as=" + as : ""}`);
       params.set("t", table); params.set("c", c); params.delete("k"); S.n = String(table); S.choosing = false;
-      $("#sub").textContent = `Table ${S.n}`; attach(session);
+      askToJoin(session, table);
     } catch (e) { paint(errorBox(e)); }
+  }
+  // A friend's code doesn't let you in by itself: the table gets "Juma wants to join" and someone there
+  // taps Let in. (Anyone could guess a 4-digit code; only the QR on the table proves you're there.)
+  async function askToJoin(session, table, name) {
+    S.sid = session; S.access = false; S.err = ""; $("#cart").hidden = true; setMenu([]);
+    $("#sub").textContent = `Table ${table}`;
+    subMine && subMine(); subMine = null;
+    let mine = null;
+    try { const j = await getDoc(joinRef(S.uid)); mine = j.exists() && j.data().session === session ? j.data() : null; } catch {}
+    if (mine && mine.ok) return attach(session);
+    S.ask = { session, table: Number(table), name: name || (mine && mine.name) || S.name || (S.profile && S.profile.name) || "", state: mine && !mine.no ? "waiting" : mine && mine.no ? "no" : "form" };
+    if (S.ask.state === "waiting") watchAsk();
+    else if (name && S.ask.state === "form") return sendAsk();   // signed in mid-meal: ask again under the new sign-in
+    renderAsk();
+  }
+  async function sendAsk() {
+    const a = S.ask; if (!a) return;
+    try { await setDoc(joinRef(S.uid), { session: a.session, table: a.table, name: a.name, t: Date.now(), ok: false }); a.state = "waiting"; watchAsk(); renderAsk(); }
+    catch (err) { if (!denied(err)) return fail(err); S.ask = null; S.err = "This invite has expired. Ask your friend for the new code."; codeEntry(String(a.table)); }
+  }
+  function watchAsk() {
+    subMine && subMine();
+    subMine = onSnapshot(joinRef(S.uid), (snap) => {
+      const j = snap.data(), a = S.ask; if (!a || !j || j.session !== a.session) return;
+      if (j.ok) { subMine && subMine(); subMine = null; S.pendingName = a.name; toast("You're in"); try { navigator.vibrate?.(200); } catch {} attach(a.session); }
+      else if (j.no && a.state !== "no") { a.state = "no"; renderAsk(); }
+    }, () => {});
+  }
+  function renderAsk() {
+    const a = S.ask; if (!a) return;
+    if (a.state === "waiting") return paint(`<section class="askwait" aria-live="polite"><div class="label">Table ${esc(a.table)}</div>
+      <h2 class="jtitle">Asking the table to let you in…</h2>
+      <p>Your friends will see <b>${esc(a.name)} wants to join</b> on their phones. This screen moves on as soon as one of them taps <b>Let in</b>.</p>
+      <div class="askdots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <button class="btn ghost" data-act="askcancel">Cancel</button></section>`);
+    paint(`<section><div class="label">Table ${esc(a.table)}</div><h2 class="jtitle">Ask to join</h2>
+      ${a.state === "no" ? `<p class="err">The table didn't let you in. Check it's the right code, or ask your friend to let you in when you ask again.</p>`
+        : `<p style="margin-top:0">Your friends get a message and let you in with one tap.</p>`}
+      <form id="askform" class="grid"><label class="flabel" for="askin">Your first name <span>So your friends know it's you</span></label>
+        <input class="field" id="askin" maxlength="16" autocomplete="given-name" placeholder="e.g. Amani" value="${esc(a.name)}">
+        <button class="btn primary big">${a.state === "no" ? "Ask again" : "Ask to join"}</button></form>
+      <p class="note">Sitting at the table? Scan its QR code to join straight away.</p></section>`);
+  }
+  // People at the table see requests from friends using the code, and answer them.
+  function watchJoins() {
+    if (subJoins || joinsFailed || !S.sid) return;
+    let first = true;
+    subJoins = onSnapshot(query(rcol("joins"), where("session", "==", S.sid)), (s) => {
+      const seen = new Set(S.joins.map((j) => j.id));
+      S.joins = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((j) => !j.ok && !j.no);
+      if (!first && S.joins.some((j) => !seen.has(j.id))) { try { navigator.vibrate?.([200, 100, 200]); } catch {} }
+      first = false; render();
+    }, () => { subJoins = null; joinsFailed = true; });
   }
   function codeEntry(n) {
     $("#cart").hidden = true;
     $("#sub").textContent = n ? `Table ${n}` : "Join a table";
     paint(`<section><div class="label">${n ? `Join table ${esc(n)}` : "Join your friends"}</div>
       <p>Scan the QR code on your table, or enter the 4-digit code shown on a friend's phone.</p>
-      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="4-digit code" autocomplete="off">
+      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="4-digit code" aria-label="4-digit table code" autocomplete="off">
       <button class="btn primary big">Join</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}</section>`);
   }
   // Shared table with groups already ordering: join friends with their code, or start a new group.
@@ -961,7 +1033,7 @@ function dinerScreen() {
     paint(`<section><div class="tablebar"><b>Table ${esc(S.n)}</b><span class="note" style="margin:0">Shared table · ${count} group${count > 1 ? "s" : ""} ordering</span></div>
       <div class="label">Here with friends who already ordered?</div>
       <p style="margin-top:0">Enter the 4-digit code shown on their phone.</p>
-      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="Their group code" autocomplete="off">
+      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="Their group code" aria-label="Their 4-digit group code" autocomplete="off">
       <button class="btn primary big">Join their group</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}
       <div class="label">New here?</div>
       <button class="btn big" data-act="newgroup">Start a new group</button>
@@ -987,7 +1059,7 @@ function dinerScreen() {
       <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="resend">Send a new code</button>${back}</div></section>`;
     if (S.user && S.profileLoading) return skPage();
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
-      <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
+      <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" aria-label="Your first name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
         ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}
         <button class="btn primary big">Join ${unit}</button></form>${err}
       <div class="orline"><span>or</span></div>
@@ -1035,7 +1107,13 @@ function dinerScreen() {
         ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
         : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
-    if (!S.me) { $("#cart").hidden = true; setMenu([]); return paint(joinScreen(g, shared)); }
+    // Just let in with a friend's code: join with the name they asked with, no second form.
+    if (!S.me && S.pendingName && !S.autoJoin) { const n = S.pendingName; S.pendingName = null; S.autoJoin = true;
+      joinAs(n, S.user).catch((err) => { fail(err); }).finally(() => { S.autoJoin = false; render(); }); return paint(skMenu()); }
+    if (!S.me) { $("#cart").hidden = true; setMenu([]); return paint(S.autoJoin ? skMenu() : joinScreen(g, shared)); }
+    watchJoins();
+    const asks = S.joins.map((j) => `<div class="joinask" role="alert"><span><b>${esc(j.name)}</b> wants to join your ${shared ? "group" : "table"}</span>
+      <span class="row"><button class="btn small primary" data-letin="${esc(j.id)}">Let in</button><button class="btn small ghost" data-letno="${esc(j.id)}">No</button></span></div>`).join("");
     const open = S.alerts.filter((a) => !a.done);
     const banners = open.filter((a) => a.ack).map((a) => `<div class="ontheway" role="status"><span>${esc(wname(a.ackBy) || "Your waiter")} ${a.type === "bill" ? "is bringing your bill" : "is on the way to your table"}</span><span class="note">${ago(a.ack)}</span></div>`).join("");
     const tabs = [["menu", "Menu"], ["orders", `${shared ? "Our order" : "Table order"}${S.lines.length ? ` (${S.lines.length})` : ""}`], ["bill", "Bill"]];
@@ -1070,7 +1148,7 @@ function dinerScreen() {
         <li>Everyone at the table orders on their own phone. See it all under <b>Table order</b>.</li>
         <li><b>Call waiter</b> or <b>Bill please</b> alerts your waiter, and you'll see when they're on the way.</li>
         <li><b>Bill</b> shows what each person owes. Pay your waiter as usual.</li>
-        <li>Friends can join with the code under ☰ → Share invite.</li></ol></div>` : "";
+        <li>Friends can join with the code under ☰ → Share invite. You'll get a message to let them in.</li></ol></div>` : "";
     // Change my name: a small card at the top, like How it works.
     const rename = S.renaming ? `<div class="helpcard"><div class="trow"><b>Change my name</b><button class="btn small ghost" data-act="renameclose">Cancel</button></div>
       <form id="renameform" class="grid" style="margin-top:8px"><label class="flabel" for="renamein">Your first name <span>Your table and waiter see this</span></label>
@@ -1082,7 +1160,7 @@ function dinerScreen() {
           <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
             return `<button class="btn small${a ? "" : " primary"}" data-alert="${k}" ${a ? "disabled" : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
       </div>
-      ${banners}${welcomeCard()}
+      ${asks}${banners}${welcomeCard()}
       <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
       ${body}</section>`);
     renderCart();
@@ -1135,7 +1213,7 @@ function dinerScreen() {
       ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}</span>
           <span class="qty"><button class="qb" data-dec="${esc(g.k)}" aria-label="One fewer ${esc(g.l.n)}">−</button><b class="num">${g.q}</b><button class="qb" data-inc="${esc(g.k)}" aria-label="One more ${esc(g.l.n)}">+</button></span>
           <span class="num cp">${fmt(g.l.pr * g.q)}</span></div>`).join("")}
-        <input id="note" placeholder="Note for the kitchen or bar (e.g. no onions)" value="${esc(S.note)}"></div>` : ""}
+        <input id="note" maxlength="200" aria-label="Note for the kitchen or bar" placeholder="Note for the kitchen or bar (e.g. no onions)" value="${esc(S.note)}"></div>` : ""}
       <div class="cbar"><button class="cview" data-act="cart" aria-expanded="${!!S.cartOpen}"><b class="num">${n}</b> item${n > 1 ? "s" : ""}<span>${S.cartOpen ? "Hide" : "View"}</span></button>
         <button class="cartbtn" data-act="place" ${S.placing ? "disabled" : ""}><span>${S.placing ? "Sending…" : "Place order"}</span><span class="num">TSh ${fmt(tot)}</span></button></div></div>`;
     document.body.classList.toggle("hascart", true);
@@ -1144,6 +1222,8 @@ function dinerScreen() {
 
   document.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (e.target.id === "askform") { const a = S.ask; if (!a) return; const name = $("#askin").value.trim(); if (!name) return toast("Enter your first name");
+      a.name = name; S.name = name; return sendAsk(); }
     if (e.target.id === "codeform") {
       const c = $("#codein").value.trim(); if (c.length !== 4) return;
       if (S.choosing) return findByCode(c, S.n);
@@ -1189,6 +1269,10 @@ function dinerScreen() {
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.tab) { S.tab = d.tab; render(); window.scrollTo(0, 0); }
+    else if (d.letin || d.letno) { const id = d.letin || d.letno, who = (S.joins.find((j) => j.id === id) || {}).name || "They";
+      try { await updateDoc(joinRef(id), d.letin ? { ok: true, by: S.uid, at: Date.now() } : { no: true, by: S.uid, at: Date.now() }); toast(d.letin ? `${who} can join now` : "Not let in"); }
+      catch (err) { fail(err); } }
+    else if (d.act === "askcancel") { const a = S.ask; S.ask = null; subMine && subMine(); subMine = null; deleteDoc(joinRef(S.uid)).catch(() => {}); S.err = ""; codeEntry(a ? String(a.table) : S.n); }
     else if (d.cat) { S.cat = +d.cat; markCat(); jumpTo(S.cat); }
     else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c]?.items[i]; if (!it || it.out || !it.v[v]) return render(); const [l, p] = it.v[v];
       S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}${l ? " · " + l : ""}`); S.bump = d.add; render(); S.bump = null; }
@@ -1773,14 +1857,14 @@ function ownerScreen(role) {
           <input class="field num" id="wp-${i}" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="${(S.pins || {})[w.id] ? "New PIN" : "4-digit PIN"}" aria-label="PIN for ${esc(w.name)}">
           <button class="btn">${(S.pins || {})[w.id] ? "Change" : "Set PIN"}</button></form></div>`).join("")}</div>
       <p class="note">Each waiter starts a shift on their own phone with their name and PIN. Tell them their PIN in person. Changing a PIN ends that waiter's current shift.</p>
-      <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name"><button class="btn primary">Add</button></form>
+      <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name" aria-label="New waiter's name"><button class="btn primary">Add</button></form>
       ${S.wErr ? `<p class="err" role="alert">${esc(S.wErr)}</p>` : ""}
       ${owner ? `<div class="label">Owner and managers</div>
       <p class="note" style="margin-top:0">They sign in with Google. Managers can edit the menu and staff and open Setup; the owner also sees the dashboard and look, and adds or removes managers.</p>
       ${S.admins == null ? (loadAdmins(), skRows(2)) : `<div class="grid" style="max-width:520px">${S.admins.map((a) => `<div class="vrow"><span class="field" style="overflow:hidden;text-overflow:ellipsis">${esc(a.email)}${a.email === myEmail ? " (you)" : ""}</span>
         <span class="pill ${a.role === "owner" ? "s-ready" : "s-preparing"}">${a.role === "owner" ? "Owner" : "Manager"}</span>
         ${a.email === myEmail || a.role === "owner" ? "" : `<button class="btn danger" data-deladmin="${esc(a.email)}">${S.armed === "a" + a.email ? "Tap again" : "Remove"}</button>`}</div>`).join("")}</div>`}
-      <form id="addadmin" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="adminemail" type="email" autocomplete="off" placeholder="New manager's Google email">
+      <form id="addadmin" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="adminemail" type="email" autocomplete="off" placeholder="New manager's Google email" aria-label="New manager's Google email">
         <button class="btn primary">Add</button></form>
       <p class="note">Waiter, kitchen, bar and grill phones don't need an account: they scan the staff code on the Setup page.</p>
       <div class="label">Subscription</div>
@@ -2018,6 +2102,8 @@ function companyScreen() {
     paint(skPage());
     C.u = await authReady(); C.ok = await isCompanyUser(C.u);
     if (!C.ok) { try { C.claimed = (await getDoc(doc(db, "meta", "company"))).exists(); } catch { C.claimed = true; } return render(); }
+    // The public "company claimed" marker used to hold the claimer's email: keep only that it's claimed.
+    getDoc(doc(db, "meta", "company")).then((m) => { if (m.exists() && "by" in m.data()) return setDoc(doc(db, "meta", "company"), { claimed: true, t: Date.now() }); }).catch(() => {});
     await load();
   }
   async function load() {
@@ -2048,7 +2134,7 @@ function companyScreen() {
         <button class="btn ghost" data-own="${a.rid}">Change owner</button>
         <a class="btn ghost" href="${BASE}?r=${esc(a.rid)}#owner">Open</a>
         <a class="btn ghost" href="${BASE}demo.html?r=${esc(a.rid)}">Demo stage</a></div>
-      ${C.edit === a.rid ? `<form class="vrow ownform" data-rid="${a.rid}" style="margin-top:8px"><input class="field" type="email" id="own-${a.rid}" placeholder="New owner's Google email" value="${esc(a.ownerEmail)}"><button class="btn primary">Save owner</button></form>
+      ${C.edit === a.rid ? `<form class="vrow ownform" data-rid="${a.rid}" style="margin-top:8px"><input class="field" type="email" id="own-${a.rid}" placeholder="New owner's Google email" aria-label="New owner's Google email" value="${esc(a.ownerEmail)}"><button class="btn primary">Save owner</button></form>
         <p class="note">The new owner signs in with this Google account. The old owner loses access straight away. Managers stay.</p>` : ""}
       ${a.status === "suspended" && st.kind !== "suspended" ? "" : a.status === "active" && !st.live ? `<p class="note">Switched on but unpaid: record a payment to start it again.</p>` : ""}</article>`;
   }
@@ -2080,13 +2166,13 @@ function companyScreen() {
       <div class="grid" style="margin-top:10px">${shown.map(card).join("") || `<p class="note">None.</p>`}</div>
       <p class="note">Payments add a month or a year from the paid-until date (or from today if it has passed). After the paid-until date a restaurant keeps working for ${COMPANY.graceDays} days with a warning, then stops until paid. Pause stops it straight away. Nothing is ever deleted.</p>
       <div class="label">Add a restaurant yourself</div>
-      <form id="coadd" class="grid" style="max-width:520px"><input class="field" id="coname" placeholder="Restaurant name" maxlength="60">
-        <input class="field" id="coemail" type="email" placeholder="Owner's Google email">
+      <form id="coadd" class="grid" style="max-width:520px"><input class="field" id="coname" placeholder="Restaurant name" aria-label="Restaurant name" maxlength="60">
+        <input class="field" id="coemail" type="email" placeholder="Owner's Google email" aria-label="Owner's Google email">
         <div class="vrow"><label class="note" for="codays" style="margin:0">Free trial days</label><input class="field num" id="codays" inputmode="numeric" value="30"></div>
         <button class="btn primary">Add and switch on</button></form>
       <div class="label">Company team</div>
       <div class="grid" style="max-width:520px">${C.team.map((t) => `<div class="vrow"><span class="field">${esc(t.email)}${t.email === C.u.email ? " (you)" : ""}</span>${t.email === C.u.email ? "" : `<button class="btn danger" data-deltm="${esc(t.email)}">${C.armed === "tm" + t.email ? "Tap again" : "Remove"}</button>`}</div>`).join("")}</div>
-      <form id="coteam" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="cotm" type="email" placeholder="Partner's Google email"><button class="btn">Add</button></form>
+      <form id="coteam" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="cotm" type="email" placeholder="Partner's Google email" aria-label="Partner's Google email"><button class="btn">Add</button></form>
     </section>`);
   }
   const acc = (rid) => doc(db, "accounts", rid);
@@ -2422,7 +2508,42 @@ function presenterScreen() {
       if (params.get("new")) history.replaceState(null, "", BASE);
     }
     const join = `${BASE}?r=${room.id}&join=1&k=${room.k}`, ends = new Date(room.t + DEMO_HOURS * 3600e3);
-    paint(`<section class="dpres">
+    // Two tabs: this room's QR and script, and every open demo table (all rooms) with a way to end them.
+    const P = { tab: "room", rooms: [], tables: {}, armed: null }, subs = {};
+    const hhmm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    onSnapshot(query(collection(db, "demo"), where("created", ">", Date.now() - DEMO_HOURS * 3600e3)), (s) => {
+      P.rooms = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((r) => !r.ended).sort((a, b) => b.created - a.created);
+      P.rooms.forEach((r) => { if (subs[r.id]) return;
+        subs[r.id] = onSnapshot(query(collection(db, "demo", r.id, "groups"), where("open", "==", true)), (g) => { P.tables[r.id] = g.docs.map((x) => x.data()); if (P.tab === "tables") draw(); }, () => {}); });
+      if (P.tab === "tables") draw();
+    }, () => {});
+    const tablesHtml = () => !P.rooms.length ? `<p class="empty">No demo rooms are open right now.</p>` : `<div class="grid">${P.rooms.map((r) => {
+      const ts = P.tables[r.id] || [];
+      return `<article class="ticket${ts.length ? " preparing" : ""}"><header><b>Room ${esc(r.id)}${r.id === room.id ? " · this screen" : ""}</b><span class="note" style="margin:0">started ${hhmm(r.created)}</span></header>
+        ${ts.length ? ts.map((g) => `<div class="oline"><span class="l">Table ${esc(g.table)} · ${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "nobody seated yet"}</span><span class="note num">code ${esc(g.code || "")}</span></div>`).join("")
+          : `<p class="note">No table open.</p>`}
+        <div class="acts"><button class="btn danger" data-endroom="${esc(r.id)}">${P.armed === r.id ? "Tap again: end this demo for everyone" : ts.length ? "Close table and end demo" : "End demo"}</button></div></article>`; }).join("")}</div>`;
+    async function endRoom(id) {
+      const b = writeBatch(db), now = Date.now();
+      (P.tables[id] || []).forEach((g) => { b.update(doc(db, "demo", id, "groups", g.session), { open: false, closed: now }); if (g.code) b.delete(doc(db, "demo", id, "codes", String(g.code))); });
+      b.update(doc(db, "demo", id), { ended: now });
+      await b.commit();
+      if (id === room.id) { store.set("wasabi-demo-room", null); location.replace(`${BASE}?ended=1`); return; }
+      toast("Demo ended"); P.armed = null; draw();
+    }
+    function draw() {
+      paint(`<div class="seg" role="tablist" style="max-width:420px;margin:0 0 16px">${[["room", "This demo"], ["tables", `Open tables${P.rooms.length ? ` (${P.rooms.reduce((n, r) => n + (P.tables[r.id] || []).length, 0)})` : ""}`]].map(([k, l]) => `<button role="tab" aria-pressed="${P.tab === k}" data-ptab="${k}">${l}</button>`).join("")}</div>`
+        + (P.tab === "room" ? roomHtml() : `<section><div class="label" style="margin-top:0">Open demo tables</div>
+          <p class="note" style="margin-top:0">Every live demo room started in the last ${DEMO_HOURS} hours. Ending a demo closes its table and sends every phone and screen in it to a "Demo ended" page.</p>${tablesHtml()}</section>`));
+      if (P.tab === "room") drawQr();
+    }
+    document.addEventListener("click", async (e) => {
+      const t = e.target.closest("[data-ptab]"); if (t) { P.tab = t.dataset.ptab; P.armed = null; return draw(); }
+      const x = e.target.closest("[data-endroom]"); if (!x) return; const id = x.dataset.endroom;
+      if (P.armed !== id) { P.armed = id; draw(); setTimeout(() => { if (P.armed === id) { P.armed = null; draw(); } }, 4000); return; }
+      try { x.disabled = true; await endRoom(id); } catch (err) { fail(err); P.armed = null; draw(); }
+    });
+    const roomHtml = () => (`<section class="dpres">
       <div class="dqr"><h2>Scan to join the demo</h2><p class="note" style="margin:4px 0 14px">Then pick a role: diner, waiter, bar, kitchen or owner</p>
         <div class="qrbig" id="dqr"></div>
         <p class="note">Room <b class="num">${esc(room.id)}</b> · table ${DEMO_TABLE} · open until ${ends.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p></div>
@@ -2433,10 +2554,10 @@ function presenterScreen() {
           <li>A diner taps <b>Bill please</b>; the waiter is on the way</li><li>Split the bill, then open the owner dashboard</li></ol>
         <div class="row" style="margin-top:14px"><a class="btn primary" href="${BASE}?r=${room.id}#owner">Open owner dashboard here</a>
           <button class="btn" data-act="dcopy">Copy join link</button><button class="btn ghost" data-act="dnew">Start a new room</button></div>
-        <p class="note">No sign-in for anyone. Everything happens in this room only, with Crafty Dee's menu; real restaurants are never touched. The room closes by itself after ${DEMO_HOURS} hours.</p>
+        <p class="note">No sign-in for anyone. Everything happens in this room only, with Crafty Dee's menu; real restaurants are never touched. The room closes by itself after ${DEMO_HOURS} hours, or end it any time under <b>Open tables</b>.</p>
       </div></section>`);
-    const draw = () => { const el = document.getElementById("dqr"); if (el && !el.childNodes.length && window.QRCode) brandQr(el, join, 512); };
-    if (window.QRCode) draw(); else addEventListener("load", draw, { once: true });
+    const drawQr = () => { const el = document.getElementById("dqr"); if (el && !el.childNodes.length && window.QRCode) brandQr(el, join, 512); };
+    draw(); if (!window.QRCode) addEventListener("load", drawQr, { once: true });
     document.addEventListener("click", async (e) => {
       const b = e.target.closest("button[data-act]"); if (!b) return;
       if (b.dataset.act === "dcopy") { try { await navigator.clipboard.writeText(join); toast("Join link copied"); } catch { toast(join); } }
@@ -2445,8 +2566,27 @@ function presenterScreen() {
     });
   })().catch((e) => paint(denied(e) ? `<section><div class="err">The demo can't open a room yet: the database doesn't allow demo rooms. Publish the latest rules (firestore.rules) in Firebase → Firestore → Rules, then reload this page.</div></section>` : errorBox(e)));
 }
+// DEMO: the presenter ended this room. Every screen in it forgets the room and shows "Demo ended".
+function demoEnded() {
+  try {
+    Object.keys(localStorage).filter((k) => k.includes(RID) || k.endsWith("wasabi-demo-join")).forEach((k) => localStorage.removeItem(k));
+    const mine = store.get("wasabi-demo-room"); if (mine && mine.id === RID) store.set("wasabi-demo-room", null);
+  } catch {}
+  location.replace(`${BASE}?ended=1`);
+}
+function endedScreen() {
+  wasabiPage(); $("#sub").textContent = "Live demo"; document.title = "Demo ended · " + COMPANY.name;
+  const cart = $("#cart"); if (cart) cart.hidden = true;
+  history.replaceState(null, "", BASE);
+  paint(`<section style="text-align:center;padding-top:36px"><h2 class="jtitle">Demo ended</h2>
+    <p>Thanks for trying Wasabi. This demo is closed and everything in it has been reset.</p>
+    <p class="note">Want Wasabi at your bar, café or restaurant? Visit <a href="https://wasabi.co.tz/">wasabi.co.tz</a>.</p>
+    <div id="endco" style="margin-top:18px"></div></section>`);
+  authReady().then(async (u) => { if (await isCompanyUser(u)) { const el = document.getElementById("endco"); if (el) el.innerHTML = `<a class="btn primary big" href="${BASE}?new=1">Start a new demo</a>`; } }).catch(() => {});
+}
 // What the QR opens on each phone: pick a role.
 function roleScreen() {
+  startConfig();   // so this screen also notices when the demo is ended
   $("#sub").textContent = "Live demo"; document.title = "Pick a role · " + rname();
   const k = params.get("k") || "", ic = (d) => `<span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
   const staff = (screen) => `${BASE}?r=${RID}&s=demo#${screen}`;

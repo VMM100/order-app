@@ -7,7 +7,7 @@ export const median = (xs) => {
   const m = Math.floor(a.length / 2);
   return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
 };
-export const pct = (xs, p) => {
+const pct = (xs, p) => {
   const a = xs.filter((x) => Number.isFinite(x) && x >= 0).sort((q, r) => q - r);
   return a.length ? a[Math.min(a.length - 1, Math.floor(p * a.length))] : null;
 };

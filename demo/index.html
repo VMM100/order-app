@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="img/brand/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="demo/styles.css?v=6">
+<link rel="stylesheet" href="demo/styles.css?v=7">
 </head>
 <body>
 <div class="wrap" id="wrap">
@@ -23,7 +23,7 @@
   <main id="view"><div class="skel" data-loading aria-busy="true"><span class="sr">Loading…</span><section style="display:grid;gap:12px"><i class="sk t" style="width:45%"></i><i class="sk" style="width:85%"></i><i class="sk" style="width:70%"></i><i class="sk btn" style="width:100%;height:48px;margin-top:6px"></i></section></div></main>
 </div>
 <div class="cart" id="cart" hidden></div>
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <div id="recaptcha"></div>
 <script>
   // The staging copy (test site) says so on every page.
@@ -48,6 +48,6 @@
 </script>
 <script src="vendor/qrcode.min.js" defer></script>
 <script type="module" src="demo/app.js?v=2"></script>
-<script src="demo/ptr.js?v=2" defer></script>
+<script src="ptr.js?v=2" defer></script>
 </body>
 </html>

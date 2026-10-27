@@ -29,6 +29,12 @@ export default {
     let body; try { body = JSON.parse(await req.text()); } catch { return new Response("Bad request", { status: 400, headers: cors }); }
     const m = PATH.exec(String(body && body.path || ""));
     if (!m) return new Response("Bad path", { status: 400, headers: cors });
+    // Each request costs a database read, so one address gets at most 60 a minute (a busy bar's whole
+    // Wi-Fi sends a few). Cloudflare's free rate limiter; if it isn't set up, requests just go through.
+    if (env.LIMIT) {
+      const { success } = await env.LIMIT.limit({ key: req.headers.get("cf-connecting-ip") || "unknown" }).catch(() => ({ success: true }));
+      if (!success) return new Response("Too many requests", { status: 429, headers: cors });
+    }
     const count = Math.max(1, Math.min(20, Number(body.count) || 1));
     // Answer straight away; the ringing carries on in the background.
     ctx.waitUntil(handle(env, m, count).catch((e) => console.error("ring failed", m[0], e && e.stack || e)));
@@ -153,7 +159,8 @@ function val(v) {
 }
 function decode(fields) { const o = {}; for (const [k, v] of Object.entries(fields || {})) o[k] = val(v); return o; }
 const num = (x) => (typeof x === "number" ? x : Number(x) || 0);
-// Notifications only open our own sites.
-function safeUrl(u) { try { const x = new URL(u); return x.protocol === "https:" && /(^|\.)wasabi\.co\.tz$|\.web\.app$/.test(x.hostname) ? x.href : SITE; } catch { return SITE; } }
+// Notifications only open our own sites: the live site and the staging copy.
+const OUR_HOSTS = new Set(["wasabi.co.tz", "www.wasabi.co.tz", "wasabi-tz-staging.web.app"]);
+function safeUrl(u) { try { const x = new URL(u); return x.protocol === "https:" && OUR_HOSTS.has(x.hostname) ? x.href : SITE; } catch { return SITE; } }
 
 export const _test = { decode, PATH, safeUrl };

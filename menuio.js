@@ -4,7 +4,7 @@
 // Download is a CSV file (opens in Excel, Google Sheets and Numbers). Upload takes CSV or Excel (.xlsx);
 // Excel files are read with SheetJS, loaded only when one is uploaded.
 
-export const HEAD = ["Section", "Goes to", "Item", "Option", "Price (TSh)", "Description", "Tag", "Sold out"];
+const HEAD = ["Section", "Goes to", "Item", "Option", "Price (TSh)", "Description", "Tag", "Sold out"];
 const EXAMPLE = [
   ["Drinks", "Bar", "Fresh juice", "", "5000", "Passion, mango or orange", "", "no"],
   ["Drinks", "Bar", "Draught lager", "Half 250ml", "6000", "", "ABV 4.5%", "no"],
@@ -14,7 +14,9 @@ const EXAMPLE = [
   ["Food", "Kitchen", "Garden salad", "", "12000", "", "Vegetarian", "no"],
 ];
 
-const cell = (v) => { const s = String(v == null ? "" : v); return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+// A cell starting with = + - @ (or a tab) would run as a formula when the file is opened in a
+// spreadsheet, so text cells like that get a leading ' (the spreadsheet shows them as plain text).
+const cell = (v) => { let s = String(v == null ? "" : v); if (typeof v !== "number" && /^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 
 // The current menu as CSV, or example rows if the menu is empty. Starts with a BOM so Excel reads
 // accents and the shilling text correctly.
@@ -26,7 +28,7 @@ export function menuToCsv(menu, stations) {
 }
 
 // CSV text → rows. Handles quotes, commas or semicolons (Excel in some countries), and Windows line ends.
-export function parseCsv(text) {
+function parseCsv(text) {
   text = text.replace(/^﻿/, "");
   const first = text.split(/\r?\n/, 1)[0] || "", sep = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ";" : ",";
   const rows = []; let row = [], val = "", q = false;
@@ -78,7 +80,8 @@ export function rowsToMenu(rows, stations) {
   const stKey = (v) => { const n = norm(v); if (!n) return null;
     const hit = Object.entries(stations).find(([k, l]) => norm(k) === n || norm(l) === n || norm(l).startsWith(n));
     return hit ? hit[0] : undefined; };
-  const clip = (s, n) => String(s == null ? "" : s).trim().slice(0, n);
+  // Undo the ' the download puts in front of cells that start like a formula.
+  const clip = (s, n) => String(s == null ? "" : s).trim().replace(/^'(?=[=+\-@])/, "").slice(0, n);
   const secs = [], bySec = new Map(); let lastSec = "Menu", lastItem = "";
   rows.slice(hi + 1).forEach((r, i) => {
     const line = hi + i + 2, get = (k) => (C[k] >= 0 ? r[C[k]] : "");
