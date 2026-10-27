@@ -47,6 +47,8 @@ const soldOut = (name) => MENU.some((c) => c.items.some((it) => it.n === name &&
 const wname = (id) => (WAITERS.find((w) => w.id === id) || {}).name || (id ? "Former staff" : "");
 
 function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 2200); }
+// The waiter already using this name (ignoring capitals and spaces), other than waiter number `skip`.
+function takenName(n, skip = -1) { const k = String(n).trim().toLowerCase().replace(/\s+/g, " "); return WAITERS.find((w, i) => i !== skip && String(w.name).trim().toLowerCase().replace(/\s+/g, " ") === k); }
 function fail(e) { console.error(e); toast(denied(e) ? "Not allowed from this phone." : "Could not save. Check your connection and try again."); }
 const denied = (e) => String(e && (e.code || e.message)).includes("permission");
 
@@ -853,8 +855,9 @@ function dinerScreen() {
     // A new sign-in means a new identity: carry the table pass over to it before anything else.
     if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid); attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
     S.user = isAccount(u) ? u : null; S.profile = null; S.visits = [];
-    if (S.user) { try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
-      S.visits = (await myVisits(u.uid)).filter((v) => v.rid === RID); } catch {} }
+    // While the saved profile loads, show a skeleton, not the first-name question (it would flash up and vanish).
+    if (S.user) { S.profileLoading = true; try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
+      S.visits = (await myVisits(u.uid)).filter((v) => v.rid === RID); } catch {} S.profileLoading = false; }
     const justSignedIn = S.step === "code" || S.step === "phone" || S.step === "google";
     if (justSignedIn) S.step = S.user && !(S.profile && S.profile.name) ? "name" : "";
     // Signed in just now and already known: join straight away, no extra tap.
@@ -982,6 +985,7 @@ function dinerScreen() {
       <form id="smsform" class="grid"><input class="field num" id="smsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="6-digit code">
         <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Checking…" : "Confirm"}</button></form>${err}
       <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="resend">Send a new code</button>${back}</div></section>`;
+    if (S.user && S.profileLoading) return skPage();
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
       <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
         ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}
@@ -1763,12 +1767,14 @@ function ownerScreen(role) {
       <p class="note" style="margin-top:0">These names appear on the waiter phones${owner ? " and the dashboard" : ""}.</p>
       ${S.pins == null ? (loadPins(), "") : ""}
       <div class="grid" style="max-width:640px">${WAITERS.map((w, i) => `<div class="wrow"><div class="vrow"><input class="field" id="wn-${i}" data-f="wname" data-i="${i}" value="${esc(w.name)}" aria-label="Waiter name">
-        <button class="btn danger" data-delw="${i}">${S.armed === "w" + i ? "Tap again" : "Remove"}</button></div>
+        ${S.armed === "w" + i ? `<button class="btn danger" data-delw="${i}">Tap again</button>`
+          : `<button class="iconbtn brandbtn" data-delw="${i}" aria-label="Remove ${esc(w.name)}" title="Remove"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>`}</div>
         <form class="vrow pinset" data-wid="${esc(w.id)}"><span class="pill ${(S.pins || {})[w.id] ? "s-ready" : "s-new"}">${S.pins == null ? "…" : (S.pins || {})[w.id] ? "PIN set" : "No PIN yet"}</span>
           <input class="field num" id="wp-${i}" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="${(S.pins || {})[w.id] ? "New PIN" : "4-digit PIN"}" aria-label="PIN for ${esc(w.name)}">
           <button class="btn">${(S.pins || {})[w.id] ? "Change" : "Set PIN"}</button></form></div>`).join("")}</div>
       <p class="note">Each waiter starts a shift on their own phone with their name and PIN. Tell them their PIN in person. Changing a PIN ends that waiter's current shift.</p>
       <form id="addw" class="vrow" style="max-width:520px;margin-top:10px"><input class="field" id="addwin" maxlength="20" placeholder="New waiter's name"><button class="btn primary">Add</button></form>
+      ${S.wErr ? `<p class="err" role="alert">${esc(S.wErr)}</p>` : ""}
       ${owner ? `<div class="label">Owner and managers</div>
       <p class="note" style="margin-top:0">They sign in with Google. Managers can edit the menu and staff and open Setup; the owner also sees the dashboard and look, and adds or removes managers.</p>
       ${S.admins == null ? (loadAdmins(), skRows(2)) : `<div class="grid" style="max-width:520px">${S.admins.map((a) => `<div class="vrow"><span class="field" style="overflow:hidden;text-overflow:ellipsis">${esc(a.email)}${a.email === myEmail ? " (you)" : ""}</span>
@@ -1879,7 +1885,10 @@ function ownerScreen(role) {
     else if (!owner && ["bname", "c1", "c2"].includes(d.f)) return;
     else if (d.f === "bname") { BRAND = { ...BRAND, name: v || RESTAURANT }; applyBrand(); }
     else if (d.f === "c1" || d.f === "c2") { BRAND = { ...BRAND, c1: $("#c1").value, c2: $("#c2").value }; applyBrand(); render(); }
-    else if (d.f === "wname") { if (!v) return render(); WAITERS = WAITERS.map((w, i) => (i === +d.i ? { ...w, name: v } : w)); }
+    else if (d.f === "wname") { if (!v) return render();
+      // Two waiters with one name can't be told apart on the sign-in screen, the tables or the dashboard.
+      if (takenName(v, +d.i)) { S.wErr = `There's already a waiter called ${takenName(v, +d.i).name}. Add a surname or initial, e.g. "${v} M."`; toast("Same name already exists"); return render(); }
+      S.wErr = ""; WAITERS = WAITERS.map((w, i) => (i === +d.i ? { ...w, name: v } : w)); }
     else return;
     save();
   });
@@ -1907,7 +1916,9 @@ function ownerScreen(role) {
       if (Object.entries(S.pins || {}).some(([k, v]) => k !== wid && v === p)) return toast("Another waiter already has that PIN. Pick a different one.");
       S.pins = { ...(S.pins || {}), [wid]: p }; inp.value = ""; savePins(`PIN set for ${wname(wid)}`);
     }
-    if (e.target.id === "addw") { const n = $("#addwin").value.trim(); if (!n) return; WAITERS = [...WAITERS, { id: uid("w"), name: n }]; save(`${n} added`); $("#addwin").value = ""; render(); }
+    if (e.target.id === "addw") { const n = $("#addwin").value.trim(); if (!n) return;
+      if (takenName(n)) { S.wErr = `There's already a waiter called ${takenName(n).name}. Add a surname or initial, e.g. "${n} M."`; toast("Same name already exists"); render(); const i = $("#addwin"); if (i) { i.value = n; i.focus(); i.select(); } return; }
+      S.wErr = ""; WAITERS = [...WAITERS, { id: uid("w"), name: n }]; save(`${n} added`); $("#addwin").value = ""; render(); }
     if (owner && e.target.id === "addadmin") {
       const em = $("#adminemail").value.trim().toLowerCase(), r = "manager";
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return toast("Enter their Google email address");
