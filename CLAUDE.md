@@ -4,6 +4,7 @@ Before changing anything, read and follow **[docs/security/Security.md](docs/sec
 the change against **[docs/security/Security Checklist.md](docs/security/Security%20Checklist.md)** before committing.
 Who can do what: [Auth.md](docs/security/Auth.md). Personal data: [Data Security.md](docs/security/Data%20Security.md).
 Risks: [Threat Model.md](docs/security/Threat%20Model.md). Outside code register: [vendor/SOURCES.md](vendor/SOURCES.md).
+How screens should look and behave (colours, type, touch sizes, words): **[DESIGN.md](DESIGN.md)**.
 
 Ground rules in short:
 - `firestore.rules` is the security. New data → new rules + tests in the same change. Keep `firestore.rules`

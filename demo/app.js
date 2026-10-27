@@ -952,7 +952,7 @@ function dinerScreen() {
     $("#sub").textContent = n ? `Table ${n}` : "Join a table";
     paint(`<section><div class="label">${n ? `Join table ${esc(n)}` : "Join your friends"}</div>
       <p>Scan the QR code on your table, or enter the 4-digit code shown on a friend's phone.</p>
-      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="4-digit code" autocomplete="off">
+      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="4-digit code" aria-label="4-digit table code" autocomplete="off">
       <button class="btn primary big">Join</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}</section>`);
   }
   // Shared table with groups already ordering: join friends with their code, or start a new group.
@@ -961,7 +961,7 @@ function dinerScreen() {
     paint(`<section><div class="tablebar"><b>Table ${esc(S.n)}</b><span class="note" style="margin:0">Shared table · ${count} group${count > 1 ? "s" : ""} ordering</span></div>
       <div class="label">Here with friends who already ordered?</div>
       <p style="margin-top:0">Enter the 4-digit code shown on their phone.</p>
-      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="Their group code" autocomplete="off">
+      <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="Their group code" aria-label="Their 4-digit group code" autocomplete="off">
       <button class="btn primary big">Join their group</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}
       <div class="label">New here?</div>
       <button class="btn big" data-act="newgroup">Start a new group</button>
@@ -987,7 +987,7 @@ function dinerScreen() {
       <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="resend">Send a new code</button>${back}</div></section>`;
     if (S.user && S.profileLoading) return skPage();
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
-      <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
+      <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" aria-label="Your first name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
         ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}
         <button class="btn primary big">Join ${unit}</button></form>${err}
       <div class="orline"><span>or</span></div>
@@ -1135,7 +1135,7 @@ function dinerScreen() {
       ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}</span>
           <span class="qty"><button class="qb" data-dec="${esc(g.k)}" aria-label="One fewer ${esc(g.l.n)}">−</button><b class="num">${g.q}</b><button class="qb" data-inc="${esc(g.k)}" aria-label="One more ${esc(g.l.n)}">+</button></span>
           <span class="num cp">${fmt(g.l.pr * g.q)}</span></div>`).join("")}
-        <input id="note" placeholder="Note for the kitchen or bar (e.g. no onions)" value="${esc(S.note)}"></div>` : ""}
+        <input id="note" maxlength="200" aria-label="Note for the kitchen or bar" placeholder="Note for the kitchen or bar (e.g. no onions)" value="${esc(S.note)}"></div>` : ""}
       <div class="cbar"><button class="cview" data-act="cart" aria-expanded="${!!S.cartOpen}"><b class="num">${n}</b> item${n > 1 ? "s" : ""}<span>${S.cartOpen ? "Hide" : "View"}</span></button>
         <button class="cartbtn" data-act="place" ${S.placing ? "disabled" : ""}><span>${S.placing ? "Sending…" : "Place order"}</span><span class="num">TSh ${fmt(tot)}</span></button></div></div>`;
     document.body.classList.toggle("hascart", true);
