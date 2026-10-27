@@ -468,6 +468,8 @@ const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []
 // which the database only accepts with the table's QR key or an open group's code.
 const passRef = (u) => rdoc("passes", u);
 const codeRef = (c) => rdoc("codes", String(c));
+// Shared code book, so a friend can type a demo table's code on the main site's scanner and land in this room.
+const inviteRef = (c) => doc(db, "invites", String(c));
 const newCode = () => String(1000 + Math.floor(Math.random() * 9000));
 const newGroup = (n, code) => ({ table: Number(n), session: `${n}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, code,
   opened: Date.now(), waiter: null, people: {}, split: "order", paid: {}, open: true, label: null });
@@ -486,7 +488,7 @@ function tableGroup(n, proof) {
       if (cur) { const g = await tx.get(groupRef(cur)); if (g.exists() && g.data().open) { sid = cur; tx.set(passRef(me), { ...proof, session: cur, t: Date.now() }); return; } }
       const g = newGroup(n, code); sid = g.session;
       tx.set(groupRef(sid), g); tx.set(tableRef(n), { table: Number(n), current: sid });
-      tx.set(codeRef(code), { session: sid, table: Number(n) }); tx.set(passRef(me), { ...proof, session: sid, t: Date.now() });
+      tx.set(codeRef(code), { session: sid, table: Number(n) }); tx.set(inviteRef(code), { demo: RID }); tx.set(passRef(me), { ...proof, session: sid, t: Date.now() });
     });
     return sid;
   });
@@ -496,7 +498,7 @@ function startGroup(n, proof) {
   const me = auth.currentUser.uid;
   return withFreshCode(async (code) => {
     const g = newGroup(n, code), b = writeBatch(db);
-    b.set(groupRef(g.session), g); b.set(codeRef(code), { session: g.session, table: Number(n) }); b.set(passRef(me), { ...proof, session: g.session, t: Date.now() });
+    b.set(groupRef(g.session), g); b.set(codeRef(code), { session: g.session, table: Number(n) }); b.set(inviteRef(code), { demo: RID }); b.set(passRef(me), { ...proof, session: g.session, t: Date.now() });
     await b.commit(); return g.session;
   });
 }

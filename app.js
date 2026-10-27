@@ -929,8 +929,11 @@ function dinerScreen() {
     try {
       await ensureUser();
       const inv = await getDoc(inviteRef(String(c).trim()));
-      if (!inv.exists() || !inv.data().rid) return again("No open table with that code. Check the number on your friend's phone.");
-      location.replace(`${BASE}?r=${encodeURIComponent(inv.data().rid)}&c=${encodeURIComponent(String(c).trim())}`);
+      const to = inv.exists() ? inv.data() : {};
+      // A live demo room's table: open it in the demo.
+      if (to.demo) return location.replace(`${BASE}demo/?r=${encodeURIComponent(to.demo)}&c=${encodeURIComponent(String(c).trim())}`);
+      if (!to.rid) return again("No open table with that code. Check the number on your friend's phone.");
+      location.replace(`${BASE}?r=${encodeURIComponent(to.rid)}&c=${encodeURIComponent(String(c).trim())}`);
     } catch (e) { again("Couldn't check that code. Check your connection and try again."); }
   }
   document.addEventListener("submit", (e) => { if (e.target.id !== "invform") return; e.preventDefault(); const v = ($("#invin").value || "").trim(); joinByInvite(v); });
