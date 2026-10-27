@@ -432,3 +432,9 @@ body.wasabi .btn.big.primary{background:var(--accent);color:var(--accent-ink);bo
 .iconbtn.dull:hover,.iconbtn.dull:focus-visible{opacity:1;background:var(--line)}
 .iconbtn.brandbtn{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .iconbtn.brandbtn:hover{background:var(--accent);color:var(--accent-ink)}
+
+/* Top bar runs edge to edge on every page (as on wide screens it otherwise stopped at the page width).
+   Its contents stay lined up with the page; only the background and bottom line stretch. */
+body{overflow-x:clip}
+header.top{background:transparent;border-bottom-color:transparent}
+header.top::before{content:"";position:absolute;inset:0 calc(50% - 50vw);background:var(--bg);border-bottom:1px solid var(--line);z-index:-1;pointer-events:none}
