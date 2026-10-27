@@ -159,14 +159,65 @@ test("the app's table transaction: read table, start group, move pass, all in on
 });
 
 // ---------- friend's invite code ----------
-test("friend with the code can join and order", async () => {
-  await seatAt("d1");
+// A friend with the code asks to join; someone already at the table lets them in.
+const ask = (uid, name = "Juma", sid = "4-a", table = 4) => ({ session: sid, table, name, t: 1, ok: false });
+const letIn = (by) => ({ ok: true, by, at: 2 });
+test("friend with the code can join and order once the table lets them in", async () => {
+  const d1 = await seatAt("d1");
   const db = diner("f1");
   const c = await assertSucceeds(db.doc(`${R}/codes/1234`).get());
   await assertSucceeds(db.doc(`${R}/passes/f1`).set({ table: 4, via: "code", c: "1234", session: c.data().session, t: 1 }));
+  await assertSucceeds(db.doc(`${R}/joins/f1`).set(ask("f1")));
+  await assertSucceeds(d1.doc(`${R}/joins/f1`).update(letIn("d1")));
   await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ "people.f1": { name: "Juma", t: 3, uid: "f1", acct: false } }));
   await assertSucceeds(db.doc(`${R}/lines/f`).set(line("f1", "4-a", { pname: "Juma" })));
   await assertSucceeds(db.doc(`${R}/alerts/a1`).set({ table: 4, session: "4-a", type: "call", pid: "f1", pname: "Juma", t: 1, ack: null, ackBy: null, done: false }));
+});
+test("a guessed code alone gets nowhere: no names, orders, ordering or calls until the table says yes", async () => {
+  const d1 = await seatAt("d1");
+  await d1.doc(`${R}/lines/l1`).set(line("d1", "4-a"));
+  const db = diner("x1");
+  await assertSucceeds(db.doc(`${R}/passes/x1`).set({ table: 4, via: "code", c: "1234", session: "4-a", t: 1 }));
+  await assertSucceeds(db.doc(`${R}/joins/x1`).set(ask("x1", "Stranger")));
+  await assertFails(db.doc(`${R}/groups/4-a`).get());
+  await assertFails(db.doc(`${R}/lines/l1`).get());
+  await assertFails(db.collection(`${R}/lines`).where("session", "==", "4-a").get());
+  await assertFails(db.collection(`${R}/alerts`).where("session", "==", "4-a").get());
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.x1": { name: "Stranger", t: 3, uid: "x1", acct: false } }));
+  await assertFails(db.doc(`${R}/lines/x`).set(line("x1", "4-a", { pname: "Stranger" })));
+  await assertFails(db.doc(`${R}/alerts/x`).set({ table: 4, session: "4-a", type: "call", pid: "x1", pname: "Stranger", t: 1, ack: null, ackBy: null, done: false }));
+  // Can't let themselves in, and can't see other people's requests.
+  await assertFails(db.doc(`${R}/joins/x1`).update(letIn("x1")));
+  await assertFails(db.doc(`${R}/joins/x1`).set({ ...ask("x1"), ok: true }));
+  await assertFails(db.collection(`${R}/joins`).where("session", "==", "4-a").get());
+  // Saying no keeps them out.
+  await assertSucceeds(d1.doc(`${R}/joins/x1`).update({ no: true, by: "d1", at: 2 }));
+  await assertFails(db.doc(`${R}/groups/4-a`).get());
+});
+test("who can answer a join request: people at that table and staff, not other tables or strangers", async () => {
+  const d1 = await seatAt("d1");
+  await seatAt("e1", 5, "5-a", "5555");
+  const f = diner("f1");
+  await f.doc(`${R}/passes/f1`).set({ table: 4, via: "code", c: "1234", session: "4-a", t: 1 });
+  await f.doc(`${R}/joins/f1`).set(ask("f1"));
+  await assertSucceeds(d1.collection(`${R}/joins`).where("session", "==", "4-a").get());
+  await assertFails(diner("e1").doc(`${R}/joins/f1`).update(letIn("e1")));          // another table
+  await assertFails(diner("zz").doc(`${R}/joins/f1`).update(letIn("zz")));          // a stranger
+  await assertFails(d1.doc(`${R}/joins/f1`).update({ ...letIn("d1"), name: "Boss" })); // only the answer changes
+  await assertFails(d1.doc(`${R}/joins/f1`).update(letIn("someone-else")));         // signed as themselves
+  const w = await staffPhone("s1");
+  await assertSucceeds(w.doc(`${R}/joins/f1`).update({ ok: true, by: "s1", at: 2 }));
+});
+test("a join request needs a code pass for that group, a first name, and the group still open", async () => {
+  await seatAt("d1");
+  const f = diner("f1");
+  await assertFails(f.doc(`${R}/joins/f1`).set(ask("f1")));                         // no pass yet
+  await f.doc(`${R}/passes/f1`).set({ table: 4, via: "code", c: "1234", session: "4-a", t: 1 });
+  await assertFails(f.doc(`${R}/joins/f1`).set(ask("f1", "")));
+  await assertFails(f.doc(`${R}/joins/f1`).set(ask("f1", "A name far too long for a table")));
+  await assertFails(f.doc(`${R}/joins/f1`).set(ask("f1", "Juma", "4-zzz")));
+  await assertFails(f.doc(`${R}/joins/f2`).set(ask("f2")));                         // only their own request
+  await assertSucceeds(f.doc(`${R}/joins/f1`).set(ask("f1")));
 });
 test("wrong code, or a code for another group, gives no pass", async () => {
   await seatAt("d1");
@@ -496,6 +547,14 @@ test("a diner logs consent to offers; nobody can change or read someone else's l
   await assertSucceeds(db.doc("diners/p1/consents/c1").delete());
 });
 
+test("the company can remove who claimed it from the public marker; nobody else can change it", async () => {
+  await assertFails(diner("x").doc("meta/company").set({ claimed: true, t: 1 }));
+  await assertFails(owner().doc("meta/company").set({ claimed: true, t: 1 }));
+  await assertFails(boss().doc("meta/company").set({ claimed: true, t: 1, by: "boss@example.com" }));
+  await assertSucceeds(boss().doc("meta/company").set({ claimed: true, t: 1 }));
+  await assertSucceeds(env.unauthenticatedContext().firestore().doc("meta/company").get());
+});
+
 // ---------- live demo rooms (demo/ folder of the site) ----------
 const room = (created = Date.now()) => ({ created, sections: [], waiters: [{ id: "w1", name: "Grace" }], shared: [], brand: { name: "Crafty Dee's" }, prices: PRICES, tables: 10, updated: created });
 test("demo: only the company team can start a room", async () => {
@@ -526,6 +585,15 @@ test("demo: needs the quiet sign-in, and goes read-only after 12 hours", async (
   await assertSucceeds(diner("d1").doc("demo/old").get());
   await assertFails(diner("d1").doc("demo/old/lines/l1").set({ table: 8 }));
   await assertFails(diner("d1").doc("demo/old").set({ updated: 3 }, { merge: true }));
+});
+test("demo: rooms can't be listed by visitors, and writes are capped", async () => {
+  await assertSucceeds(boss().doc("demo/room4").set(room()));
+  await assertFails(diner("d1").collection("demo").get());
+  await assertSucceeds(diner("d1").doc("demo/room4").get());
+  await assertSucceeds(boss().collection("demo").get());
+  const big = Object.fromEntries(Array.from({ length: 41 }, (_, i) => ["k" + i, i]));
+  await assertFails(diner("d1").doc("demo/room4/lines/x").set(big));
+  await assertFails(diner("d1").doc("demo/room4").set(big, { merge: true }));
 });
 test("demo: a room can't reach real restaurants", async () => {
   await assertSucceeds(boss().doc("demo/room4").set(room()));
@@ -560,11 +628,38 @@ test("push: refused when the restaurant is more than 7 days unpaid", async () =>
 });
 
 // ---------- changing your name at the table ----------
+test("what diners write is limited in size and type", async () => {
+  const d1 = await seatAt("d1");
+  await assertFails(d1.doc(`${R}/lines/a`).set(line("d1", "4-a", { pname: "x".repeat(21) })));
+  await assertFails(d1.doc(`${R}/lines/b`).set(line("d1", "4-a", { pname: { evil: 1 } })));
+  await assertFails(d1.doc(`${R}/lines/c`).set(line("d1", "4-a", { batch: "x".repeat(41) })));
+  await assertFails(d1.doc(`${R}/lines/d`).set(line("d1", "4-a", { t: "soon" })));
+  await assertSucceeds(d1.doc(`${R}/lines/e`).set(line("d1", "4-a")));
+  const call = { table: 4, session: "4-a", type: "call", pid: "d1", pname: "Amani", t: 1, ack: null, ackBy: null, done: false };
+  await assertFails(d1.doc(`${R}/alerts/a`).set({ ...call, pname: "x".repeat(21) }));
+  await assertFails(d1.doc(`${R}/alerts/b`).set({ ...call, t: "now" }));
+  await assertSucceeds(d1.doc(`${R}/alerts/c`).set(call));
+});
+test("a group's label is set once, as a short name", async () => {
+  const db = diner("d1");
+  await db.doc(`${R}/passes/d1`).set({ table: 4, via: "key", k: "KEY4", t: 1 });
+  const b = db.batch();
+  b.set(db.doc(`${R}/groups/4-a`), newGroup("4-a", 4, "1234"));
+  b.set(db.doc(`${R}/codes/1234`), { session: "4-a", table: 4 });
+  b.set(db.doc(`${R}/passes/d1`), { table: 4, via: "key", k: "KEY4", session: "4-a", t: 1 });
+  await b.commit();
+  const me = { "people.d1": { name: "Amani", t: 1, uid: "d1", acct: false } };
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ ...me, label: "x".repeat(21) }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ ...me, label: { a: 1 } }));
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ ...me, label: "Amani" }));
+});
 test("a diner can change their own name at the table, not anyone else's", async () => {
   const d1 = await seatAt("d1");
   // A friend joins with the group's code.
   const d2 = diner("d2");
   await d2.doc(`${R}/passes/d2`).set({ table: 4, via: "code", c: "1234", session: "4-a", t: 1 });
+  await d2.doc(`${R}/joins/d2`).set(ask("d2", "Neha"));
+  await d1.doc(`${R}/joins/d2`).update(letIn("d1"));
   await assertSucceeds(d2.doc(`${R}/groups/4-a`).update({ "people.d2": { name: "Neha", t: 2, uid: "d2", acct: false } }));
   await assertSucceeds(d1.doc(`${R}/groups/4-a`).update({ "people.d1": { name: "Vandan", t: 1, uid: "d1", acct: false } }));
   await assertFails(d1.doc(`${R}/groups/4-a`).update({ "people.d2": { name: "Haha", t: 2, uid: "d2", acct: false } }));

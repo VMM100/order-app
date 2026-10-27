@@ -34,15 +34,19 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/demo/$(room)).data.created + 12 * 60 * 60 * 1000 > request.time.toMillis();
     }
     match /demo/{room} {
-      allow read: if signedIn();
+      // A room is found by its (random) name only: nobody can list the rooms.
+      allow get: if signedIn();
+      allow list: if isCompany();
       // Only the company team can start a room; anyone with the room's QR can then take part.
       allow create: if isCompany() && room.size() <= 12 && request.resource.data.created is int
         && request.resource.data.created > request.time.toMillis() - 60000 && request.resource.data.created < request.time.toMillis() + 60000;
-      allow update: if demoOpen(room) && request.resource.data.created == resource.data.created;
+      allow update: if demoOpen(room) && request.resource.data.created == resource.data.created
+        && request.resource.data.keys().size() <= 40;
       // {sub}/ first: a bare {rest=**} would also match the room itself and skip the create check.
       match /{sub}/{rest=**} {
         allow read: if signedIn();
-        allow write: if demoOpen(room);
+        allow delete: if demoOpen(room);
+        allow create, update: if demoOpen(room) && request.resource.data.keys().size() <= 40;
       }
     }
 
@@ -65,7 +69,9 @@ service cloud.firestore {
       // The first company admin: allowed once, together with their own company entry.
       allow create: if verified() && request.resource.data.by == email()
         && existsAfter(/databases/$(database)/documents/company/$(email()));
-      allow update, delete: if false;
+      // The company can strip who claimed it, so no email sits in this public document.
+      allow update: if isCompany() && request.resource.data.keys().hasOnly(['claimed', 't']);
+      allow delete: if false;
     }
     match /company/{em} {
       allow read: if isCompany() || (verified() && em == email());
@@ -142,7 +148,14 @@ service cloud.firestore {
           && p.k == get(/databases/$(database)/documents/restaurants/$(rid)/tablekeys/$(string(p.table))).data.k;
       }
       function keyPassFor(n) { return live(rid) && hasPass() && pass().via == 'key' && pass().table == n && keyOk(pass()); }
-      function inSession(sid) { return live(rid) && hasPass() && pass().session == sid; }
+      // At the table: with the table's QR key, or with a friend's code once someone at the table let
+      // them in (joins/{uid}.ok). A guessed code alone gets nowhere.
+      function approvedFor(sid) {
+        let j = /databases/$(database)/documents/restaurants/$(rid)/joins/$(me());
+        return exists(j) && get(j).data.session == sid && get(j).data.ok == true;
+      }
+      function inSession(sid) { return live(rid) && hasPass() && pass().session == sid && (pass().via == 'key' || approvedFor(sid)); }
+      function memberOf(sid) { return inSession(sid) && me() in groupNow(sid).people; }
       function groupAfter(sid) { return getAfter(/databases/$(database)/documents/restaurants/$(rid)/groups/$(sid)).data; }
       function groupNow(sid) { return get(/databases/$(database)/documents/restaurants/$(rid)/groups/$(sid)).data; }
       function validPass(p) {
@@ -224,6 +237,28 @@ service cloud.firestore {
         allow delete: if boss(rid) || (signedIn() && uid == me());
         allow create, update: if live(rid) && signedIn() && uid == me() && validPass(request.resource.data);
       }
+      // Asking to join with a friend's code. The person asking writes only "waiting" with their first name;
+      // someone already at that table (or staff) lets them in or says no.
+      match /joins/{uid} {
+        function waiting(d) {
+          return d.keys().hasOnly(['session', 'table', 'name', 't', 'ok', 'no'])
+            && d.session is string && d.table is int && d.t is int
+            && d.name is string && d.name.size() > 0 && d.name.size() <= 20
+            && d.ok == false && d.get('no', false) == false;
+        }
+        allow get: if signedIn() && (uid == me() || isStaff() || memberOf(resource.data.session));
+        allow list: if isStaff() || memberOf(resource.data.session);
+        allow create, update: if live(rid) && signedIn() && uid == me() && hasPass() && pass().via == 'code'
+          && waiting(request.resource.data)
+          && request.resource.data.session == pass().session && request.resource.data.table == pass().table
+          && groupNow(request.resource.data.session).open == true;
+        allow update: if (isStaff() || memberOf(resource.data.session))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ok', 'no', 'by', 'at'])
+          && request.resource.data.by == me() && request.resource.data.at is int
+          && ((request.resource.data.ok == true && request.resource.data.get('no', false) == false)
+              || (request.resource.data.ok == false && request.resource.data.no == true));
+        allow delete: if signedIn() && (uid == me() || isStaff());
+      }
       match /tables/{n} {
         allow read: if isStaff() || keyPassFor(int(n));
         allow write: if isStaff()
@@ -256,7 +291,8 @@ service cloud.firestore {
             && ppl.removedKeys().size() == 0
             && ppl.addedKeys().union(ppl.changedKeys()).hasOnly([me()])
             && (!(me() in d.people) || validPerson(d.people[me()]))
-            && (!changed.hasAny(['label']) || resource.data.label == null);
+            && (!changed.hasAny(['label'])
+                || (resource.data.label == null && d.label is string && d.label.size() > 0 && d.label.size() <= 20));
         }
         function validPerson(p) {
           return p.keys().hasOnly(['name', 't', 'uid', 'acct'])
@@ -288,11 +324,12 @@ service cloud.firestore {
           return inSession(l.session) && g.open == true && me() in g.people
             && l.keys().hasOnly(['table', 'session', 'batch', 'pid', 'pname', 'n', 'v', 'pr', 'st', 's', 't', 'note'])
             && l.pid == me() && l.table == g.table && l.s == 'new'
-            && l.n is string && l.v is string
+            && l.n is string && l.v is string && l.t is int
+            && l.pname is string && l.pname.size() <= 20 && l.batch is string && l.batch.size() <= 40
             && price != null && l.pr == price.p && l.st == price.st && !(l.n in stockOut())
             && (l.note == null || (l.note is string && l.note.size() <= 200));
         }
-        allow read: if isStaff() || (hasPass() && live(rid) && resource.data.session == pass().session);
+        allow read: if isStaff() || inSession(resource.data.session);
         allow create: if boss(rid) || dinerLine(request.resource.data);
         // Kitchen, bar and grill move items along; "served" is recorded against the waiter on shift.
         allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys()
@@ -307,9 +344,10 @@ service cloud.firestore {
           return inSession(a.session) && g.open == true && me() in g.people
             && a.keys().hasOnly(['table', 'session', 'type', 'pid', 'pname', 't', 'ack', 'ackBy', 'done'])
             && a.type in ['call', 'bill'] && a.pid == me() && a.table == g.table
+            && a.t is int && a.pname is string && a.pname.size() <= 20
             && a.ack == null && a.ackBy == null && a.done == false;
         }
-        allow read: if isStaff() || (hasPass() && live(rid) && resource.data.session == pass().session);
+        allow read: if isStaff() || inSession(resource.data.session);
         allow create: if boss(rid) || dinerAlert(request.resource.data);
         allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ack', 'ackBy', 'done', 'doneAt'])
           && (boss(rid) || (onShift() && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ackBy'])
