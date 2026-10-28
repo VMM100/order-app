@@ -37,6 +37,7 @@ or Vandan accepts the risk in writing here.
 - [ ] Company accounts: only named people, each with Google 2-Step Verification.
 - [ ] Firebase App Check on (blocks scripts that aren't the Wasabi app).
 - [ ] Uptime alert on wasabi.co.tz.
+- [ ] Pre-launch pass with `docs/engineering/vendor/agent-skills/`: **shipping-and-launch** (incl. its accessibility, performance, security and observability checklists), **security-and-hardening** and **performance-optimization**; findings fixed or accepted in writing.
 
 ## Known gaps (accepted for the pilot, fix before launch)
 

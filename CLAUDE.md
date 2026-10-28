@@ -5,6 +5,8 @@ the change against **[docs/security/Security Checklist.md](docs/security/Securit
 Who can do what: [Auth.md](docs/security/Auth.md). Personal data: [Data Security.md](docs/security/Data%20Security.md).
 Risks: [Threat Model.md](docs/security/Threat%20Model.md). Outside code register: [vendor/SOURCES.md](vendor/SOURCES.md).
 How screens should look and behave (colours, type, touch sizes, words): **[DESIGN.md](DESIGN.md)**.
+Before a release or launch, also check against the engineering checklists in `docs/engineering/vendor/agent-skills/`
+(shipping-and-launch, security-and-hardening, performance-optimization, code-review-and-quality): read-only references.
 
 Ground rules in short:
 - `firestore.rules` is the security. New data → new rules + tests in the same change. Keep `firestore.rules`
