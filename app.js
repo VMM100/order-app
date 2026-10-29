@@ -1561,6 +1561,29 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
   return { close };
 }
 
+// Closing a table (or bar tab): unfinished items and calls are closed, the visit is filed for the
+// dashboard and for diners signed in with an account, and the friends' code stops working.
+async function closeSession(g) {
+  const sid = g.session;
+  const [ls, as] = await Promise.all([getDocs(query(rcol("lines"), where("session", "==", sid))), getDocs(query(rcol("alerts"), where("session", "==", sid)))]);
+  const allLines = ls.docs.map((x) => x.data()), batch = writeBatch(db), now = Date.now();
+  // Items never marked served are closed without a serve time, so they don't skew the averages.
+  ls.docs.forEach((x) => { if (x.data().s !== "served") batch.update(x.ref, { s: "served", closedUnserved: true }); });
+  as.docs.forEach((x) => { if (!x.data().done) batch.update(x.ref, { done: true, doneAt: now }); });
+  batch.set(rdoc("sessions", sid), { table: g.table, session: sid, opened: g.opened, accepted: g.accepted || null, closed: now,
+    waiter: g.waiter || null, guests: Object.keys(g.people || {}).length, total: tableTotal(allLines), paid: Object.keys(g.paid || {}).length });
+  batch.update(groupRef(sid), { open: false, closed: now });
+  if (g.code) batch.delete(codeRef(g.code));   // the invite code stops working
+  // Signed-in diners get this visit saved to their account: what they had and their share.
+  const owed = shares(g, allLines);
+  Object.entries(g.people || {}).forEach(([pid, p]) => {
+    if (!p.uid || p.acct === false) return; const sh = owed.find((x) => x.pid === pid);
+    batch.set(doc(db, "visits", `${p.uid}_${sid}_${pid}`), { uid: p.uid, rid: RID, rname: rname(), table: g.table, session: sid, date: now,
+      items: allLines.filter((l) => l.pid === pid).map((l) => ({ n: l.n, v: l.v || "", pr: l.pr })), share: sh ? sh.amt : 0, groupTotal: tableTotal(allLines) });
+  });
+  await batch.commit();
+}
+
 // ================= WAITER =================
 // Waiters use their own phones. A phone is set up once with the staff code; each shift starts with the
 // waiter's name and PIN and ends with End shift (or after 16 hours). The database only accepts table,
@@ -1784,24 +1807,7 @@ function waiterScreen(boss) {
   };
   async function closeGroup(sid) {
     const g = find(sid); if (!g) return;
-    const all = await getDocs(query(rcol("lines"), where("session", "==", sid)));
-    const batch = writeBatch(db), now = Date.now();
-    // Items never marked served are closed without a serve time, so they don't skew the averages.
-    S.lines.filter(live(g)).forEach((l) => batch.update(rdoc("lines", l.id), { s: "served", closedUnserved: true }));
-    S.alerts.filter(live(g)).forEach((a) => batch.update(rdoc("alerts", a.id), { done: true, doneAt: now }));
-    batch.set(rdoc("sessions", sid), { table: g.table, session: sid, opened: g.opened, accepted: g.accepted || null, closed: now,
-      waiter: g.waiter || null, guests: Object.keys(g.people || {}).length, total: tableTotal(all.docs.map((x) => x.data())),
-      paid: Object.keys(g.paid || {}).length });
-    batch.update(groupRef(sid), { open: false, closed: now });
-    batch.delete(codeRef(g.code));   // the invite code stops working
-    // Signed-in diners get this visit saved to their account: what they had and their share.
-    const allLines = all.docs.map((x) => x.data()), owed = shares(g, allLines);
-    Object.entries(g.people || {}).forEach(([pid, p]) => {
-      if (!p.uid || p.acct === false) return; const sh = owed.find((x) => x.pid === pid);
-      batch.set(doc(db, "visits", `${p.uid}_${sid}_${pid}`), { uid: p.uid, rid: RID, rname: rname(), table: g.table, session: sid, date: now,
-        items: allLines.filter((l) => l.pid === pid).map((l) => ({ n: l.n, v: l.v || "", pr: l.pr })), share: sh ? sh.amt : 0, groupTotal: tableTotal(allLines) });
-    });
-    await batch.commit();
+    return closeSession(g);
   }
   setInterval(render, 30000);
   cfgListeners.add(render);
@@ -1809,7 +1815,7 @@ function waiterScreen(boss) {
 
 // ================= SETUP =================
 // The same tabs as the owner and manager pages, with Tables & QR selected; the others open that page.
-const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["menu", "Menu"], ["staff", "Staff"]]);
+const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["open", "Open tables"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["open", "Open tables"], ["menu", "Menu"], ["staff", "Staff"]]);
 // ☰ on the owner, manager and Tables & QR pages: things used now and then. extra = items for this page.
 function bossMenu(role, extra = []) {
   const st = subState(ACCOUNT), page = role === "owner" ? "owner" : "manager";
@@ -1957,11 +1963,76 @@ function ownerScreen(role) {
     bossMenu(owner ? "owner" : "manager");
     if (!TABS.some(([k]) => k === S.tab)) S.tab = TABS[0][0];
     paint(subBanner() + tabBar(TABS, S.tab) + `
-      ${S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
+      ${S.tab === "open" ? openTab() : S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
     const qr = document.getElementById("wlqr");
     if (qr && S.wtok) { const draw = () => { if (!qr.childNodes.length) brandQr(qr, waiterLink(), 160); };
       if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true }); }
   }
+
+  // ----- open tables -----
+  // Every open table and bar tab, live: who's sitting there, which waiter has it, calls waiting,
+  // what's being made, the bill so far. The owner or manager can change the waiter or close it.
+  const O = { on: false, groups: null, lines: {}, live: [], alerts: [], sids: "", subs: [], armed: null, busy: null };
+  function watchOpen() {
+    if (O.on) return; O.on = true;
+    const again = () => { if (S.tab === "open" && !editing()) render(); };
+    onSnapshot(query(rcol("groups"), where("open", "==", true)), (q) => {
+      O.groups = q.docs.map((x) => x.data()); again();
+      // The bill so far: every item at the open tables (30 tables per listener, the database's limit).
+      const sids = O.groups.map((g) => g.session).sort(), key = sids.join(",");
+      if (key === O.sids) return; O.sids = key; O.subs.forEach((u) => u()); O.subs = []; O.lines = {};
+      for (let i = 0; i < sids.length; i += 30) { const part = sids.slice(i, i + 30);
+        O.subs.push(onSnapshot(query(rcol("lines"), where("session", "in", part)), (ls) => {
+          part.forEach((sid) => { O.lines[sid] = []; }); ls.docs.forEach((x) => { const l = x.data(); (O.lines[l.session] = O.lines[l.session] || []).push(l); }); again(); }, () => {})); }
+    }, (e) => { O.groups = []; O.err = e; again(); });
+    onSnapshot(query(rcol("alerts"), where("done", "==", false)), (q) => { O.alerts = q.docs.map((x) => ({ id: x.id, ...x.data() })); again(); }, () => {});
+    setInterval(again, 30000);   // keeps "12 min" fresh
+  }
+  if (S.tab === "open") watchOpen();
+  function openTab() {
+    if (O.err) return `<section>${errorBox(O.err)}</section>`;
+    if (!O.groups) return `<section><h2 class="ptitle">Open tables</h2>${skTickets(3)}</section>`;
+    const calls = (g) => O.alerts.filter((a) => a.session === g.session);
+    const rank = (g) => (calls(g).some((a) => !a.ack) ? 0 : !g.waiter && !g.tab ? 1 : 2);
+    const list = [...O.groups].sort((a, b) => rank(a) - rank(b) || (a.tab ? 1 : 0) - (b.tab ? 1 : 0) || a.table - b.table || a.opened - b.opened);
+    const noWaiter = list.filter((g) => !g.waiter && !g.tab).length, waiting = list.filter((g) => calls(g).some((a) => !a.ack)).length;
+    const opts = (cur) => `<option value="">No waiter</option>${WAITERS.map((w) => `<option value="${esc(w.id)}" ${w.id === cur ? "selected" : ""}>${esc(w.name)}</option>`).join("")}${cur && !WAITERS.some((w) => w.id === cur) ? `<option value="${esc(cur)}" selected>${esc(wname(cur))}</option>` : ""}`;
+    const card = (g) => {
+      const ls = O.lines[g.session] || [], al = calls(g), unit = g.tab ? "tab" : isShared(g.table) ? "group" : "table";
+      const making = ls.filter((l) => l.s === "new" || l.s === "preparing").length, ready = ls.filter((l) => l.s === "ready").length;
+      const ppl = Object.values(g.people || {}).map((p) => esc(p.name)).join(", ");
+      return `<article class="ticket${al.some((a) => !a.ack) ? " alert" : ""}">
+        <header><b>${esc(where_(g, O.groups))}</b>${g.tab ? `<span class="pill s-preparing">Bar tab</span>` : g.waiter ? `<span class="note" style="margin:0">${esc(wname(g.waiter))}</span>` : `<span class="pill s-new">No waiter</span>`}</header>
+        ${al.map((a) => `<div class="arow"><div><b>${ALERT[a.type]}</b> <span class="note" style="margin:0">from ${esc(nowName(g, a.pid, a.pname))} · ${ago(a.t)}</span></div>
+          ${a.ack ? `<span class="pill s-preparing">${esc(wname(a.ackBy) || "Waiter")} on the way</span>` : `<span class="pill s-new">Waiting</span>`}</div>`).join("")}
+        <p class="note" style="margin:6px 0 0">${ppl || "No guests yet"} · open ${ago(g.opened).replace(" ago", "")}</p>
+        <div class="ostats"><span><b class="num">TSh ${fmt(tableTotal(ls))}</b> so far</span><span>${ls.length} item${ls.length === 1 ? "" : "s"}</span>${making ? `<span>${making} being made</span>` : ""}${ready ? `<span class="hot">${ready} ready to serve</span>` : ""}</div>
+        <div class="acts">${g.tab ? "" : `<label class="ow"><span class="note" style="margin:0">Waiter</span><select class="field sel" data-owaiter="${esc(g.session)}" aria-label="Waiter for ${esc(where_(g, O.groups))}">${opts(g.waiter)}</select></label>`}
+          ${O.armed === g.session ? `<button class="btn danger" data-oclose="${esc(g.session)}" ${O.busy === g.session ? "disabled" : ""}>${O.busy === g.session ? "Closing…" : "Tap again to close"}</button>`
+            : `<button class="btn ghost" data-oarm="${esc(g.session)}">Close ${unit}</button>`}</div>
+      </article>`;
+    };
+    return `<section><h2 class="ptitle">Open tables</h2>
+      <p class="note" style="margin-top:0">${list.length ? `${list.length} open${noWaiter ? ` · <b>${noWaiter} without a waiter</b>` : ""}${waiting ? ` · <b>${waiting} calling</b>` : ""}. Updates by itself.` : "No open tables right now. Tables appear here as soon as guests sit down."}</p>
+      ${list.length ? `<div class="grid">${list.map(card).join("")}</div>` : ""}
+      ${list.length ? `<p class="note">Closing ends the table for everyone at it: unfinished items and calls are cleared and the table's code stops working. Only close when they've paid and left.</p>` : ""}</section>`;
+  }
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b || S.tab !== "open") return; const d = b.dataset;
+    if (d.oarm) { O.armed = d.oarm; render(); setTimeout(() => { if (O.armed === d.oarm && O.busy !== d.oarm) { O.armed = null; render(); } }, 4000); }
+    else if (d.oclose) { const g = (O.groups || []).find((x) => x.session === d.oclose); if (!g || O.busy) return;
+      O.busy = g.session; render();
+      try { await closeSession(g); toast(`${where_(g, O.groups)} closed`); } catch (err) { fail(err); }
+      O.busy = null; O.armed = null; render(); }
+  });
+  document.addEventListener("change", async (e) => {
+    const sid = e.target.dataset && e.target.dataset.owaiter; if (!sid) return;
+    const g = (O.groups || []).find((x) => x.session === sid), w = e.target.value || null; if (!g) return;
+    try { await updateDoc(groupRef(sid), w ? { waiter: w, accepted: g.accepted || Date.now() } : { waiter: null });
+      toast(w ? `${where_(g, O.groups)} is now ${wname(w)}'s` : `${where_(g, O.groups)} is open for any waiter`); }
+    catch (err) { fail(err); }
+    e.target.blur();
+  });
 
   // ----- menu editor -----
   function menuTab() {
@@ -2234,7 +2305,7 @@ function ownerScreen(role) {
       try { await navigator.clipboard.writeText(link); toast("Link copied. Paste it in WhatsApp."); }
       catch { const i = $("#wlinkin"); if (i) { i.focus(); i.select(); } toast("Select the link and copy it."); }
       return; }
-    if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; render(); }
+    if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; if (S.tab === "open") watchOpen(); render(); }
     else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii], want = !it.out, msg = want ? `${it.n} marked sold out` : `${it.n} back on the menu`;
       // Only the small sold-out list changes. An old sold-out flag saved inside the menu is cleared with one full save.
       const clearOld = !want && it.oldOut; it.oldOut = clearOld ? false : !!it.oldOut;

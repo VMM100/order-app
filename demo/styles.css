@@ -111,6 +111,8 @@ section{padding-top:16px}
 .ticket li .q{font-weight:700;margin-right:6px}
 .ticket .nt{font-size:14px;color:var(--warn);font-style:italic}
 .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.ostats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:13px;color:var(--muted)}.ostats b{color:var(--fg)}.ostats .hot{color:var(--fg);font-weight:600}
+.ow{display:inline-flex;align-items:center;gap:6px;margin-right:auto}
 .empty{color:var(--muted);text-align:center;padding:40px 0}
 .ontheway{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--good);color:#fff;font-weight:600}
 .ontheway .note{color:#fff;opacity:.85;margin:0}
