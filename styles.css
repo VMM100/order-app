@@ -494,3 +494,7 @@ body.otk-open{overflow:hidden}
 .rph{display:flex;justify-content:space-between;gap:10px;margin-bottom:2px}
 .rl{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:3px 0}
 .rtot{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+
+/* "By continuing, you agree to Wasabi's Terms" under sign-in buttons */
+.terms-note{margin:10px 0 0;text-align:center;font-size:13px}
+.terms-note a{font-weight:600}

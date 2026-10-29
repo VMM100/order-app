@@ -179,21 +179,18 @@ function logConsent(batch, u, rid, name, on, source) {
 // The yes is kept on the profile (diners/{uid}.terms) and logged like offers consent, with the exact words
 // and version. Change TERMS_VERSION when the terms change: everyone is asked once more.
 const TERMS_VERSION = "2026-10-30-draft";
-const TERMS_TEXT = "I agree to the Terms and Privacy policy.";
+const TERMS_TEXT = "By continuing, you agree to Wasabi's Terms. Read our Privacy policy.";
 const termsOk = (p) => !!(p && p.terms && p.terms.v === TERMS_VERSION);
 // The tick survives a sign-in round trip (Google, SMS code) in this tab, so nobody is asked twice.
 let TERMS_TICK = false;
 const termsTicked = () => { if (TERMS_TICK) return true; try { return sessionStorage.getItem("wasabi-terms") === TERMS_VERSION; } catch { return false; } };
 function setTermsTick(on) {
   TERMS_TICK = on; try { if (on) sessionStorage.setItem("wasabi-terms", TERMS_VERSION); else sessionStorage.removeItem("wasabi-terms"); } catch {}
-  document.querySelectorAll("[data-needterms]").forEach((b) => { b.disabled = !on; });
-  document.querySelectorAll("[data-termsnote]").forEach((n) => { n.hidden = on; });
 }
-const termsBox = () => `<label class="optin terms"><input type="checkbox" data-terms ${termsTicked() ? "checked" : ""}>
-  <span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Terms</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></span></label>
-  <p class="note" data-termsnote ${termsTicked() ? "hidden" : ""} style="margin:4px 0 0">Tick the box to continue.</p>`;
-const needTerms = () => (termsTicked() ? "data-needterms" : "data-needterms disabled");
-document.addEventListener("change", (e) => { if (e.target.matches && e.target.matches("input[data-terms]")) setTermsTick(e.target.checked); });
+// Shown right under the sign-in buttons; tapping one of them (or Continue) is agreeing, and is logged.
+const termsBox = (verb = "continuing") => `<p class="note terms-note">By ${verb}, you agree to ${esc(COMPANY.name)}'s <a href="terms.html" target="_blank" rel="noopener">Terms</a>. Read our <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>.</p>`;
+const needTerms = () => "";
+const agree = () => setTermsTick(true);
 // Adds the agreement to a batch: on the profile (merged, so it can be the first thing on it) and in the log.
 function logTerms(batch, u, profile, source) {
   const at = Date.now(), terms = { v: TERMS_VERSION, at };
@@ -749,7 +746,7 @@ function adminGate(page, go) {
     step("sign-in"); G.u = await authReady(); step("sign-in done");
     if (!isAccount(G.u) || !G.u.email) return show(`<section><div class="label" style="margin-top:0">${title} sign-in</div>
       <p>Sign in with the Google account registered for your restaurant.</p>
-      ${termsBox()}<button class="btn primary big" data-act="admin-in" style="margin-top:12px" ${G.busy ? "disabled" : needTerms()}>${G.busy ? "Signing in…" : "Sign in with Google"}</button>${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${signupLink}</section>`);
+      <button class="btn primary big" data-act="admin-in" ${G.busy ? "disabled" : ""}>${G.busy ? "Signing in…" : "Sign in with Google"}</button>${termsBox()}${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${signupLink}</section>`);
     const who = esc(G.u.email), other = `<button class="btn" data-act="admin-out">Use a different Google account</button>`;
     // No restaurant in the link: find the ones this account runs.
     if (!RID) {
@@ -778,7 +775,7 @@ function adminGate(page, go) {
     const b = e.target.closest("button"); if (!b || G.done) return; const a = b.dataset.act;
     if (a === "admin-out") { try { await signOutUser(); } catch {} G.err = ""; return check(); }
     if (a !== "admin-in" || G.busy) return;
-    if (!termsTicked()) { toast("Tick the box to agree to the Terms first"); return; }
+    agree();
     G.busy = true; G.err = ""; check();
     try { recordTerms((await googleSignIn()).user, "owner page sign-in"); } catch (err) { G.err = authMessage(err); }
     G.busy = false; check();
@@ -898,7 +895,7 @@ function dinerScreen() {
     const changed = S.uid && S.uid !== u.uid; S.uid = u.uid;
     // A new sign-in means a new identity: carry the table pass over to it before anything else.
     if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid);
-      if (S.proof.via === "code") askToJoin(S.sid, S.proof.table, (S.me && S.me.name) || S.name); else attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
+      if (S.proof.via === "code") { S.step = ""; S.authErr = ""; S.busy = false; if (isAccount(u)) recordTerms(u, "ask to join at table"); } if (S.proof.via === "code") askToJoin(S.sid, S.proof.table, (S.me && S.me.name) || S.name); else attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
     S.user = isAccount(u) ? u : null; S.profile = null; S.visits = [];
     // While the saved profile loads, show a skeleton, not the first-name question (it would flash up and vanish).
     if (S.user) { S.profileLoading = true; try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
@@ -1050,6 +1047,8 @@ function dinerScreen() {
   }
   function renderAsk() {
     const a = S.ask; if (!a) return;
+    // Signing in from here: the same phone-number and code steps as at the table.
+    if (a.state !== "waiting" && (S.step === "phone" || S.step === "code")) return paint(joinScreen({ people: {}, askTable: a.table }, false));
     if (a.state === "waiting") return paint(`<section class="askwait" aria-live="polite"><div class="label">Table ${esc(a.table)}</div>
       <h2 class="jtitle">Asking the table to let you in…</h2>
       <p>Your friends will see <b>${esc(a.name)} wants to join</b> on their phones. This screen moves on as soon as one of them taps <b>Let in</b>.</p>
@@ -1061,6 +1060,10 @@ function dinerScreen() {
       <form id="askform" class="grid"><label class="flabel" for="askin">Your first name <span>So your friends know it's you</span></label>
         <input class="field" id="askin" maxlength="16" autocomplete="given-name" placeholder="e.g. Amani" value="${esc(a.name)}">
         <button class="btn primary big">${a.state === "no" ? "Ask again" : "Ask to join"}</button></form>
+      ${S.user ? "" : `<div class="orline"><span>or sign in</span></div>
+      <div class="grid two"><button class="btn big" data-act="auth-phone">Phone number</button>
+        <button class="btn big" data-act="auth-google" ${S.busy ? "disabled" : ""}>Google</button></div>${termsBox("signing in")}
+      ${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}`}
       <p class="note">Sitting at the table? Scan its QR code to join straight away.</p></section>`);
   }
   // People at the table see requests from friends using the code, and answer them.
@@ -1097,7 +1100,7 @@ function dinerScreen() {
   // Joining: signed-in diners join in one tap; others choose phone, Google, or just a first name.
   function joinScreen(g, shared) {
     const names = Object.values(g.people || {}).map((p) => esc(p.name)), unit = shared ? "group" : "table";
-    const bar = `<div class="tablebar slim"><span>${names.length ? `With <b>${names.join(", ")}</b>` : shared ? "Starting a new group" : "You're the first one here"}</span></div>`;
+    const bar = `<div class="tablebar slim"><span>${g.askTable ? `Joining your friends at table ${esc(g.askTable)}` : names.length ? `With <b>${names.join(", ")}</b>` : shared ? "Starting a new group" : "You're the first one here"}</span></div>`;
     const err = S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : "";
     const back = `<button class="btn ghost" data-act="authback">Back</button>`;
     if (S.step === "phone") return `<section>${bar}<div class="label">Your phone number</div>
@@ -1115,15 +1118,13 @@ function dinerScreen() {
     if (S.user && S.profileLoading) return skPage();
     if (S.user && (S.step === "name" || !(S.profile && S.profile.name))) return `<section>${bar}<div class="label">You're signed in. What's your first name?</div>
       <form id="profileform" class="grid"><input class="field" id="profilein" maxlength="16" autocomplete="given-name" placeholder="First name" aria-label="Your first name" value="${esc(S.name || (S.user.displayName || "").split(" ")[0])}">
-        ${termsOk(S.profile) ? "" : termsBox()}
         ${S.user.phoneNumber ? `<label class="optin"><input type="checkbox" id="offersin"> <span>${esc(offersText(rname()))} <span class="note">Optional. Leave this unticked if you don't want offers.</span></span></label>` : ""}
-        <button class="btn primary big">Join ${unit}</button></form>${err}
+        <button class="btn primary big">Join ${unit}</button>${termsOk(S.profile) ? "" : termsBox()}</form>${err}
       <div class="orline"><span>or</span></div>
       <button class="btn big" data-act="signout">Join as a guest instead</button>
       <p class="note">Just a first name, no account. This signs your account out on this phone.</p></section>`;
     if (S.user && S.profile && S.profile.name) return `<section>${bar}
-      ${termsOk(S.profile) ? "" : `<div style="margin-top:16px">${termsBox()}</div>`}
-      <button class="btn primary big" data-act="joinme" style="margin-top:16px" ${termsOk(S.profile) ? "" : needTerms()}>Join as ${esc(S.profile.name)}</button>
+      <button class="btn primary big" data-act="joinme" style="margin-top:16px">Join as ${esc(S.profile.name)}</button>${termsOk(S.profile) ? "" : termsBox()}
       <div class="orline"><span>or</span></div>
       <button class="btn big" data-act="signout">Join as a guest instead</button>
       <p class="note">Just a first name, no account. This signs your account out on this phone.</p>${err}</section>`;
@@ -1133,9 +1134,8 @@ function dinerScreen() {
         <input class="field" id="namein" maxlength="16" placeholder="e.g. Amani" autocomplete="given-name" value="${esc(S.name)}">
         <button class="btn primary big">Join ${unit}</button></form>
       <div class="orline"><span>or sign in</span></div>
-      ${termsBox()}
-      <div class="grid two" style="margin-top:10px"><button class="btn big" data-act="auth-phone" ${needTerms()}>Phone number</button>
-        <button class="btn big" data-act="auth-google" ${S.busy ? "disabled" : needTerms()}>Google</button></div>${err}
+      <div class="grid two"><button class="btn big" data-act="auth-phone">Phone number</button>
+        <button class="btn big" data-act="auth-google" ${S.busy ? "disabled" : ""}>Google</button></div>${termsBox("signing in")}${err}
       <p class="note">Signing in is optional: it keeps your receipts and lets you order your usual in one tap. Ordering and splitting the bill work the same either way.</p></section>`;
   }
   // Welcome card for signed-in diners: visit number here, their usual, and a link to their account.
@@ -1159,6 +1159,7 @@ function dinerScreen() {
     store.set("dees-lasttable", location.href); render();
   }
   function render() {
+    if (S.ask && !S.access) return renderAsk();
     if (!S.n || !S.access) return;
     const shared = isShared(S.n), g = S.g;
     if (!S.gLoaded) { $("#cart").hidden = true; return paint(skMenu()); }
@@ -1321,7 +1322,7 @@ function dinerScreen() {
     }
     if (e.target.id === "profileform") {
       const name = $("#profilein").value.trim(); if (!name || !S.user) return;
-      if (!termsOk(S.profile) && !termsTicked()) { S.authErr = "Tick the box to agree to the Terms first."; return render(); }
+      agree();
       const on = !!($("#offersin") && $("#offersin").checked);
       const prof = { name, phone: S.user.phoneNumber || null, email: S.user.email || null, offers: on ? { [RID]: true } : {}, offerNames: on ? { [RID]: rname() } : {}, created: Date.now() };
       try { const b = writeBatch(db); b.set(dinerRef(S.user.uid), prof); if (on) logConsent(b, S.user, RID, rname(), true, "sign-up at table");
@@ -1367,17 +1368,16 @@ function dinerScreen() {
       try { if (navigator.share) { await navigator.share({ text: txt }); return; } } catch { return; }
       try { await navigator.clipboard.writeText(txt); toast("Invite copied. Paste it in WhatsApp."); } catch { toast(`Code: ${S.g.code}`); }
     }
-    else if ((d.act === "auth-phone" || d.act === "auth-google") && !termsTicked()) toast("Tick the box to agree to the Terms first");
-    else if (d.act === "auth-phone") { S.step = "phone"; S.authErr = ""; render(); }
+    else if (d.act === "auth-phone") { agree(); S.step = "phone"; S.authErr = ""; render(); }
     else if (d.act === "authback") { S.step = ""; S.authErr = ""; render(); }
     else if (d.act === "resend") { S.step = "phone"; S.authErr = ""; render(); }
-    else if (d.act === "auth-google" && !S.busy) {
+    else if (d.act === "auth-google" && !S.busy) { agree();
       S.busy = true; S.step = "google"; S.authErr = ""; render();
       try { await googleSignIn(); } catch (err) { S.authErr = authMessage(err); S.step = ""; }
       S.busy = false; render();
     }
     else if (d.act === "joinme" && S.profile) {
-      if (!termsOk(S.profile) && !termsTicked()) { toast("Tick the box to agree to the Terms first"); return; }
+      agree();
       try { if (!termsOk(S.profile)) { const bt = writeBatch(db), t = logTerms(bt, S.user, S.profile, "join at table"); await bt.commit(); S.profile = { ...S.profile, terms: t }; }
         await joinAs(S.profile.name, S.user); } catch (err) { fail(err); } }
     else if (d.act === "signout") { try { await signOutUser(); } catch {} S.step = ""; S.user = null; S.profile = null; S.name = ""; render(); }
@@ -2588,7 +2588,7 @@ function companyScreen() {
         ${signedIn ? `<p><b>${esc(C.u.email)}</b> isn't on the company team.</p>` : `<p>For the ${esc(COMPANY.name)} team: approve restaurants, record payments and manage subscriptions.</p>`}
         ${!C.claimed ? `<p>No one has set up the company page yet. The first Google account to do so runs it, and can add partners later.</p>
           <button class="btn primary big" data-act="co-claim" ${C.busy ? "disabled" : ""}>${signedIn ? "Make this account the company admin" : "Sign in with Google and set up"}</button>`
-          : signedIn ? `<button class="btn" data-act="co-out">Use a different Google account</button>` : `${termsBox()}<button class="btn primary big" data-act="co-in" style="margin-top:12px" ${needTerms()}>Sign in with Google</button>`}
+          : signedIn ? `<button class="btn" data-act="co-out">Use a different Google account</button>` : `<button class="btn primary big" data-act="co-in">Sign in with Google</button>${termsBox()}`}
         ${C.err ? `<p class="err">${esc(C.err)}</p>` : ""}</section>`);
     }
     const by = (k) => C.list.filter((a) => subState(a).kind === k);
@@ -2626,7 +2626,7 @@ function companyScreen() {
       if (d.act === "co-in" || d.act === "co-claim") {
         C.busy = "in"; C.err = ""; render();
         let u = isAccount(C.u) && C.u.email ? C.u : null;
-        if (!u && !termsTicked()) { C.busy = ""; toast("Tick the box to agree to the Terms first"); return render(); }
+        if (!u) agree();
         try { if (!u) { u = (await googleSignIn()).user; recordTerms(u, "company page sign-in"); } } catch (err) { C.err = authMessage(err); C.busy = ""; return render(); }
         if (d.act === "co-claim" && !(await isCompanyUser(u))) {
           const batch = writeBatch(db);
@@ -2693,7 +2693,7 @@ function signupScreen() {
       <p class="note">${price()}, after a free trial. Nothing to install.</p>`;
     if (!isAccount(U.u) || !U.u.email) return paint(`<section><div class="label" style="margin-top:0">Register your restaurant</div>${intro}
       <p>Sign in with the Google account you'll use as the owner.</p>
-      ${termsBox()}<button class="btn primary big" data-act="su-in" style="margin-top:12px" ${U.busy ? "disabled" : needTerms()}>${U.busy ? "Signing in…" : "Sign in with Google"}</button>${err}</section>`);
+      <button class="btn primary big" data-act="su-in" ${U.busy ? "disabled" : ""}>${U.busy ? "Signing in…" : "Sign in with Google"}</button>${termsBox()}${err}</section>`);
     const list = U.mine.length ? `<div class="label">Your restaurants</div><div class="grid" style="max-width:520px">${U.mine.map((m) => { const st = subState(m.acct);
       return `<a class="ticket ${st.live ? "preparing" : ""}" style="display:block;text-decoration:none;color:inherit" href="${BASE}?r=${esc(m.rid)}#owner"><b>${esc(m.name)}</b>
         <div class="note" style="margin:2px 0 0">${st.kind === "pending" ? "Waiting for approval. We'll be in touch." : st.live ? "Running · open the owner page" : st.kind === "suspended" ? "Paused" : "Subscription ended"}</div></a>`; }).join("")}</div>` : "";
@@ -2714,7 +2714,7 @@ function signupScreen() {
   }
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const a = b.dataset.act;
-    if (a === "su-in" && !U.busy) { if (!termsTicked()) { toast("Tick the box to agree to the Terms first"); return; }
+    if (a === "su-in" && !U.busy) { agree();
       U.busy = true; U.err = ""; render(); try { recordTerms((await googleSignIn()).user, "restaurant sign-up"); } catch (err) { U.err = authMessage(err); } U.busy = false; check(); }
     if (a === "su-out") { await signOutUser(); check(); }
     if (a === "su-new") { U.form = true; render(); }
@@ -2789,8 +2789,8 @@ function accountScreen() {
           <input class="field num" id="acsmsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
           <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Checking…" : "Sign in"}</button></form>
           <button class="btn ghost" data-act="ac-phone" style="margin-top:10px">Use a different number</button>`
-      : `${termsBox()}<div class="grid" style="margin-top:12px"><button class="btn primary big" data-act="ac-google" ${S.busy ? "disabled" : needTerms()}>${S.busy ? "Signing in…" : "Continue with Google"}</button>
-          <button class="btn big" data-act="ac-phone" ${needTerms()}>Continue with phone number</button></div>
+      : `<div class="grid"><button class="btn primary big" data-act="ac-google" ${S.busy ? "disabled" : ""}>${S.busy ? "Signing in…" : "Continue with Google"}</button>
+          <button class="btn big" data-act="ac-phone">Continue with phone number</button></div>${termsBox()}
           <p class="note">Restaurant owners and managers: use the Google account registered for your restaurant.</p>`;
     return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Sign in</div>
         <div class="wsign-title">For diners, restaurant owners and managers</div></div>
@@ -2801,7 +2801,7 @@ function accountScreen() {
   function termsGateHtml() {
     return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Before you continue</div>
         <div class="wsign-title">${S.profile && S.profile.terms ? "We've updated our Terms" : "Please agree to our Terms"}</div></div>
-      <div class="wsign-step">${termsBox()}<button class="btn primary big" data-act="ac-terms" style="margin-top:12px;width:100%" ${needTerms()}>Continue</button>
+      <div class="wsign-step"><button class="btn primary big" data-act="ac-terms" style="width:100%">Continue</button>${termsBox()}
         ${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}</div></div>
       <p class="note wsign-foot">Signed in as ${esc(S.user.email || S.user.phoneNumber || "")} · <button class="linkbtn" data-act="signout">Use a different account</button></p></section>`;
   }
@@ -2919,9 +2919,9 @@ function accountScreen() {
   });
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
-    if ((d.act === "ac-google" || d.act === "ac-phone") && !termsTicked()) { toast("Tick the box to agree to the Terms first"); return; }
+    if (d.act === "ac-google" || d.act === "ac-phone") agree();
     if (d.act === "ac-google" && !S.busy) { S.busy = true; S.authErr = ""; render(); try { await googleSignIn(); } catch (err) { S.authErr = authMessage(err); S.busy = false; render(); } return; }
-    if (d.act === "ac-terms") { if (termsTicked()) render(); return; }
+    if (d.act === "ac-terms") { agree(); render(); return; }
     if (d.act === "ac-phone") { S.step = "phone"; S.authErr = ""; render(); const i = $("#acphonein"); if (i) i.focus(); return; }
     if (d.act === "ac-editname") { S.editName = !S.editName; S.authErr = ""; render(); if (S.editName) { const i = $("#acnamein"); if (i) { i.focus(); i.select(); } } return; }
     if (d.act === "ac-back") { S.step = ""; S.authErr = ""; render(); return; }

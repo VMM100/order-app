@@ -49,11 +49,9 @@ await check("Table without a QR key (asks for a code)", "?r=crafty-dees&t=1", as
 await check("Live demo page", "demo/", null, { wait: 5000 });
 await check("Privacy policy", "privacy.html", async (p) => { await p.locator("h1").first().waitFor(T); });
 await check("Terms", "terms.html", async (p) => { await p.locator("h1").first().waitFor(T); });
-await check("Sign in needs the Terms ticked", "#account", async (p) => {
-  const g = p.getByText("Continue with Google"); await g.waitFor(T);
-  if (!(await g.isDisabled())) throw new Error("Google button works without the Terms box");
-  await p.locator("input[data-terms]").check();
-  if (await g.isDisabled()) throw new Error("ticking the Terms box didn't enable sign-in");
+await check("Sign in shows the Terms statement", "#account", async (p) => {
+  await p.getByText("Continue with Google").waitFor(T);
+  await p.locator(".terms-note a[href='terms.html']").waitFor(T);
 });
 await check("Page not found", "this-page-does-not-exist", async (p) => { await p.getByText("isn't on the menu").first().waitFor(T); });
 
