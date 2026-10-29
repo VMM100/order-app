@@ -449,7 +449,16 @@ body.otk-open{overflow:hidden}
 .otk-head{display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg);padding:6px 0 10px;z-index:2;border-bottom:1px solid var(--line)}
 .otk-head b{font-family:var(--display);font-size:22px;text-transform:var(--dcase,uppercase)}
 .otk-who{gap:6px;flex-wrap:wrap}
-.otk-ren{margin-top:6px;color:var(--muted,#6b6b6b);display:inline-flex;align-items:center;gap:6px}
+.otk-chip{display:inline-flex;align-items:center;padding:0 3px 0 0}
+.otk-chipn{background:none;border:0;padding:6px 2px 6px 12px;font:inherit;color:inherit;cursor:pointer}
+.otk-pen{background:none;border:0;color:var(--muted);display:inline-grid;place-items:center;width:32px;height:32px;margin:-4px 0;border-radius:999px;cursor:pointer;animation:otkpen .2s ease-out}
+.otk-pen:hover{color:var(--fg)}
+.otk-chip.editing{box-shadow:0 0 0 3px var(--accent-soft)}
+.otk-chip.editing .otk-pen{color:var(--fg)}
+.otk-chipin{background:none;border:0;outline:0;font:inherit;color:inherit;padding:6px 2px 6px 12px;min-width:0;max-width:20ch;flex:none}
+.otk-chipin::placeholder{color:var(--muted);font-weight:500}
+@keyframes otkpen{from{opacity:0;max-width:0}to{opacity:1;max-width:32px}}
+@media (prefers-reduced-motion:reduce){.otk-pen{animation:none}}
 .otk-search{margin-top:12px}
 .otk-cats{gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-top:10px;padding-bottom:2px}
 .otk-cats .chip{white-space:nowrap}

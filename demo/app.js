@@ -1445,6 +1445,15 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
   // The same item, size, person and note twice shows once, with a count.
   const keyOf = (l) => [l.pid, l.n, l.v, l.note || ""].join("|");
   const groups = () => { const gs = []; T.cart.forEach((l) => { const k = keyOf(l), x = gs.find((y) => y.k === k); if (x) x.q++; else gs.push({ k, l, q: 1 }); }); return gs; };
+  // Who it's for, as chips. The picked guest without a phone grows a pen; the pen turns that chip into
+  // a name box right where it is, with a tick to finish.
+  function chipHtml(p) {
+    const on = T.who === p.pid, editable = p.guest && !base.tab;
+    if (T.nameFor === p.pid) { const v = p.name.startsWith("Guest ") && !T.renamed[p.pid] ? "" : p.name;
+      return `<span class="chip otk-chip editing" aria-pressed="true"><input id="otname" class="otk-chipin" maxlength="20" style="width:${Math.max(6, (v || p.name).length + 1)}ch" placeholder="${esc(p.name)}" value="${esc(v)}" aria-label="Guest's name" autocomplete="off" enterkeyhint="done"><button type="button" class="otk-pen" data-ot="namedone" aria-label="Save name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></span>`; }
+    if (on && editable) return `<span class="chip otk-chip" aria-pressed="true"><button type="button" class="otk-chipn" data-otwho="${esc(p.pid)}">${esc(p.name)}</button><button type="button" class="otk-pen" data-ot="rename" aria-label="Change ${esc(p.name)}'s name"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></span>`;
+    return `<button class="chip" aria-pressed="${on}" data-otwho="${esc(p.pid)}">${esc(p.name)}</button>`;
+  }
   function render() {
     const q = T.q.trim().toLowerCase(), tot = T.cart.reduce((a, l) => a + l.pr, 0);
     const secs = MENU.map((c, ci) => ({ c, ci, items: c.items.map((it, ii) => ({ it, ii })).filter(({ it }) => !q || it.n.toLowerCase().includes(q) || (it.d || "").toLowerCase().includes(q)) }))
@@ -1453,10 +1462,8 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
     el.innerHTML = `<div class="otk-in">
       <div class="otk-head"><b>${esc(title)}</b><button class="btn ghost" data-ot="close" aria-label="Close without sending">Close</button></div>
       <div class="label" style="margin-top:6px">For</div>
-      <div class="row otk-who">${who.map((p) => `<button class="chip" aria-pressed="${T.who === p.pid}" data-otwho="${esc(p.pid)}">${esc(p.name)}</button>`).join("")}
+      <div class="row otk-who">${who.map(chipHtml).join("")}
         ${base.tab ? "" : `<button class="chip" data-ot="guest">+ Guest without phone</button>`}</div>
-      ${!base.tab && !T.nameFor && (who.find((p) => p.pid === T.who) || {}).guest ? `<button class="btn ghost small otk-ren" data-ot="rename" aria-label="Change ${esc(nameOf(T.who))}'s name"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Change ${esc(nameOf(T.who))}'s name</button>` : ""}
-      ${T.nameFor ? `<div class="vrow" style="margin-top:6px"><input class="field" id="otname" maxlength="20" placeholder="Name (optional)" value="${esc(nameOf(T.nameFor).startsWith("Guest ") ? "" : nameOf(T.nameFor))}" aria-label="Guest's name, optional"><button class="btn" data-ot="namedone">OK</button></div>` : ""}
       <input class="field otk-search" id="otq" type="search" placeholder="Search the menu" value="${esc(T.q)}" aria-label="Search the menu" autocomplete="off">
       ${q ? "" : `<div class="row otk-cats">${MENU.map((c, i) => `<button class="chip" aria-pressed="${i === T.cat}" data-otcat="${i}">${esc(c.c)}</button>`).join("")}</div>`}
       <div class="otk-list">${secs.map(({ c, ci, items }) => `${q ? `<div class="label">${esc(c.c)}</div>` : ""}${items.map(({ it, ii }) => `<div class="otk-item${out(it) ? " out" : ""}">
@@ -1495,11 +1502,13 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
   }
   el.addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
+    // Tapping anywhere else while naming a guest keeps the name and carries on.
+    if (T.nameFor && !b.closest(".editing")) { nameDone(); if (!d.otwho && !d.ot) render(); }
     if (d.ot === "close") { if (T.cart.length && !b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Tap again: discard basket"; return; } return close(); }
-    if (d.ot === "guest") { addGuest(""); return render(); }
-    if (d.ot === "namedone") { nameDone(); return render(); }
-    if (d.ot === "rename") { T.nameFor = T.who; render(); const i = el.querySelector("#otname"); if (i) { i.focus(); i.select(); } return; }
-    if (d.otwho) { if (T.nameFor) nameDone(); T.who = d.otwho; return render(); }
+    if (d.ot === "guest") { addGuest(""); render(); const i = el.querySelector("#otname"); if (i) i.focus(); return; }
+    if (d.ot === "namedone") { if (T.nameFor) nameDone(); return render(); }
+    if (d.ot === "rename") { T.nameFor = T.who; render(); const i = el.querySelector("#otname"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } return; }
+    if (d.otwho) { T.who = d.otwho; return render(); }
     if (d.otcat) { T.cat = +d.otcat; el.querySelector(".otk-list") && el.scrollTo({ top: 0 }); return render(); }
     if (d.otadd) { if (!T.who) { toast("First pick who it's for"); return; }
       const [ci, ii, vi] = d.otadd.split(".").map(Number), it = MENU[ci] && MENU[ci].items[ii]; if (!it || out(it) || !it.v[vi]) return render();
@@ -1516,7 +1525,7 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
     if (e.target.id === "otnote" && T.noteFor != null) { const k = T.noteFor; let nk = k; T.cart.forEach((l) => { if (keyOf(l) === k) { l.note = e.target.value; nk = keyOf(l); } }); T.noteFor = nk; }
     if (e.target.id === "otname" && T.nameFor) { const p = T.guests.find((x) => x.pid === T.nameFor), v = e.target.value.trim();
       if (p) p.name = v || `Guest ${people().findIndex((x) => x.pid === p.pid) + 1}`; else T.renamed[T.nameFor] = v || (base.people[T.nameFor] || {}).name;
-      el.querySelectorAll(".otk-who .chip").forEach((c) => { if (c.dataset.otwho === T.nameFor) c.textContent = nameOf(T.nameFor); }); }
+      e.target.style.width = `${Math.max(6, (e.target.value || e.target.placeholder).length + 1)}ch`; }
   });
   // A guest who is already at the table keeps the new name straight away, even if nothing is sent.
   function nameDone() {
