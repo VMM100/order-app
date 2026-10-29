@@ -594,6 +594,7 @@ const view = location.hash.slice(1);
 // (guest, owner, company…) without logging out; on Sign in itself it asks, then logs out; Tables & QR
 // goes back to the owner page.
 const LOGIN_PAGES = ["account", "owner", "manager", "setup", "company"];
+let SETUP_ROLE = "owner";   // which page Tables & QR's back arrow returns to (set by setupScreen)
 let SIGNED_IN = false;
 async function logOut() {
   try { await signOutUser(); } catch {}
@@ -622,7 +623,10 @@ if (LOGIN_PAGES.includes(view)) {
   onUser((u) => { SIGNED_IN = isAccount(u); if (lb) lb.hidden = !SIGNED_IN; });
   if (lb) lb.addEventListener("click", async () => { if (await askLogOut()) logOut(); });
   window.wasabiBack = () => {
-    if (!SIGNED_IN || view === "setup") return false;
+    // Tables & QR always goes straight back to its owner or manager page, in one press, however many
+    // times the person went back and forth (history would walk through every visit).
+    if (view === "setup" && RID) { location.href = `${BASE}?r=${encodeURIComponent(RID)}#${SETUP_ROLE}`; return true; }
+    if (!SIGNED_IN) return false;
     if (view !== "account") { location.href = `${BASE}?choose=1#account`; return true; }
     askLogOut().then((yes) => { if (yes) logOut(); });
     return true;
@@ -1875,6 +1879,7 @@ function bossMenu(role, extra = []) {
 }
 const tabBar = (tabs, cur) => `<div class="seg tabs" role="tablist" style="max-width:640px">${tabs.map(([k, l]) => `<button aria-pressed="${cur === k}" data-otab="${k}">${l}</button>`).join("")}</div>`;
 function setupScreen(role) {
+  SETUP_ROLE = role === "manager" ? "manager" : "owner";
   $("#wrap").classList.add("wide"); $("#sub").textContent = role === "owner" ? "Owner" : "Manager"; document.title = "Tables & QR · " + rname();
   const link = (h, l) => `<div><div class="note" style="margin:0">${l}</div><a href="${h}">${esc(h)}</a></div>`;
   let rot = false, keys = {}, staffTok = null, rotStaff = false, rekey = null;
