@@ -569,11 +569,15 @@ async function logOut() {
   if (view !== "account") location.replace(`${BASE}#account`);
 }
 function askLogOut() {
+  return askSure("Log out?", "Are you sure you want to log out? You'll need to sign in again to get back here.", "Log out", "Stay signed in");
+}
+// A small yes/no box in the app's own look (never the browser's alert boxes).
+function askSure(title, text, yes, no) {
   return new Promise((done) => {
     const back = document.activeElement, d = document.createElement("div"); d.className = "ask";
     d.innerHTML = `<div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-t" aria-describedby="ask-d">
-      <h2 id="ask-t">Log out?</h2><p id="ask-d">Are you sure you want to log out? You'll need to sign in again to get back here.</p>
-      <div class="ask-acts"><button type="button" class="btn big" data-no>Stay signed in</button><button type="button" class="btn danger big" data-yes>Log out</button></div></div>`;
+      <h2 id="ask-t">${esc(title)}</h2><p id="ask-d">${esc(text)}</p>
+      <div class="ask-acts"><button type="button" class="btn big" data-no>${esc(no)}</button><button type="button" class="btn danger big" data-yes>${esc(yes)}</button></div></div>`;
     document.body.appendChild(d); d.querySelector("[data-no]").focus();
     const end = (yes) => { d.remove(); removeEventListener("keydown", key); if (back && back.focus) back.focus(); done(yes); };
     const key = (e) => { if (e.key === "Escape") end(false); };
@@ -1766,6 +1770,18 @@ function waiterScreen(boss) {
     }
   });
   loadShift();
+  // The back arrow goes back to the waiter sign-in, not the front page: from the PIN pad to the names,
+  // and from a shift (after a yes) to the names, ending the shift. Tables stay the waiter's until handed over.
+  window.wasabiBack = () => {
+    const sheet = document.querySelector(".otk"); if (sheet) { sheet.remove(); document.body.classList.remove("otk-open"); return true; }
+    if (boss) return false;
+    if (!S.me && S.picking) { S.picking = null; S.pin = ""; S.pinErr = ""; render(); return true; }
+    if (!S.me) return true;   // already on the sign-in names: stay here
+    const mine = S.groups.filter((g) => g.waiter === S.me).length;
+    askSure("End your shift?", `You'll go back to the waiter sign-in.${mine ? ` Your ${mine} table${mine > 1 ? "s stay" : " stays"} yours until handed over.` : ""}`, "End shift", "Stay on shift")
+      .then((yes) => { if (yes) endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); });
+    return true;
+  };
   async function closeGroup(sid) {
     const g = find(sid); if (!g) return;
     const all = await getDocs(query(rcol("lines"), where("session", "==", sid)));
