@@ -1429,8 +1429,9 @@ function stationScreen(st) {
 //   by / byName: who is ordering (waiter id or "counter", and the name shown to diners and the kitchen)
 function orderTaker({ g, create, by, byName, title, onSent }) {
   const base = g || create.group;
-  const T = { who: null, guests: [], cart: [], q: "", cat: 0, noteFor: null, sending: false, nameFor: null };
-  const people = () => [...Object.entries(base.people || {}).map(([pid, p]) => ({ pid, name: p.name })), ...T.guests];
+  const T = { who: null, guests: [], cart: [], q: "", cat: 0, noteFor: null, sending: false, nameFor: null, renamed: {} };
+  // Guests without a phone (just added, or added earlier by staff) can be renamed here at any time.
+  const people = () => [...Object.entries(base.people || {}).map(([pid, p]) => ({ pid, name: T.renamed[pid] || p.name, guest: !!p.guest })), ...T.guests.map((p) => ({ ...p, guest: true }))];
   const nameOf = (pid) => (people().find((p) => p.pid === pid) || {}).name || "Guest";
   const addGuest = (name) => { const pid = `guest-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
     T.guests.push({ pid, name: name || `Guest ${people().length + 1}`, fresh: true }); T.who = pid; T.nameFor = name ? null : pid; };
@@ -1454,6 +1455,7 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
       <div class="label" style="margin-top:6px">For</div>
       <div class="row otk-who">${who.map((p) => `<button class="chip" aria-pressed="${T.who === p.pid}" data-otwho="${esc(p.pid)}">${esc(p.name)}</button>`).join("")}
         ${base.tab ? "" : `<button class="chip" data-ot="guest">+ Guest without phone</button>`}</div>
+      ${!base.tab && !T.nameFor && (who.find((p) => p.pid === T.who) || {}).guest ? `<button class="btn ghost small otk-ren" data-ot="rename" aria-label="Change ${esc(nameOf(T.who))}'s name"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Change ${esc(nameOf(T.who))}'s name</button>` : ""}
       ${T.nameFor ? `<div class="vrow" style="margin-top:6px"><input class="field" id="otname" maxlength="20" placeholder="Name (optional)" value="${esc(nameOf(T.nameFor).startsWith("Guest ") ? "" : nameOf(T.nameFor))}" aria-label="Guest's name, optional"><button class="btn" data-ot="namedone">OK</button></div>` : ""}
       <input class="field otk-search" id="otq" type="search" placeholder="Search the menu" value="${esc(T.q)}" aria-label="Search the menu" autocomplete="off">
       ${q ? "" : `<div class="row otk-cats">${MENU.map((c, i) => `<button class="chip" aria-pressed="${i === T.cat}" data-otcat="${i}">${esc(c.c)}</button>`).join("")}</div>`}
@@ -1471,6 +1473,7 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
   }
   async function send() {
     if (!T.cart.length || T.sending) return;
+    if (T.nameFor) nameDone();
     if (T.cart.some((l) => out(MENU.flatMap((c) => c.items).find((it) => it.n === l.n) || {}))) { toast("Something in the basket just sold out. Remove it first."); return render(); }
     T.sending = true; render();
     const write = async (code) => {
@@ -1494,8 +1497,9 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.ot === "close") { if (T.cart.length && !b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Tap again: discard basket"; return; } return close(); }
     if (d.ot === "guest") { addGuest(""); return render(); }
-    if (d.ot === "namedone") { T.nameFor = null; return render(); }
-    if (d.otwho) { T.who = d.otwho; T.nameFor = null; return render(); }
+    if (d.ot === "namedone") { nameDone(); return render(); }
+    if (d.ot === "rename") { T.nameFor = T.who; render(); const i = el.querySelector("#otname"); if (i) { i.focus(); i.select(); } return; }
+    if (d.otwho) { if (T.nameFor) nameDone(); T.who = d.otwho; return render(); }
     if (d.otcat) { T.cat = +d.otcat; el.querySelector(".otk-list") && el.scrollTo({ top: 0 }); return render(); }
     if (d.otadd) { if (!T.who) { toast("First pick who it's for"); return; }
       const [ci, ii, vi] = d.otadd.split(".").map(Number), it = MENU[ci] && MENU[ci].items[ii]; if (!it || out(it) || !it.v[vi]) return render();
@@ -1510,10 +1514,17 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
     if (e.target.id === "otq") { T.q = e.target.value; render(); }
     // The note goes on every item in that row; the row is found again by its new key while typing.
     if (e.target.id === "otnote" && T.noteFor != null) { const k = T.noteFor; let nk = k; T.cart.forEach((l) => { if (keyOf(l) === k) { l.note = e.target.value; nk = keyOf(l); } }); T.noteFor = nk; }
-    if (e.target.id === "otname" && T.nameFor) { const p = T.guests.find((x) => x.pid === T.nameFor); if (p) p.name = e.target.value.trim() || `Guest ${people().indexOf(p) + 1}`;
+    if (e.target.id === "otname" && T.nameFor) { const p = T.guests.find((x) => x.pid === T.nameFor), v = e.target.value.trim();
+      if (p) p.name = v || `Guest ${people().findIndex((x) => x.pid === p.pid) + 1}`; else T.renamed[T.nameFor] = v || (base.people[T.nameFor] || {}).name;
       el.querySelectorAll(".otk-who .chip").forEach((c) => { if (c.dataset.otwho === T.nameFor) c.textContent = nameOf(T.nameFor); }); }
   });
-  el.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.target.id === "otnote" || e.target.id === "otname")) { e.preventDefault(); T.noteFor = null; T.nameFor = null; render(); }
+  // A guest who is already at the table keeps the new name straight away, even if nothing is sent.
+  function nameDone() {
+    const pid = T.nameFor; T.nameFor = null; if (!pid || !g || !(g.people || {})[pid]) return;
+    const n = String(T.renamed[pid] || "").trim().slice(0, 20); if (!n || n === g.people[pid].name) return;
+    updateDoc(groupRef(base.session), { [`people.${pid}.name`]: n }).then(() => { g.people[pid].name = n; toast(`Name changed to ${n}`); }, fail);
+  }
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.target.id === "otnote" || e.target.id === "otname")) { e.preventDefault(); T.noteFor = null; if (e.target.id === "otname") nameDone(); render(); }
     if (e.key === "Escape") close(); });
   render();
   const i = el.querySelector("#otname") || el.querySelector("#otq"); if (i && !matchMedia("(pointer:coarse)").matches) i.focus();

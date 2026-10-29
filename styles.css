@@ -449,6 +449,7 @@ body.otk-open{overflow:hidden}
 .otk-head{display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg);padding:6px 0 10px;z-index:2;border-bottom:1px solid var(--line)}
 .otk-head b{font-family:var(--display);font-size:22px;text-transform:var(--dcase,uppercase)}
 .otk-who{gap:6px;flex-wrap:wrap}
+.otk-ren{margin-top:6px;color:var(--muted,#6b6b6b);display:inline-flex;align-items:center;gap:6px}
 .otk-search{margin-top:12px}
 .otk-cats{gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-top:10px;padding-bottom:2px}
 .otk-cats .chip{white-space:nowrap}
