@@ -1861,7 +1861,7 @@ function waiterScreen(boss) {
 
 // ================= SETUP =================
 // The same tabs as the owner and manager pages, with Tables & QR selected; the others open that page.
-const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["open", "Open tables"], ["past", "Past tables"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["open", "Open tables"], ["menu", "Menu"], ["staff", "Staff"]]);
+const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["live", "Tables"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["live", "Tables"], ["menu", "Menu"], ["staff", "Staff"]]);
 // ☰ on the owner, manager and Tables & QR pages: things used now and then. extra = items for this page.
 function bossMenu(role, extra = []) {
   const st = subState(ACCOUNT), page = role === "owner" ? "owner" : "manager";
@@ -1976,7 +1976,9 @@ function ownerScreen(role) {
   const myEmail = auth.currentUser && auth.currentUser.email;
   const TABS = ownerTabs(owner ? "owner" : "manager");
   let startTab = null; try { startTab = sessionStorage.getItem("dees-otab"); sessionStorage.removeItem("dees-otab"); } catch {}
-  const S = { tab: TABS.some(([k]) => k === startTab) ? startTab : TABS[0][0], edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "", admins: null, pins: null, wtok: null, wqr: false };
+  if (startTab === "open" || startTab === "past") startTab = "live";
+  // Tables tab: Open (live) or Past (one day at a time, owners only).
+  const S = { tab: TABS.some(([k]) => k === startTab) ? startTab : TABS[0][0], ttab: "open", edit: null, period: "7", m: null, loading: false, armed: null, pending: false, busy: "", admins: null, pins: null, wtok: null, wqr: false };
   // Who can sign in: the owner (set on the account by the company) and the managers the owner adds.
   // Waiter PINs live in restaurants/{RID}/secrets/waiters, readable only by the owner and managers.
   const pinsRef = () => rdoc("secrets", "waiters");
@@ -2010,7 +2012,7 @@ function ownerScreen(role) {
     bossMenu(owner ? "owner" : "manager");
     if (!TABS.some(([k]) => k === S.tab)) S.tab = TABS[0][0];
     paint(subBanner() + tabBar(TABS, S.tab) + `
-      ${S.tab === "open" ? openTab() : owner && S.tab === "past" ? pastTab() : S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
+      ${S.tab === "live" ? tablesTab() : S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
     const qr = document.getElementById("wlqr");
     if (qr && S.wtok) { const draw = () => { if (!qr.childNodes.length) brandQr(qr, waiterLink(), 160); };
       if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true }); }
@@ -2022,7 +2024,7 @@ function ownerScreen(role) {
   const O = { on: false, groups: null, lines: {}, live: [], alerts: [], sids: "", subs: [], armed: null, busy: null };
   function watchOpen() {
     if (O.on) return; O.on = true;
-    const again = () => { if (S.tab === "open" && !editing()) render(); };
+    const again = () => { if (S.tab === "live" && S.ttab === "open" && !editing()) render(); };
     onSnapshot(query(rcol("groups"), where("open", "==", true)), (q) => {
       O.groups = q.docs.map((x) => x.data()); again();
       // The bill so far: every item at the open tables (30 tables per listener, the database's limit).
@@ -2035,7 +2037,14 @@ function ownerScreen(role) {
     onSnapshot(query(rcol("alerts"), where("done", "==", false)), (q) => { O.alerts = q.docs.map((x) => ({ id: x.id, ...x.data() })); again(); }, () => {});
     setInterval(again, 30000);   // keeps "12 min" fresh
   }
-  if (S.tab === "open") watchOpen();
+  if (S.tab === "live") watchOpen();
+  function tablesTab() {
+    const past = owner && S.ttab === "past";
+    return (owner ? `<div class="seg" role="tablist" aria-label="Tables" style="max-width:360px;margin:4px 0 6px"><button role="tab" aria-pressed="${!past}" data-ttab="open">Open now</button><button role="tab" aria-pressed="${past}" data-ttab="past">Past</button></div>` : "")
+      + (past ? pastTab() : openTab());
+  }
+  document.addEventListener("click", (e) => { const b = e.target.closest("button[data-ttab]"); if (!b || S.tab !== "live") return;
+    S.ttab = b.dataset.ttab === "past" && owner ? "past" : "open"; if (S.ttab === "open") watchOpen(); render(); });
   function openTab() {
     if (O.err) return `<section>${errorBox(O.err)}</section>`;
     if (!O.groups) return `<section><h2 class="ptitle">Open tables</h2>${skTickets(3)}</section>`;
@@ -2065,7 +2074,7 @@ function ownerScreen(role) {
       ${list.length ? `<p class="note">Closing ends the table for everyone at it: unfinished items and calls are cleared and the table's code stops working. Only close when they've paid and left.</p>` : ""}</section>`;
   }
   document.addEventListener("click", async (e) => {
-    const b = e.target.closest("button"); if (!b || S.tab !== "open") return; const d = b.dataset;
+    const b = e.target.closest("button"); if (!b || S.tab !== "live" || S.ttab !== "open") return; const d = b.dataset;
     if (d.oarm) { O.armed = d.oarm; render(); setTimeout(() => { if (O.armed === d.oarm && O.busy !== d.oarm) { O.armed = null; render(); } }, 4000); }
     else if (d.oclose) { const g = (O.groups || []).find((x) => x.session === d.oclose); if (!g || O.busy) return;
       O.busy = g.session; render();
@@ -2092,7 +2101,7 @@ function ownerScreen(role) {
     try { const q = await getDocs(query(rcol("sessions"), where("closed", ">=", a), where("closed", "<", a + DAY)));
       if (H.day !== k) return; H.rows = q.docs.map((x) => x.data()).sort((x, y) => y.closed - x.closed); }
     catch (e) { if (H.day !== k) return; H.err = e; H.rows = []; }
-    if (S.tab === "past") render();
+    if (S.tab === "live" && S.ttab === "past") render();
   }
   async function loadRec(sid) {
     if (H.rec[sid] && !H.rec[sid].err) return;
@@ -2157,7 +2166,7 @@ function ownerScreen(role) {
     H.csv = false; render();
   }
   document.addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b || S.tab !== "past") return; const d = b.dataset;
+    const b = e.target.closest("button"); if (!b || S.tab !== "live" || S.ttab !== "past") return; const d = b.dataset;
     if (d.hday != null) { H.day = d.hday === "0" ? dayKey(Date.now()) : dayKey(dayStart(H.day) + Number(d.hday) * DAY + 12 * 36e5); render(); }
     else if (d.hopen) { H.open = H.open === d.hopen ? null : d.hopen; if (H.open) loadRec(H.open); else render(); }
     else if (d.act === "hcsv") dayCsv();
@@ -2471,7 +2480,7 @@ function ownerScreen(role) {
       try { await navigator.clipboard.writeText(link); toast("Link copied. Paste it in WhatsApp."); }
       catch { const i = $("#wlinkin"); if (i) { i.focus(); i.select(); } toast("Select the link and copy it."); }
       return; }
-    if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; if (S.tab === "open") watchOpen(); render(); }
+    if (d.otab) { if (!TABS.some(([k]) => k === d.otab)) return; S.tab = d.otab; S.edit = null; if (S.tab === "dash") S.m = null; if (S.tab === "live") watchOpen(); render(); }
     else if (d.out) { const [si, ii] = ix(d.out), it = MENU[si].items[ii], want = !it.out, msg = want ? `${it.n} marked sold out` : `${it.n} back on the menu`;
       // Only the small sold-out list changes. An old sold-out flag saved inside the menu is cleared with one full save.
       const clearOld = !want && it.oldOut; it.oldOut = clearOld ? false : !!it.oldOut;
