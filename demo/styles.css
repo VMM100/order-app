@@ -41,6 +41,7 @@ section{padding-top:16px}
 .btn:disabled{opacity:.6;cursor:default}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500}
 .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);font-weight:600}
+.chip:disabled{opacity:.35;cursor:not-allowed;text-decoration:line-through;background:transparent}
 .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .field{width:100%;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:12px 14px;font:inherit;font-size:16px}
 .cats{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;position:sticky;top:var(--bar-top,64px);z-index:4;background:var(--bg);

@@ -1653,8 +1653,11 @@ function waiterScreen(boss) {
       ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
       <div class="trow" style="margin-top:22px"><div class="label" style="margin:0">My tables</div><button class="btn small" data-act="opentable" aria-expanded="${!!S.opening}">${S.opening ? "Cancel" : "+ Open a table"}</button></div>
       ${S.opening ? `<div class="ticket" style="margin-top:10px"><b>Which table?</b><p class="note" style="margin:2px 0 8px">For guests ordering without their phones. Diners can still scan the table's QR and join.</p>
-        <div class="row">${Array.from({ length: TABLES }, (_, i) => i + 1).map((n) => { const busy = S.groups.some((x) => x.table === n && !isShared(n));
-          return `<button class="chip" data-opennum="${n}" ${busy ? "disabled" : ""} title="${busy ? "Already open" : ""}">${n}</button>`; }).join("")}</div></div>` : ""}
+        <div class="row">${Array.from({ length: TABLES }, (_, i) => i + 1).map((n) => {
+          // Taken: guests already sat down there, or another waiter has it. Shared tables take more than one group.
+          const g = !isShared(n) && S.groups.find((x) => x.table === n), why = g ? (g.waiter ? (g.waiter === S.me ? "yours already" : `${wname(g.waiter)}'s`) : "guests waiting") : "";
+          return `<button class="chip" data-opennum="${n}" ${g ? `disabled aria-disabled="true" aria-label="Table ${n}, ${esc(why)}" title="${esc(why)}"` : `aria-label="Table ${n}"`}>${n}</button>`; }).join("")}</div>
+        ${S.groups.some((x) => !isShared(x.table)) ? `<p class="note" style="margin:8px 0 0">Greyed out: already has guests or a waiter.</p>` : ""}</div>` : ""}
       ${!S.gotGroups ? skTickets(2) : mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down, or open one for guests ordering through you.</p>`}
     </section>`);
   }
@@ -1728,7 +1731,8 @@ function waiterScreen(boss) {
       else if (d.opennum) { const n = Number(d.opennum); S.opening = false; render();
         // A table nobody scanned: it opens as this waiter's when the first order is sent.
         const open = await groupsAt(n);
-        if (open.length && !isShared(n)) { toast(`Table ${n} already has guests. Accept it under "Waiting for a waiter".`); return; }
+        if (open.length && !isShared(n)) { const w = open.map((x) => x.waiter).find(Boolean);
+          toast(w ? `Table ${n} was just taken by ${w === S.me ? "you" : wname(w)}.` : `Table ${n} already has guests. Accept it under "Waiting for a waiter".`); return; }
         const grp = { ...newGroup(n, null), waiter: S.me, accepted: Date.now() };
         orderTaker({ create: { group: grp, needsCode: true, extra: (bt, code) => {
             bt.set(tableRef(n), { table: n, current: grp.session }); bt.set(codeRef(code), { session: grp.session, table: n }); bt.set(inviteRef(code), { demo: RID }); } },
