@@ -333,7 +333,13 @@ service cloud.firestore {
             || (d.waiter == myWaiter() && resource.data.waiter == null)
             || (d.waiter == null && resource.data.waiter == myWaiter());
         }
-        allow update: if boss(rid) || (onShift() && waiterEdit()) || (inSession(sid) && resource.data.open == true && dinerEdit());
+        // The bar counter's named tabs (table 0, tab: "Juma"): any staff phone of the restaurant runs them.
+        function counterTab() {
+          return isStaffPhone() && live(rid) && resource.data.get('tab', null) != null
+            && request.resource.data.get('tab', null) == resource.data.tab && request.resource.data.table == 0;
+        }
+        allow update: if boss(rid) || (onShift() && waiterEdit()) || counterTab()
+          || (inSession(sid) && resource.data.open == true && dinerEdit());
         allow delete: if boss(rid);
       }
       match /lines/{id} {
@@ -348,14 +354,34 @@ service cloud.firestore {
             && price != null && l.pr == price.p && l.st == price.st && !(l.n in stockOut())
             && (l.note == null || (l.note is string && l.note.size() <= 200));
         }
+        // Staff taking an order for a table: a waiter on shift for their own table, or the bar counter for
+        // a named tab. Same price and sold-out checks as diners; the item goes on someone at that table.
+        function staffLine(l) {
+          let g = groupAfter(l.session);
+          let price = get(/databases/$(database)/documents/restaurants/$(rid)).data.prices.get(l.n + '|' + l.v, null);
+          return g.open == true && l.pid in g.people
+            && l.keys().hasOnly(['table', 'session', 'batch', 'pid', 'pname', 'n', 'v', 'pr', 'st', 's', 't', 'note', 'by', 'byName'])
+            && l.table == g.table && l.s == 'new' && l.n is string && l.v is string && l.t is int
+            && l.pname is string && l.pname.size() <= 20 && l.batch is string && l.batch.size() <= 40
+            && price != null && l.pr == price.p && l.st == price.st && !(l.n in stockOut())
+            && (l.note == null || (l.note is string && l.note.size() <= 200))
+            && l.byName is string && l.byName.size() <= 30
+            && ((onShift() && l.by == myWaiter() && g.waiter == myWaiter())
+                || (isStaffPhone() && live(rid) && l.by == 'counter' && g.get('tab', null) != null));
+        }
+        // Whoever added an item can take it back until the kitchen or bar starts it.
+        function staffCancel(l) {
+          return l.s == 'new' && l.get('by', null) != null
+            && ((onShift() && l.by == myWaiter()) || (isStaffPhone() && live(rid) && l.by == 'counter'));
+        }
         allow read: if isStaff() || inSession(resource.data.session);
-        allow create: if boss(rid) || dinerLine(request.resource.data);
+        allow create: if boss(rid) || dinerLine(request.resource.data) || staffLine(request.resource.data);
         // Kitchen, bar and grill move items along; "served" is recorded against the waiter on shift.
         allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['s', 'tPrep', 'tReady', 'tServed', 'servedBy', 'closedUnserved'])
           && (boss(rid) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['servedBy'])
               || (onShift() && request.resource.data.servedBy == myWaiter()));
-        allow delete: if boss(rid);
+        allow delete: if boss(rid) || staffCancel(resource.data);
       }
       match /alerts/{id} {
         function dinerAlert(a) {
