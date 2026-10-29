@@ -35,7 +35,9 @@
 .wscan-code input::placeholder{letter-spacing:normal;font-size:15px;font-weight:500;color:rgb(255 255 255/.55)}
 .wscan-code input:focus{outline:none;border-color:${GREEN};box-shadow:0 0 0 3px rgb(156 196 60/.3)}
 .wscan-code button{height:50px;padding:0 20px;border-radius:12px;border:0;background:${GREEN};color:#1a2117;font-family:inherit;font-size:16px;font-weight:700;cursor:pointer}
-.wscan-code.bad input{border-color:#f2a493;animation:wscan-shake .3s}
+.wscan-code.bad input{border-color:#f26b55;box-shadow:0 0 0 3px rgb(242 107 85/.45),0 0 22px rgb(242 107 85/.55);animation:wscan-shake .35s}
+.wscan-code button:disabled{opacity:.6;cursor:default}
+@media (prefers-reduced-motion:reduce){.wscan-code.bad input{animation:none}}
 @keyframes wscan-shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .wscan-acts{display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap}
 .wscan-acts button{min-height:46px;padding:0 22px;border-radius:999px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;border:1.5px solid rgb(255 255 255/.5);background:none;color:#fff}
@@ -69,10 +71,20 @@
     // A friend's 4-digit code: the app finds their restaurant and table (see joinByInvite in app.js).
     const form = el.querySelector(".wscan-code"), inp = form.querySelector("input");
     inp.addEventListener("input", () => { inp.value = inp.value.replace(/\D/g, "").slice(0, 4); form.classList.remove("bad"); });
-    form.addEventListener("submit", (e) => {
-      e.preventDefault(); const v = inp.value.trim();
-      if (!/^\d{4}$/.test(v)) { form.classList.remove("bad"); void form.offsetWidth; form.classList.add("bad"); say("Codes are 4 digits. Check the number on your friend's phone."); return; }
-      stopCam(); say("Finding your friends…"); location.href = base + "?c=" + v;
+    const btn = form.querySelector("button");
+    const bad = (msg) => { form.classList.remove("bad"); void form.offsetWidth; form.classList.add("bad"); say(msg); try { navigator.vibrate?.(120); } catch {} inp.focus(); inp.select(); };
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault(); const v = inp.value.trim(); if (btn.disabled) return;
+      if (!/^\d{4}$/.test(v)) return bad("Codes are 4 digits. Check the number on your friend's phone.");
+      // Check the code here first: a wrong one glows red and shakes, and the scanner stays open to try again.
+      btn.disabled = true; btn.textContent = "…"; say("Checking the code…");
+      let to;
+      try { to = await (await import(base + "invite.js?v=1")).findInvite(v); }
+      catch { stopCam(); say("Finding your friends…"); location.href = base + "?c=" + v; return; }   // couldn't check here: the app will
+      btn.disabled = false; btn.textContent = "Join";
+      if (to && to.demo) { stopCam(); say("Finding your friends…"); location.href = base + "demo/?r=" + encodeURIComponent(to.demo) + "&c=" + v; return; }
+      if (to && to.rid) { stopCam(); say("Finding your friends…"); location.href = base + "?r=" + encodeURIComponent(to.rid) + "&c=" + v; return; }
+      bad("No open table with that code. Check the number on your friend's phone and try again.");
     });
     addEventListener("resize", layout); addEventListener("orientationchange", () => setTimeout(layout, 250));
   }
