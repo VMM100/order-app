@@ -451,3 +451,28 @@ header.top::before{content:"";position:absolute;inset:0 calc(50% - 50vw);backgro
 @media (prefers-reduced-motion:no-preference){.askdots i{animation:askdot 1.2s ease-in-out infinite}.askdots i:nth-child(2){animation-delay:.2s}.askdots i:nth-child(3){animation-delay:.4s}@keyframes askdot{0%,80%,100%{opacity:.25}40%{opacity:1}}}
 /* Touch screens: every control at least 44px tall to tap (Vercel Web Interface Guidelines; Wasabi DESIGN.md) */
 @media (pointer:coarse){.btn,.btn.small,.cview{min-height:44px}.var{min-height:44px}.chip{min-height:36px}.qb::after,.chip::after,.iconbtn.dull::after,.linkbtn::after{content:"";position:absolute;inset:-6px}.chip,.iconbtn.dull,.linkbtn{position:relative}}
+
+/* Staff order taker: a full-screen sheet over the waiter or bar screen. */
+body.otk-open{overflow:hidden}
+.otk{position:fixed;inset:0;z-index:30;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:max(12px,env(safe-area-inset-top)) 16px 0}
+.otk-in{max-width:720px;margin:0 auto;display:flex;flex-direction:column;min-height:100%}
+.otk-head{display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg);padding:6px 0 10px;z-index:2;border-bottom:1px solid var(--line)}
+.otk-head b{font-family:var(--display);font-size:22px;text-transform:var(--dcase,uppercase)}
+.otk-who{gap:6px;flex-wrap:wrap}
+.otk-search{margin-top:12px}
+.otk-cats{gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-top:10px;padding-bottom:2px}
+.otk-cats .chip{white-space:nowrap}
+.otk-list{flex:1;padding-bottom:12px}
+.otk-item{padding:10px 0;border-bottom:1px solid var(--line);display:grid;gap:6px}
+.otk-item.out{opacity:.6}
+.otk-item .row{gap:6px;flex-wrap:wrap}
+.otk-item .var{min-width:110px}
+.otk-cart{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:10px 0 max(12px,env(safe-area-inset-bottom));display:grid;gap:8px}
+.otk-lines{max-height:34vh;overflow-y:auto;display:grid;gap:6px}
+.otk-line{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line)}
+/* Bar tabs on the bar screen */
+.tabrow{padding:10px 0;border-top:1px solid var(--line);margin-top:10px}
+.tabrow .row{gap:6px;flex-wrap:wrap}
+/* A note per item in the diner's basket */
+.cnote{font-size:12px;display:block;margin-top:2px}
+.cnotein{width:100%;margin:2px 0 8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:8px 10px;font:inherit;font-size:16px}

@@ -743,3 +743,77 @@ test("sold out: owner and manager mark items, nobody else; a sold-out item can't
   await assertSucceeds(owner().doc(`${R}/live/stock`).set({ out: { "Fish & Chips": true }, t: 4 }));
   await assertSucceeds(d.doc(`${R}/lines/l1`).set(line("d1", "4-a")));
 });
+
+// ---------- staff taking orders (waiter for a table, bar counter for a named tab) ----------
+const staffLineFor = (by, byName, extra = {}) => ({ table: 4, session: "4-a", batch: "b9", pid: "d1", pname: "Amani", n: "Pilsner", v: "Full 400ml",
+  pr: 10000, st: "bar", s: "new", t: 1, note: null, by, byName, ...extra });
+test("a waiter on shift orders for their own table, for a seated diner or a new phoneless guest", async () => {
+  await seatAt("d1");
+  const w = await waiterPhone("s1", "w1");
+  await assertSucceeds(w.doc(`${R}/groups/4-a`).update({ waiter: "w1" }));
+  await assertSucceeds(w.doc(`${R}/lines/s1`).set(staffLineFor("w1", "Grace")));
+  // A phoneless guest added and ordered for in one go.
+  const b = w.batch();
+  b.update(w.doc(`${R}/groups/4-a`), { "people.guest-1": { name: "Guest 2", t: 2, guest: true, by: "w1" } });
+  b.set(w.doc(`${R}/lines/s2`), staffLineFor("w1", "Grace", { pid: "guest-1", pname: "Guest 2", note: "no ice" }));
+  await assertSucceeds(b.commit());
+});
+test("staff orders are price-checked, sold-out aware, and only for someone at that table", async () => {
+  await seatAt("d1");
+  const w = await waiterPhone("s1", "w1");
+  await w.doc(`${R}/groups/4-a`).update({ waiter: "w1" });
+  await assertFails(w.doc(`${R}/lines/x1`).set(staffLineFor("w1", "Grace", { pr: 1 })));
+  await assertFails(w.doc(`${R}/lines/x2`).set(staffLineFor("w1", "Grace", { pid: "nobody" })));
+  await assertFails(w.doc(`${R}/lines/x3`).set(staffLineFor("w2", "Juma")));            // as another waiter
+  await assertFails(w.doc(`${R}/lines/x4`).set(staffLineFor("w1", "Grace", { s: "ready" })));
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`${R}/live/stock`).set({ out: { Pilsner: true }, t: 1 }));
+  await assertFails(w.doc(`${R}/lines/x5`).set(staffLineFor("w1", "Grace")));
+});
+test("a waiter can't order for another waiter's table, a table nobody took, or off shift", async () => {
+  await seatAt("d1");
+  const w2 = await waiterPhone("s2", "w2", "2222");
+  await assertFails(w2.doc(`${R}/lines/y1`).set(staffLineFor("w2", "Juma")));         // nobody took it yet
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`${R}/groups/4-a`).update({ waiter: "w1" }));
+  await assertFails(w2.doc(`${R}/lines/y2`).set(staffLineFor("w2", "Juma")));         // Grace's table
+  const off = await staffPhone("s3");                                                  // staff phone, no shift
+  await assertFails(off.doc(`${R}/lines/y3`).set(staffLineFor("w1", "Grace")));
+  await assertFails(off.doc(`${R}/lines/y4`).set(staffLineFor("counter", "Bar")));     // not a bar tab
+});
+test("a waiter opens a table nobody scanned and orders in one go", async () => {
+  const w = await waiterPhone("s1", "w1"), b = w.batch();
+  b.set(w.doc(`${R}/groups/5-w`), { ...newGroup("5-w", 5, "5151"), waiter: "w1", people: { "guest-a": { name: "Guest 1", t: 1, guest: true, by: "w1" } } });
+  b.set(w.doc(`${R}/tables/5`), { table: 5, current: "5-w" });
+  b.set(w.doc(`${R}/codes/5151`), { session: "5-w", table: 5 });
+  b.set(w.doc(`${R}/lines/z1`), staffLineFor("w1", "Grace", { table: 5, session: "5-w", pid: "guest-a", pname: "Guest 1" }));
+  await assertSucceeds(b.commit());
+});
+test("the bar counter runs named tabs: open, add rounds, close; not ordinary tables", async () => {
+  await seatAt("d1");
+  const bar = await staffPhone("bar1"), tab = { ...newGroup("bar-1", 0, null), tab: "Juma", label: "Juma", people: { "tab-1": { name: "Juma", t: 1, guest: true, by: "counter" } } };
+  const b = bar.batch();
+  b.set(bar.doc(`${R}/groups/bar-1`), tab);
+  b.set(bar.doc(`${R}/lines/t1`), staffLineFor("counter", "Bar", { table: 0, session: "bar-1", pid: "tab-1", pname: "Juma" }));
+  await assertSucceeds(b.commit());
+  await assertSucceeds(bar.doc(`${R}/lines/t2`).set(staffLineFor("counter", "Bar", { table: 0, session: "bar-1", pid: "tab-1", pname: "Juma" })));
+  await assertSucceeds(bar.doc(`${R}/groups/bar-1`).update({ "paid.tab-1": true }));
+  await assertSucceeds(bar.doc(`${R}/groups/bar-1`).update({ open: false, closed: 3 }));
+  await assertFails(bar.doc(`${R}/groups/bar-1`).update({ tab: null, table: 4 }));     // can't turn a tab into a table
+  await assertFails(bar.doc(`${R}/groups/4-a`).update({ "paid.d1": true }));            // ordinary table: not the bar's
+  await assertFails(bar.doc(`${R}/lines/t3`).set(staffLineFor("counter", "Bar")));     // counter order on table 4
+});
+test("staff can take back what they added until the kitchen or bar starts it", async () => {
+  const d1 = await seatAt("d1");
+  const w = await waiterPhone("s1", "w1");
+  await w.doc(`${R}/groups/4-a`).update({ waiter: "w1" });
+  await w.doc(`${R}/lines/c1`).set(staffLineFor("w1", "Grace"));
+  await w.doc(`${R}/lines/c2`).set(staffLineFor("w1", "Grace"));
+  await d1.doc(`${R}/lines/c3`).set(line("d1", "4-a"));
+  await assertSucceeds(w.doc(`${R}/lines/c1`).delete());
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`${R}/lines/c2`).update({ s: "preparing" }));
+  await assertFails(w.doc(`${R}/lines/c2`).delete());                                  // already started
+  await assertFails(w.doc(`${R}/lines/c3`).delete());                                  // a diner's own order
+  const w2 = await waiterPhone("s2", "w2", "2222");
+  await env.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`${R}/lines/c4`).set(staffLineFor("w1", "Grace")));
+  await assertFails(w2.doc(`${R}/lines/c4`).delete());                                 // someone else's
+  await assertSucceeds(owner().doc(`${R}/lines/c2`).delete());                         // the owner can fix anything
+});

@@ -463,7 +463,7 @@ const isShared = (n) => SHARED.includes(Number(n));
 const nowName = (g, pid, was) => (g && g.people && g.people[pid] && g.people[pid].name) || was || "A guest";
 const gname = (g) => (g && g.label ? `${g.label}'s group` : "New group");
 // "Table 8", or "Table 8 · Amani's group" when the table has more than one group or is shared.
-const where_ = (g, all) => `Table ${g.table}` + (isShared(g.table) || (all || []).filter((x) => x.table === g.table && x.open).length > 1 ? ` · ${gname(g)}` : "");
+const where_ = (g, all) => g && g.tab ? `Bar · ${g.tab}` : `Table ${g.table}` + (isShared(g.table) || (all || []).filter((x) => x.table === g.table && x.open).length > 1 ? ` · ${gname(g)}` : "");
 
 // Diners can't browse groups or codes. To see a table they hold a pass (passes/{their sign-in}),
 // which the database only accepts with the table's QR key or an open group's code.
@@ -1133,7 +1133,7 @@ function dinerScreen() {
            return `<button class="var${q ? " on" : ""}" data-add="${key}" aria-label="Add ${esc(it.n)}${l ? " " + esc(l) : ""}, TSh ${fmt(p)}${q ? `, ${q} in basket` : ""}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num">${fmt(p)}</span>${q ? `<span class="vq num${S.bump === key ? " bump" : ""}" aria-hidden="true">${q}</span>` : ""}</button>`; }).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
     } else if (S.tab === "orders") {
       body = Object.entries(g.people || {}).sort(([a], [b]) => (a === S.me.pid ? -1 : b === S.me.pid ? 1 : 0)).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
-        return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
+        return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}${l.byName ? ` <span class="note">added by ${esc(l.byName)}</span>` : ""}${l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
     } else body = billHtml(g, S.lines, false, S.me.pid) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
     if (S.tab !== "orders") body += poweredBy();
     // ☰: inviting friends, the account and help. Waiter, Call waiter and Bill please stay on the page.
@@ -1206,14 +1206,15 @@ function dinerScreen() {
     try { S.cart.length ? sessionStorage.setItem(ck, JSON.stringify(S.cart)) : sessionStorage.removeItem(ck); } catch {}
     const c = $("#cart"); if (!S.me || S.tab !== "menu" || !S.cart.length) { c.hidden = true; c.innerHTML = ""; document.body.classList.remove("hascart"); return; }
     const tot = S.cart.reduce((a, l) => a + l.pr, 0), n = S.cart.length; c.hidden = false;
-    const a = document.activeElement, focused = a && a.id === "note";
+    const a = document.activeElement, focused = a && a.id === "note"; S.notes = S.notes || {};
     // The same item and size twice shows once, with a count and − / +.
     const groups = []; S.cart.forEach((l) => { const k = l.n + "|" + (l.v || ""); const g = groups.find((x) => x.k === k); if (g) g.q++; else groups.push({ k, l, q: 1 }); });
     c.innerHTML = `<div class="in">
-      ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}</span>
+      ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}${S.notes[g.k] && S.noteKey !== g.k ? `<span class="nt" style="display:block">${esc(S.notes[g.k])}</span>` : ""}
+            <button class="linkbtn cnote" data-cnote="${esc(g.k)}">${S.notes[g.k] ? "Edit note" : "+ Note"}</button></span>
           <span class="qty"><button class="qb" data-dec="${esc(g.k)}" aria-label="One fewer ${esc(g.l.n)}">−</button><b class="num">${g.q}</b><button class="qb" data-inc="${esc(g.k)}" aria-label="One more ${esc(g.l.n)}">+</button></span>
-          <span class="num cp">${fmt(g.l.pr * g.q)}</span></div>`).join("")}
-        <input id="note" maxlength="200" aria-label="Note for the kitchen or bar" placeholder="Note for the kitchen or bar (e.g. no onions)" value="${esc(S.note)}"></div>` : ""}
+          <span class="num cp">${fmt(g.l.pr * g.q)}</span></div>
+          ${S.noteKey === g.k ? `<input id="note" class="cnotein" maxlength="200" aria-label="Note for ${esc(g.l.n)}" placeholder="Note for this item (e.g. no ice, well done)" value="${esc(S.notes[g.k] || "")}">` : ""}`).join("")}</div>` : ""}
       <div class="cbar"><button class="cview" data-act="cart" aria-expanded="${!!S.cartOpen}"><b class="num">${n}</b> item${n > 1 ? "s" : ""}<span>${S.cartOpen ? "Hide" : "View"}</span></button>
         <button class="cartbtn" data-act="place" ${S.placing ? "disabled" : ""}><span>${S.placing ? "Sending…" : "Place order"}</span><span class="num">TSh ${fmt(tot)}</span></button></div></div>`;
     document.body.classList.toggle("hascart", true);
@@ -1265,7 +1266,7 @@ function dinerScreen() {
         await b.commit(); S.profile = prof; S.step = ""; await joinAs(name, S.user); } catch (err) { fail(err); }
     }
   });
-  document.addEventListener("input", (e) => { if (e.target.id === "note") S.note = e.target.value; if (e.target.id === "namein") S.name = e.target.value; });
+  document.addEventListener("input", (e) => { if (e.target.id === "note" && S.noteKey) { S.notes = S.notes || {}; S.notes[S.noteKey] = e.target.value; } if (e.target.id === "namein") S.name = e.target.value; });
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.tab) { S.tab = d.tab; render(); window.scrollTo(0, 0); }
@@ -1278,6 +1279,7 @@ function dinerScreen() {
       S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}${l ? " · " + l : ""}`); S.bump = d.add; render(); S.bump = null; }
     else if (d.rm) { S.cart.splice(+d.rm, 1); render(); }
     else if (d.inc) { const x = S.cart.find((l) => l.n + "|" + (l.v || "") === d.inc); if (x) S.cart.push({ ...x }); render(); }
+    else if (d.cnote) { S.noteKey = S.noteKey === d.cnote ? null : d.cnote; render(); const i = $("#note"); if (i) i.focus(); }
     else if (d.dec) { const i = S.cart.map((l) => l.n + "|" + (l.v || "")).lastIndexOf(d.dec); if (i >= 0) S.cart.splice(i, 1); if (!S.cart.length) S.cartOpen = false; render(); }
     else if (d.act === "cart") { S.cartOpen = !S.cartOpen; renderCart(); }
     else if (d.split) setSplit(S.sid, d.split);
@@ -1289,8 +1291,8 @@ function dinerScreen() {
       S.placing = true; renderCart();
       const batch = writeBatch(db), bid = uid("b"), now = Date.now();
       S.cart.forEach((l) => batch.set(doc(rcol("lines")), { table: Number(S.n), session: S.sid, batch: bid, pid: S.me.pid, pname: S.me.name,
-        n: l.n, v: l.v, pr: l.pr, st: l.st, s: "new", t: now, note: S.note.trim() || null }));
-      try { await batch.commit(); const sts = [...new Set(S.cart.map((l) => STATIONS[l.st]))]; S.cart = []; S.note = ""; S.cartOpen = false; toast("Sent to " + sts.join(" and ")); }
+        n: l.n, v: l.v, pr: l.pr, st: l.st, s: "new", t: now, note: ((S.notes || {})[l.n + "|" + (l.v || "")] || S.note || "").trim().slice(0, 200) || null }));
+      try { await batch.commit(); const sts = [...new Set(S.cart.map((l) => STATIONS[l.st]))]; S.cart = []; S.note = ""; S.notes = {}; S.noteKey = null; S.cartOpen = false; toast("Sent to " + sts.join(" and ")); }
       catch (err) { fail(err); }
       S.placing = false; render();
     }
@@ -1335,21 +1337,68 @@ function stationScreen(st) {
     const batches = [...new Set(S.lines.sort((a, b) => a.t - b.t).map((l) => l.batch))];
     const tix = batches.map((b) => {
       const bl = S.lines.filter((l) => l.batch === b), s = bl.some((l) => l.s === "new") ? "new" : bl.some((l) => l.s === "preparing") ? "preparing" : "ready";
-      const note = bl.find((l) => l.note), g = S.groups[bl[0].session], w = g && g.waiter;
+      const g = S.groups[bl[0].session], w = g && g.waiter, tab = g && g.tab, via = bl.find((l) => l.byName);
+      // One note for the whole order (older orders) shows once; otherwise each item shows its own.
+      const notes = [...new Set(bl.map((l) => l.note || ""))], oneNote = notes.length === 1 && notes[0] ? notes[0] : "";
       // How long this order has waited, large enough to read across the kitchen; amber, then red when late.
       const mins = Math.max(0, Math.floor((Date.now() - bl[0].t) / 60000)), lim = st === "bar" ? [5, 10] : [15, 25];
       const late = s === "ready" ? "" : mins >= lim[1] ? " late" : mins >= lim[0] ? " warn" : "";
       return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="age num${late}" title="Waiting ${mins} min">${mins}<small> min</small></span></header>
-        <div class="note" style="margin:2px 0 0">${esc(nowName(g, bl[0].pid, bl[0].pname))} · waiter ${w ? esc(wname(w)) : "not assigned yet"}</div>
-        <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}</span>${l.s === "ready"
-          ? `<span class="pill s-ready">Ready</span>` : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">Ready</button>`}</li>`).join("")}</ul>${note ? `<div class="nt">${esc(note.note)}</div>` : ""}
+        <div class="note" style="margin:2px 0 0">${esc(nowName(g, bl[0].pid, bl[0].pname))}${tab ? " · bar tab" : ` · waiter ${w ? esc(wname(w)) : "not assigned yet"}`}${via ? ` · taken by ${esc(via.byName)}` : ""}</div>
+        <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}${!oneNote && l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}</span>${l.s === "ready"
+          ? `<span class="pill s-ready">Ready</span>` : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">${tab ? "Done" : "Ready"}</button>`}</li>`).join("")}</ul>${oneNote ? `<div class="nt">${esc(oneNote)}</div>` : ""}
         <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
           ${bl.filter((l) => l.s !== "ready").length > 1 ? `<button class="btn primary" data-adv="${b}" data-to="ready">All ready</button>` : ""}</div></article>`;
     });
     setMenu([{ html: `<b>${esc(STATIONS[st])} screen</b><br>${esc(rname())}. Orders for the ${esc(STATIONS[st].toLowerCase())} appear here.` },
       ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : [])]);
-    paint(soundBar() + (!S.loaded ? skTickets(4) : tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
+    paint(soundBar() + tabsHtml() + (!S.loaded ? skTickets(4) : tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
   }
+  // ----- bar counter: named tabs for walk-up customers (bar screen only) -----
+  const T = { open: false, naming: false, bill: null, confirm: null, lines: [] };
+  if (st === "bar") onSnapshot(query(rcol("lines"), where("table", "==", 0)), (s) => { T.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
+  const tabs = () => S.all.filter((g) => g.tab && g.open).sort((a, b) => a.opened - b.opened);
+  function tabsHtml() {
+    if (st !== "bar") return "";
+    const list = tabs(), lines = (g) => T.lines.filter((l) => l.session === g.session);
+    return `<section class="ticket" style="margin-bottom:14px"><div class="trow"><b>Bar tabs${list.length ? ` (${list.length})` : ""}</b>
+        <div class="row"><button class="btn primary" data-tab="new">+ New tab</button>${list.length ? `<button class="btn" data-tab="toggle">${T.open ? "Hide tabs" : "Show tabs"}</button>` : ""}</div></div>
+      ${T.naming ? `<form id="tabform" class="vrow" style="margin-top:10px"><input class="field" id="tabname" maxlength="20" placeholder="Customer's first name" aria-label="Customer's first name" autocomplete="off"><button class="btn primary">Start tab</button></form>` : ""}
+      ${T.open ? list.map((g) => { const ls = lines(g), tot = tableTotal(ls);
+        return `<div class="tabrow"><div class="trow"><span><b>${esc(g.tab)}</b> <span class="note">${ls.length} item${ls.length === 1 ? "" : "s"} · TSh ${fmt(tot)} · opened ${ago(g.opened)}</span></span>
+          <div class="row"><button class="btn primary small" data-tabadd="${g.session}">Add round</button><button class="btn small" data-tabbill="${g.session}">${T.bill === g.session ? "Hide bill" : "Bill"}</button>
+            ${T.confirm === g.session ? `<button class="btn danger small" data-tabclose="${g.session}">Tap again to close</button>` : `<button class="btn ghost small" data-tabconfirm="${g.session}">Close tab</button>`}</div></div>
+          ${T.bill === g.session ? billHtml(g, ls, true) : ""}</div>`; }).join("") : ""}</section>`;
+  }
+  async function closeTab(sid) {
+    const g = S.all.find((x) => x.session === sid); if (!g) return;
+    const ls = T.lines.filter((l) => l.session === sid), b = writeBatch(db), now = Date.now();
+    ls.filter((l) => l.s !== "served").forEach((l) => b.update(rdoc("lines", l.id), { s: "served", closedUnserved: true }));
+    b.set(rdoc("sessions", sid), { table: 0, session: sid, opened: g.opened, accepted: null, closed: now, waiter: null, guests: Object.keys(g.people || {}).length, total: tableTotal(ls), paid: Object.keys(g.paid || {}).length });
+    b.update(groupRef(sid), { open: false, closed: now });
+    await b.commit();
+  }
+  document.addEventListener("submit", (e) => {
+    if (e.target.id !== "tabform") return; e.preventDefault();
+    const n = ($("#tabname").value || "").trim().slice(0, 20); if (!n) return toast("Enter the customer's first name");
+    T.naming = false; T.open = true; render();
+    const pid = `tab-${Date.now().toString(36)}`, grp = { ...newGroup(0, null), session: `bar-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, tab: n, label: n,
+      people: { [pid]: { name: n, t: Date.now(), guest: true, by: "counter" } } };
+    orderTaker({ create: { group: grp }, by: "counter", byName: "Bar", title: `New tab · ${n}` });
+  });
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b || st !== "bar") return; const d = b.dataset;
+    try {
+      if (d.tab === "new") { T.naming = !T.naming; render(); const i = $("#tabname"); if (i) i.focus(); }
+      else if (d.tab === "toggle") { T.open = !T.open; render(); }
+      else if (d.tabadd) { const g = S.all.find((x) => x.session === d.tabadd); if (g) orderTaker({ g, by: "counter", byName: "Bar", title: `Add to ${g.tab}'s tab` }); }
+      else if (d.tabbill) { T.bill = T.bill === d.tabbill ? null : d.tabbill; render(); }
+      else if (d.tabconfirm) { T.confirm = d.tabconfirm; render(); setTimeout(() => { if (T.confirm === d.tabconfirm) { T.confirm = null; render(); } }, 4000); }
+      else if (d.tabclose) { const g = S.all.find((x) => x.session === d.tabclose); await closeTab(d.tabclose); T.confirm = null; if (T.bill === d.tabclose) T.bill = null; toast(`${g ? g.tab + "'s" : "The"} tab is closed`); render(); }
+      else if (d.split && d.g && S.all.some((x) => x.session === d.g && x.tab)) await setSplit(d.g, d.split);
+      else if (d.paid && d.g) { const g = S.all.find((x) => x.session === d.g); if (g && g.tab) await togglePaid(d.g, d.paid, !!((g.paid || {})[d.paid])); }
+    } catch (err) { fail(err); }
+  });
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.act === "sound") { await enableSound(); render(); }
@@ -1357,15 +1406,118 @@ function stationScreen(st) {
     if (d.adv) { b.disabled = true; const batch = writeBatch(db);
       const now = Date.now();
       const moving = S.lines.filter((l) => l.batch === d.adv && (d.to === "preparing" ? l.s === "new" : l.s !== "ready"));
+      const isTab = (l) => !!(S.groups[l.session] && S.groups[l.session].tab);
       moving.forEach((l) =>
-        batch.update(rdoc("lines", l.id), d.to === "preparing" ? { s: "preparing", tPrep: now } : { s: "ready", tReady: now, tPrep: l.tPrep || now }));
-      try { await batch.commit(); if (d.to !== "preparing" && moving.length) ringFor(rdoc("lines", moving[0].id).path, moving.length); } catch (err) { fail(err); b.disabled = false; } }
+        batch.update(rdoc("lines", l.id), d.to === "preparing" ? { s: "preparing", tPrep: now }
+          : isTab(l) ? { s: "served", tReady: now, tServed: now, tPrep: l.tPrep || now } : { s: "ready", tReady: now, tPrep: l.tPrep || now }));
+      try { await batch.commit(); if (d.to !== "preparing" && moving.length && !isTab(moving[0])) ringFor(rdoc("lines", moving[0].id).path, moving.length); } catch (err) { fail(err); b.disabled = false; } }
     // One dish ready on its own: the waiter is alerted for just that dish.
-    if (d.ready) { const l = S.lines.find((x) => x.id === d.ready); if (!l) return; b.disabled = true; const now = Date.now();
-      try { await updateDoc(rdoc("lines", l.id), { s: "ready", tReady: now, tPrep: l.tPrep || now }); ringFor(rdoc("lines", l.id).path); } catch (err) { fail(err); b.disabled = false; } }
+    if (d.ready) { const l = S.lines.find((x) => x.id === d.ready); if (!l) return; b.disabled = true; const now = Date.now(), tab = S.groups[l.session] && S.groups[l.session].tab;
+      try { await updateDoc(rdoc("lines", l.id), tab ? { s: "served", tReady: now, tServed: now, tPrep: l.tPrep || now } : { s: "ready", tReady: now, tPrep: l.tPrep || now });
+        if (!tab) ringFor(rdoc("lines", l.id).path); } catch (err) { fail(err); b.disabled = false; } }
   });
   setInterval(render, 30000);
   cfgListeners.add(render);
+}
+
+// ================= STAFF ORDER TAKER =================
+// Waiters (and owners or managers working as a waiter) order for their tables; the bar counter runs named
+// tabs. One full-screen sheet: who it's for (someone at the table, or a phoneless guest), the menu with
+// search, a basket with a note per item, then Send. The database checks every price, as for diners.
+//   g:      the group (table or tab) to order for, or null when `create` opens a new one on Send
+//   create: { group, extra(batch, code) } for a table or tab that doesn't exist yet
+//   by / byName: who is ordering (waiter id or "counter", and the name shown to diners and the kitchen)
+function orderTaker({ g, create, by, byName, title, onSent }) {
+  const base = g || create.group;
+  const T = { who: null, guests: [], cart: [], q: "", cat: 0, noteFor: null, sending: false, nameFor: null };
+  const people = () => [...Object.entries(base.people || {}).map(([pid, p]) => ({ pid, name: p.name })), ...T.guests];
+  const nameOf = (pid) => (people().find((p) => p.pid === pid) || {}).name || "Guest";
+  const addGuest = (name) => { const pid = `guest-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    T.guests.push({ pid, name: name || `Guest ${people().length + 1}`, fresh: true }); T.who = pid; T.nameFor = name ? null : pid; };
+  if (people().length === 1) T.who = people()[0].pid;
+  else if (!people().length) addGuest(base.tab || "");
+  if (base.tab) T.nameFor = null;
+  const el = document.createElement("div"); el.className = "otk"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", title);
+  document.body.appendChild(el); document.body.classList.add("otk-open");
+  const close = () => { el.remove(); document.body.classList.remove("otk-open"); };
+  const out = (it) => it.out || STOCK_OUT.has(it.n);
+  // The same item, size, person and note twice shows once, with a count.
+  const keyOf = (l) => [l.pid, l.n, l.v, l.note || ""].join("|");
+  const groups = () => { const gs = []; T.cart.forEach((l) => { const k = keyOf(l), x = gs.find((y) => y.k === k); if (x) x.q++; else gs.push({ k, l, q: 1 }); }); return gs; };
+  function render() {
+    const q = T.q.trim().toLowerCase(), tot = T.cart.reduce((a, l) => a + l.pr, 0);
+    const secs = MENU.map((c, ci) => ({ c, ci, items: c.items.map((it, ii) => ({ it, ii })).filter(({ it }) => !q || it.n.toLowerCase().includes(q) || (it.d || "").toLowerCase().includes(q)) }))
+      .filter((x) => x.items.length && (q || x.ci === T.cat));
+    const who = people(), focused = document.activeElement && el.contains(document.activeElement) ? document.activeElement.id : null;
+    el.innerHTML = `<div class="otk-in">
+      <div class="otk-head"><b>${esc(title)}</b><button class="btn ghost" data-ot="close" aria-label="Close without sending">Close</button></div>
+      <div class="label" style="margin-top:6px">For</div>
+      <div class="row otk-who">${who.map((p) => `<button class="chip" aria-pressed="${T.who === p.pid}" data-otwho="${esc(p.pid)}">${esc(p.name)}</button>`).join("")}
+        ${base.tab ? "" : `<button class="chip" data-ot="guest">+ Guest without phone</button>`}</div>
+      ${T.nameFor ? `<div class="vrow" style="margin-top:6px"><input class="field" id="otname" maxlength="20" placeholder="Name (optional)" value="${esc(nameOf(T.nameFor).startsWith("Guest ") ? "" : nameOf(T.nameFor))}" aria-label="Guest's name, optional"><button class="btn" data-ot="namedone">OK</button></div>` : ""}
+      <input class="field otk-search" id="otq" type="search" placeholder="Search the menu" value="${esc(T.q)}" aria-label="Search the menu" autocomplete="off">
+      ${q ? "" : `<div class="row otk-cats">${MENU.map((c, i) => `<button class="chip" aria-pressed="${i === T.cat}" data-otcat="${i}">${esc(c.c)}</button>`).join("")}</div>`}
+      <div class="otk-list">${secs.map(({ c, ci, items }) => `${q ? `<div class="label">${esc(c.c)}</div>` : ""}${items.map(({ it, ii }) => `<div class="otk-item${out(it) ? " out" : ""}">
+          <div class="otk-n"><b>${esc(it.n)}</b>${out(it) ? ` <span class="pill s-served">Sold out</span>` : ""}</div>
+          ${out(it) ? "" : `<div class="row">${it.v.map(([l, p], vi) => { const n = T.cart.filter((x) => x.n === it.n && x.v === (l || "") && x.pid === T.who).length;
+            return `<button class="var${n ? " on" : ""}" data-otadd="${ci}.${ii}.${vi}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num">${fmt(p)}</span>${n ? `<span class="vq num">${n}</span>` : ""}</button>`; }).join("")}</div>`}</div>`).join("")}`).join("") || `<p class="note">Nothing on the menu matches "${esc(T.q)}".</p>`}</div>
+      <div class="otk-cart">${T.cart.length ? `<div class="otk-lines">${groups().map((gr, i) => `<div class="otk-line"><div><b>${gr.q > 1 ? `${gr.q}× ` : ""}${label(gr.l)}</b> <span class="note">for ${esc(nameOf(gr.l.pid))}</span>
+            ${T.noteFor === gr.k ? `<div class="vrow" style="margin-top:4px"><input class="field" id="otnote" maxlength="200" placeholder="e.g. no ice, well done" value="${esc(gr.l.note || "")}" aria-label="Note for ${esc(gr.l.n)}"><button class="btn" data-ot="notedone">OK</button></div>`
+              : gr.l.note ? `<div class="nt">${esc(gr.l.note)}</div>` : ""}</div>
+          <div class="row" style="flex-wrap:nowrap"><button class="btn ghost small" data-otnote="${i}">${gr.l.note ? "Edit note" : "Note"}</button>
+            <span class="qty"><button class="qb" data-otdec="${i}" aria-label="One fewer ${esc(gr.l.n)}">−</button><button class="qb" data-otinc="${i}" aria-label="One more ${esc(gr.l.n)}">+</button></span></div></div>`).join("")}</div>` : ""}
+        <button class="btn primary big" data-ot="send" ${!T.cart.length || T.sending ? "disabled" : ""}>${T.sending ? "Sending…" : T.cart.length ? `Send ${T.cart.length} item${T.cart.length > 1 ? "s" : ""} · TSh ${fmt(tot)}` : "Pick items to send"}</button></div></div>`;
+    if (focused) { const f = document.getElementById(focused); if (f) { f.focus(); if (f.setSelectionRange && f.value) f.setSelectionRange(f.value.length, f.value.length); } }
+  }
+  async function send() {
+    if (!T.cart.length || T.sending) return;
+    if (T.cart.some((l) => out(MENU.flatMap((c) => c.items).find((it) => it.n === l.n) || {}))) { toast("Something in the basket just sold out. Remove it first."); return render(); }
+    T.sending = true; render();
+    const write = async (code) => {
+      const b = writeBatch(db), now = Date.now(), bid = uid("b"), sid = base.session;
+      const fresh = T.guests.filter((p) => T.cart.some((l) => l.pid === p.pid));
+      const newPeople = Object.fromEntries(fresh.map((p) => [p.pid, { name: p.name.slice(0, 20), t: now, guest: true, by }]));
+      if (create) { const grp = { ...create.group, people: { ...(create.group.people || {}), ...newPeople }, opened: now };
+        if (code) grp.code = code; b.set(groupRef(sid), grp); if (create.extra) create.extra(b, code); }
+      else if (fresh.length) b.update(groupRef(sid), Object.fromEntries(Object.entries(newPeople).map(([k, v]) => [`people.${k}`, v])));
+      T.cart.forEach((l) => b.set(doc(rcol("lines")), { table: base.table, session: sid, batch: bid, pid: l.pid, pname: nameOf(l.pid).slice(0, 20),
+        n: l.n, v: l.v, pr: l.pr, st: l.st, s: "new", t: now, note: (l.note || "").trim().slice(0, 200) || null, by, byName: String(byName || "Staff").slice(0, 30) }));
+      await b.commit();
+    };
+    try {
+      if (create && create.needsCode) await withFreshCode(write); else await write(null);
+      const sts = [...new Set(T.cart.map((l) => STATIONS[l.st]))];
+      toast(`Sent to ${sts.join(" and ")}`); close(); onSent && onSent(base.session);
+    } catch (err) { T.sending = false; render(); fail(err); }
+  }
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
+    if (d.ot === "close") { if (T.cart.length && !b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Tap again: discard basket"; return; } return close(); }
+    if (d.ot === "guest") { addGuest(""); return render(); }
+    if (d.ot === "namedone") { T.nameFor = null; return render(); }
+    if (d.otwho) { T.who = d.otwho; T.nameFor = null; return render(); }
+    if (d.otcat) { T.cat = +d.otcat; el.querySelector(".otk-list") && el.scrollTo({ top: 0 }); return render(); }
+    if (d.otadd) { if (!T.who) { toast("First pick who it's for"); return; }
+      const [ci, ii, vi] = d.otadd.split(".").map(Number), it = MENU[ci] && MENU[ci].items[ii]; if (!it || out(it) || !it.v[vi]) return render();
+      const [l, p] = it.v[vi]; T.cart.push({ pid: T.who, n: it.n, v: l || "", pr: p, st: MENU[ci].st, note: "" }); return render(); }
+    if (d.otdec) { const gr = groups()[+d.otdec]; if (gr) { const i = T.cart.map(keyOf).lastIndexOf(gr.k); if (i >= 0) T.cart.splice(i, 1); } T.noteFor = null; return render(); }
+    if (d.otinc) { const gr = groups()[+d.otinc]; if (gr) T.cart.push({ ...gr.l }); return render(); }
+    if (d.otnote) { const gr = groups()[+d.otnote]; T.noteFor = gr && T.noteFor !== gr.k ? gr.k : null; render(); const i = el.querySelector("#otnote"); if (i) i.focus(); return; }
+    if (d.ot === "notedone") { T.noteFor = null; return render(); }
+    if (d.ot === "send") send();
+  });
+  el.addEventListener("input", (e) => {
+    if (e.target.id === "otq") { T.q = e.target.value; render(); }
+    // The note goes on every item in that row; the row is found again by its new key while typing.
+    if (e.target.id === "otnote" && T.noteFor != null) { const k = T.noteFor; let nk = k; T.cart.forEach((l) => { if (keyOf(l) === k) { l.note = e.target.value; nk = keyOf(l); } }); T.noteFor = nk; }
+    if (e.target.id === "otname" && T.nameFor) { const p = T.guests.find((x) => x.pid === T.nameFor); if (p) p.name = e.target.value.trim() || `Guest ${people().indexOf(p) + 1}`;
+      el.querySelectorAll(".otk-who .chip").forEach((c) => { if (c.dataset.otwho === T.nameFor) c.textContent = nameOf(T.nameFor); }); }
+  });
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.target.id === "otnote" || e.target.id === "otname")) { e.preventDefault(); T.noteFor = null; T.nameFor = null; render(); }
+    if (e.key === "Escape") close(); });
+  render();
+  const i = el.querySelector("#otname") || el.querySelector("#otq"); if (i && !matchMedia("(pointer:coarse)").matches) i.focus();
+  return { close };
 }
 
 // ================= WAITER =================
@@ -1406,7 +1558,7 @@ function waiterScreen(boss) {
   // A shift that has run 16 hours ends by itself.
   setInterval(() => { if (!boss && S.since && Date.now() - S.since >= SHIFT_MS) endShift("Your shift has ended. Start a new one to keep working."); }, 60000);
   const notify = watcher();
-  onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.gotGroups = true; S.groups = s.docs.map((d) => d.data()).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
+  onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.gotGroups = true; S.groups = s.docs.map((d) => d.data()).filter((g) => !g.tab).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => { S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })); update(); });
   onSnapshot(query(rcol("alerts"), where("done", "==", false)), (s) => { S.alerts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.t - b.t); update(); });
   // Bill totals need every line of the group, including served ones.
@@ -1472,13 +1624,18 @@ function waiterScreen(boss) {
         ${al.map((a) => alertRow(a, g)).join("")}
         <p class="note" style="margin:4px 0 0">${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "No guests yet"}</p>
         ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
-        <div class="acts"><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${g.session}">Hand over</button>
+        ${S.lines.filter((l) => live(g)(l) && l.s === "new" && l.by && l.by === S.me).map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · not started yet</span></span><button class="btn ghost small" data-unline="${l.id}" aria-label="Remove ${esc(l.n)}">Remove</button></div>`).join("")}
+        <div class="acts"><button class="btn primary" data-addorder="${g.session}">Add order</button><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${g.session}">Hand over</button>
           ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>
         ${open ? billHtml(g, billLines, true) : ""}</article>`;
     }).join("");
     paint(`<section>${pick}${ringBar()}${soundBar()}
       ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
-      <div class="label">My tables</div>${!S.gotGroups ? skTickets(2) : mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down.</p>`}
+      <div class="trow" style="margin-top:22px"><div class="label" style="margin:0">My tables</div><button class="btn small" data-act="opentable" aria-expanded="${!!S.opening}">${S.opening ? "Cancel" : "+ Open a table"}</button></div>
+      ${S.opening ? `<div class="ticket" style="margin-top:10px"><b>Which table?</b><p class="note" style="margin:2px 0 8px">For guests ordering without their phones. Diners can still scan the table's QR and join.</p>
+        <div class="row">${Array.from({ length: TABLES }, (_, i) => i + 1).map((n) => { const busy = S.groups.some((x) => x.table === n && !isShared(n));
+          return `<button class="chip" data-opennum="${n}" ${busy ? "disabled" : ""} title="${busy ? "Already open" : ""}">${n}</button>`; }).join("")}</div></div>` : ""}
+      ${!S.gotGroups ? skTickets(2) : mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down, or open one for guests ordering through you.</p>`}
     </section>`);
   }
   // The sign-in card: a standard two-step sign-in (who are you, then PIN) in the restaurant's look.
@@ -1544,6 +1701,18 @@ function waiterScreen(boss) {
       else if (d.done) await updateDoc(rdoc("alerts", d.done), { done: true, doneAt: Date.now() });
       else if (d.serve) await updateDoc(rdoc("lines", d.serve), { s: "served", tServed: Date.now(), servedBy: S.me });
       else if (d.open) { S.open = S.open === d.open ? null : d.open; watchBill(S.open); render(); }
+      else if (d.addorder) { const g = find(d.addorder); if (!g) return;
+        orderTaker({ g, by: S.me, byName: wname(S.me), title: `Order for ${name(g)}` }); }
+      else if (d.unline) { b.disabled = true; await deleteDoc(rdoc("lines", d.unline)); toast("Removed"); }
+      else if (d.act === "opentable") { S.opening = !S.opening; render(); }
+      else if (d.opennum) { const n = Number(d.opennum); S.opening = false; render();
+        // A table nobody scanned: it opens as this waiter's when the first order is sent.
+        const open = await groupsAt(n);
+        if (open.length && !isShared(n)) { toast(`Table ${n} already has guests. Accept it under "Waiting for a waiter".`); return; }
+        const grp = { ...newGroup(n, null), waiter: S.me, accepted: Date.now() };
+        orderTaker({ create: { group: grp, needsCode: true, extra: (bt, code) => {
+            bt.set(tableRef(n), { table: n, current: grp.session }); bt.set(codeRef(code), { session: grp.session, table: n }); bt.set(inviteRef(code), { demo: RID }); } },
+          by: S.me, byName: wname(S.me), title: `Open table ${n}` }); }
       else if (d.split) await setSplit(d.g, d.split);
       else if (d.paid) { const g = find(d.g); await togglePaid(d.g, d.paid, !!((g && g.paid) || {})[d.paid]); }
       else if (d.confirm) { S.confirm = d.confirm; render(); setTimeout(() => { if (S.confirm === d.confirm) { S.confirm = null; render(); } }, 4000); }
