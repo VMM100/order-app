@@ -205,6 +205,9 @@ service cloud.firestore {
         allow read: if live(rid) || isCompany() || isAdmin(rid);
         allow write: if boss(rid) && doc == 'stock' && request.resource.data.keys().hasOnly(['out', 't'])
           && request.resource.data.out is map && request.resource.data.out.size() <= 500;
+        // How far guests' names older than 30 days have been replaced with "Guest" (see app.js forgetOldNames).
+        allow write: if boss(rid) && doc == 'retention' && request.resource.data.keys().hasOnly(['upto', 't'])
+          && request.resource.data.upto is int && request.resource.data.t is int;
       }
       match /photos/{id} {
         allow read: if true;
@@ -382,6 +385,9 @@ service cloud.firestore {
           && (boss(rid) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['servedBy'])
               || (onShift() && request.resource.data.servedBy == myWaiter()));
         allow delete: if boss(rid) || staffCancel(resource.data);
+        // After 30 days the owner or manager replaces the guest's name with "Guest", and nothing else.
+        allow update: if boss(rid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pname'])
+          && request.resource.data.pname == 'Guest';
       }
       match /alerts/{id} {
         function dinerAlert(a) {
@@ -397,6 +403,8 @@ service cloud.firestore {
         allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ack', 'ackBy', 'done', 'doneAt'])
           && (boss(rid) || (onShift() && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ackBy'])
                                           || request.resource.data.ackBy == myWaiter())));
+        allow update: if boss(rid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pname'])
+          && request.resource.data.pname == 'Guest';
         allow delete: if boss(rid);
       }
       match /sessions/{sid} {
