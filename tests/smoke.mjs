@@ -48,6 +48,13 @@ await check("Owner page (asks to sign in)", "?r=crafty-dees#owner", null, { wait
 await check("Table without a QR key (asks for a code)", "?r=crafty-dees&t=1", async (p) => { await p.locator("#codein").waitFor(T); });
 await check("Live demo page", "demo/", null, { wait: 5000 });
 await check("Privacy policy", "privacy.html", async (p) => { await p.locator("h1").first().waitFor(T); });
+await check("Terms", "terms.html", async (p) => { await p.locator("h1").first().waitFor(T); });
+await check("Sign in needs the Terms ticked", "#account", async (p) => {
+  const g = p.getByText("Continue with Google"); await g.waitFor(T);
+  if (!(await g.isDisabled())) throw new Error("Google button works without the Terms box");
+  await p.locator("input[data-terms]").check();
+  if (await g.isDisabled()) throw new Error("ticking the Terms box didn't enable sign-in");
+});
 await check("Page not found", "this-page-does-not-exist", async (p) => { await p.getByText("isn't on the menu").first().waitFor(T); });
 
 await browser.close(); server.close();

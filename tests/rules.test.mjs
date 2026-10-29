@@ -836,3 +836,15 @@ test("after 30 days the owner or manager replaces guests' names with Guest, and 
   await assertFails(w.doc(`${R}/live/retention`).set({ upto: 5, t: 6 }));
   await assertFails(owner().doc(`${R}/live/other`).set({ upto: 5, t: 6 }));
 });
+test("agreeing to the Terms is kept on the diner's own profile and logged, and the log can't be changed", async () => {
+  const u = env.authenticatedContext("acct1", { email: "a@example.com", email_verified: true }).firestore();
+  const at = Date.now(), b = u.batch();
+  b.set(u.doc("diners/acct1"), { terms: { v: "2026-10-30-draft", at } }, { merge: true });
+  b.set(u.doc("diners/acct1/consents/t1"), { rid: "wasabi", rname: "Wasabi", on: true, channel: "terms", phone: null,
+    text: "I agree to the Terms and Privacy policy.", version: "2026-10-30-draft", source: "sign-in", at });
+  await assertSucceeds(b.commit());
+  await assertFails(u.doc("diners/acct1/consents/t1").update({ version: "old" }));          // proof can't be edited
+  await assertFails(diner("other").doc("diners/acct1/consents/t1").get());                   // or read by others
+  await assertFails(diner("other").doc("diners/acct1/consents/t2").set({ rid: "wasabi", rname: "Wasabi", on: true, channel: "terms",
+    phone: null, text: "x", version: "v", source: "x", at }));                                // or written for someone else
+});
