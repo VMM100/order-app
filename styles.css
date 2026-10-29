@@ -479,3 +479,18 @@ body.otk-open{overflow:hidden}
 /* A note per item in the diner's basket */
 .cnote{font-size:12px;display:block;margin-top:2px}
 .cnotein{width:100%;margin:2px 0 8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:8px 10px;font:inherit;font-size:16px}
+/* Owner → Past tables: one day at a time, tap a table for its bill */
+.dayp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dayp .field.sel{min-height:44px}
+.hlist{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.hrec{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
+.hrec.on{border-color:var(--accent)}
+.hrow{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;width:100%;text-align:left;background:none;border:0;padding:12px 14px;font:inherit;color:inherit;cursor:pointer;min-height:56px}
+.ht{font-size:12px;line-height:1.35;color:var(--muted)}
+.hn,.hs{display:flex;flex-direction:column;min-width:0}
+.hs{text-align:right}
+.rcpt{border-top:1px solid var(--line);padding:10px 14px 14px}
+.rp+.rp{margin-top:10px}
+.rph{display:flex;justify-content:space-between;gap:10px;margin-bottom:2px}
+.rl{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:3px 0}
+.rtot{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}

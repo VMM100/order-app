@@ -55,7 +55,8 @@ restaurant's offers.
 
 | Data | Kept | Then |
 | --- | --- | --- |
-| Guest diners' orders, bills, names at tables | **12 months** | Deleted; restaurants keep totals (sales, counts) without names |
+| Guest diners' first names at tables (on orders, calls, tables, bar tabs, join requests) | **30 days** (since 29 Oct 2026) | Replaced with "Guest 1", "Guest 2"…; join requests deleted. Runs from the owner's or manager's phone when the owner page opens (at most daily, `live/retention` marks progress); moves to the scheduled job when it's built |
+| Guest diners' orders and bills (without names after 30 days) | **12 months** | Deleted; restaurants keep totals (sales, counts) |
 | Diner accounts, visits, consents | Until the diner deletes the account | *Delete my account and data* removes profile, visits and consents |
 | Consent records after an account is deleted | Deleted with the account | (we keep no contact details, so no offers can be sent) |
 | Alerts (calls, bill requests), `rung` records | 30 days | Deleted |

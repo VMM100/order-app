@@ -12,7 +12,7 @@ import { pushState, enablePush, refreshPush, testRing, ringFor } from "./push.js
 import {
   doc, collection, query, where, onSnapshot, getDocs, runTransaction, documentId,
   updateDoc, addDoc, writeBatch, deleteField, setDoc, getDoc, deleteDoc, collectionGroup,
-  disableNetwork, enableNetwork,
+  disableNetwork, enableNetwork, orderBy, startAfter, limit,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import morphdom from "./vendor/morphdom-esm.js";
 import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
@@ -1815,7 +1815,7 @@ function waiterScreen(boss) {
 
 // ================= SETUP =================
 // The same tabs as the owner and manager pages, with Tables & QR selected; the others open that page.
-const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["open", "Open tables"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["open", "Open tables"], ["menu", "Menu"], ["staff", "Staff"]]);
+const ownerTabs = (role) => (role === "owner" ? [["dash", "Dashboard"], ["open", "Open tables"], ["past", "Past tables"], ["menu", "Menu"], ["brand", "Look"], ["staff", "Staff"]] : [["open", "Open tables"], ["menu", "Menu"], ["staff", "Staff"]]);
 // ☰ on the owner, manager and Tables & QR pages: things used now and then. extra = items for this page.
 function bossMenu(role, extra = []) {
   const st = subState(ACCOUNT), page = role === "owner" ? "owner" : "manager";
@@ -1963,7 +1963,7 @@ function ownerScreen(role) {
     bossMenu(owner ? "owner" : "manager");
     if (!TABS.some(([k]) => k === S.tab)) S.tab = TABS[0][0];
     paint(subBanner() + tabBar(TABS, S.tab) + `
-      ${S.tab === "open" ? openTab() : S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
+      ${S.tab === "open" ? openTab() : owner && S.tab === "past" ? pastTab() : S.tab === "menu" ? menuTab() : S.tab === "staff" ? staffTab() : owner && S.tab === "brand" ? brandTab() : owner ? dashTab() : menuTab()}`);
     const qr = document.getElementById("wlqr");
     if (qr && S.wtok) { const draw = () => { if (!qr.childNodes.length) brandQr(qr, waiterLink(), 160); };
       if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true }); }
@@ -2033,6 +2033,125 @@ function ownerScreen(role) {
     catch (err) { fail(err); }
     e.target.blur();
   });
+
+  // ----- past tables -----
+  // One day at a time, so it stays cheap: opening a day reads only that day's closed tables (one read
+  // each), and a table's items are read only when it's tapped open. Nothing loads until the tab is used.
+  const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const dayStart = (k) => new Date(k + "T00:00").getTime();
+  const H = { day: dayKey(Date.now()), got: null, rows: null, err: null, open: null, rec: {}, csv: false };
+  async function loadDay() {
+    const k = H.day, a = dayStart(k); H.rows = null; H.err = null; H.open = null;
+    try { const q = await getDocs(query(rcol("sessions"), where("closed", ">=", a), where("closed", "<", a + DAY)));
+      if (H.day !== k) return; H.rows = q.docs.map((x) => x.data()).sort((x, y) => y.closed - x.closed); }
+    catch (e) { if (H.day !== k) return; H.err = e; H.rows = []; }
+    if (S.tab === "past") render();
+  }
+  async function loadRec(sid) {
+    if (H.rec[sid] && !H.rec[sid].err) return;
+    H.rec[sid] = { loading: true }; render();
+    try { const [g, ls] = await Promise.all([getDoc(groupRef(sid)), getDocs(query(rcol("lines"), where("session", "==", sid)))]);
+      H.rec[sid] = { g: g.exists() ? g.data() : { people: {} }, lines: ls.docs.map((x) => x.data()).sort((a, b) => a.t - b.t) }; }
+    catch (e) { H.rec[sid] = { err: e }; }
+    render();
+  }
+  const hm = (t) => (t ? new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "–");
+  function receipt(r) {
+    if (!r || r.loading) return `<div class="rcpt"><p class="note" style="margin:0">Loading the bill…</p></div>`;
+    if (r.err) return `<div class="rcpt">${errorBox(r.err)}</div>`;
+    const g = r.g, ls = r.lines, ppl = shares(g, ls), others = ls.filter((l) => !(g.people || {})[l.pid]);
+    const item = (l) => `<div class="rl"><span>${label(l)}${l.note ? ` <span class="nt">${esc(l.note)}</span>` : ""}<span class="note" style="margin:0"> · ${hm(l.t)}${l.byName ? ` · added by ${esc(l.byName)}` : ""}</span>${l.closedUnserved ? ` <span class="pill s-new">Not served</span>` : ""}</span><span class="num">${fmt(l.pr)}</span></div>`;
+    const person = (name, items, amt, paid) => `<div class="rp"><div class="rph"><b>${esc(name)}</b><span class="num">TSh ${fmt(amt)}${paid ? " · paid" : ""}</span></div>${items.map(item).join("") || `<p class="note" style="margin:0">Nothing ordered</p>`}</div>`;
+    return `<div class="rcpt">${g.tab ? `<p class="note" style="margin:0 0 6px">Bar tab: ${esc(g.tab)}</p>` : ""}
+      ${ppl.map((p) => person(p.name, p.items, p.amt, p.paid)).join("")}${others.length ? person("Others", others, tableTotal(others), false) : ""}
+      <div class="rph rtot"><b>Total</b><span class="num">TSh ${fmt(tableTotal(ls))}</span></div>
+      ${g.split === "equal" ? `<p class="note" style="margin:4px 0 0">Split equally.</p>` : ""}</div>`;
+  }
+  function pastTab() {
+    if (H.got !== H.day) { H.got = H.day; H.rows = null; queueMicrotask(loadDay); }
+    const today = dayKey(Date.now()), when = new Date(H.day + "T12:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const head = `<h2 class="ptitle">Past tables</h2>
+      <div class="dayp"><button class="btn ghost" data-hday="-1" aria-label="Day before">‹</button>
+        <input type="date" class="field sel" id="hday" value="${H.day}" max="${today}" aria-label="Day">
+        <button class="btn ghost" data-hday="1" aria-label="Day after" ${H.day >= today ? "disabled" : ""}>›</button>
+        ${H.day !== today ? `<button class="btn ghost small" data-hday="0">Today</button>` : ""}</div>
+      <p class="note" style="margin:6px 0 0"><b>${esc(when)}</b></p>`;
+    if (H.rows === null) return `<section>${head}${skRows(4)}</section>`;
+    if (H.err) return `<section>${head}${errorBox(H.err)}</section>`;
+    const sum = H.rows.reduce((a, x) => a + (x.total || 0), 0);
+    const row = (x) => { const open = H.open === x.session, ppl = x.guests || 0;
+      return `<div class="hrec${open ? " on" : ""}"><button class="hrow" data-hopen="${esc(x.session)}" aria-expanded="${open}">
+        <span class="ht num">${hm(x.opened)}<br>${hm(x.closed)}</span>
+        <span class="hn"><b>${x.table ? `Table ${x.table}` : "Bar tab"}</b><span class="note" style="margin:0">${x.waiter ? esc(wname(x.waiter)) : x.table ? "No waiter" : "Bar"} · ${ppl} guest${ppl === 1 ? "" : "s"}${x.opened ? ` · ${dur(x.closed - x.opened)}` : ""}</span></span>
+        <span class="hs"><b class="num">TSh ${fmt(x.total)}</b><span class="note" style="margin:0">${x.paid ? `${x.paid} of ${ppl} paid` : "Not marked paid"}</span></span></button>
+        ${open ? receipt(H.rec[x.session]) : ""}</div>`; };
+    return `<section>${head}
+      ${H.rows.length ? `<div class="trow" style="margin-top:12px"><span>${H.rows.length} table${H.rows.length === 1 ? "" : "s"} closed · <b class="num">TSh ${fmt(sum)}</b></span>
+          <button class="btn small" data-act="hcsv" ${H.csv ? "disabled" : ""}>${H.csv ? "Preparing…" : "Download day"}</button></div>
+        <div class="hlist">${H.rows.map(row).join("")}</div>`
+        : `<p class="empty">No tables were closed on this day.</p>`}
+      <p class="note">Tap a table to see who had what. Guests' first names are kept for 30 days, then replaced with "Guest 1", "Guest 2"… The items and totals stay.</p></section>`;
+  }
+  // The whole day as a spreadsheet: one row per item ordered that day.
+  async function dayCsv() {
+    const a = dayStart(H.day); H.csv = true; render();
+    try {
+      const q = await getDocs(query(rcol("lines"), where("t", ">=", a), where("t", "<", a + DAY)));
+      const ls = q.docs.map((x) => x.data()).sort((x, y) => x.t - y.t);
+      // A cell starting with = + - or @ would run as a formula in Excel: start it with ' instead.
+      const cell = (v) => { let t = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+      const rows = [["Date", "Time", "Table", "Guest", "Item", "Option", "Price (TSh)", "Station", "Added by", "Note", "Status"],
+        ...ls.map((l) => [H.day, hm(l.t), l.table ? l.table : "Bar tab", l.pname || "", l.n, l.v || "", l.pr, STATIONS[l.st] || "", l.byName || "Diner", l.note || "", l.closedUnserved ? "Not served" : l.s])];
+      const url = URL.createObjectURL(new Blob(["﻿" + rows.map((r) => r.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
+      const lk = document.createElement("a"); lk.href = url; lk.download = `${RID}-orders-${H.day}.csv`; document.body.appendChild(lk); lk.click(); lk.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast(ls.length ? `Downloaded ${ls.length} item${ls.length === 1 ? "" : "s"}` : "No items ordered on this day");
+    } catch (e) { fail(e); }
+    H.csv = false; render();
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b || S.tab !== "past") return; const d = b.dataset;
+    if (d.hday != null) { H.day = d.hday === "0" ? dayKey(Date.now()) : dayKey(dayStart(H.day) + Number(d.hday) * DAY + 12 * 36e5); render(); }
+    else if (d.hopen) { H.open = H.open === d.hopen ? null : d.hopen; if (H.open) loadRec(H.open); else render(); }
+    else if (d.act === "hcsv") dayCsv();
+  });
+  document.addEventListener("change", (e) => {
+    if (e.target.id !== "hday" || !/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) return;
+    H.day = e.target.value > dayKey(Date.now()) ? dayKey(Date.now()) : e.target.value; e.target.blur(); render();
+  });
+
+  // ----- forgetting names after 30 days -----
+  // Guests' first names stay 30 days. After that, an owner's or manager's phone replaces them with
+  // "Guest 1, Guest 2…" when this page opens: at most once a day, and only the days not done yet
+  // (live/retention remembers how far it got). Items, prices and totals stay for the dashboard.
+  async function forgetOldNames() {
+    const cutoff = Date.now() - 30 * DAY, ref = rdoc("live", "retention");
+    let from = 0; try { const d = await getDoc(ref); from = (d.exists() && d.data().upto) || 0; } catch { return; }
+    if (cutoff - from < DAY) return;
+    const pages = async (col, field, fix) => {
+      let last = null;
+      for (;;) {
+        const q = await getDocs(query(rcol(col), where(field, ">=", from), where(field, "<", cutoff), orderBy(field), ...(last ? [startAfter(last)] : []), limit(300)));
+        if (q.empty) return;
+        const b = writeBatch(db); let n = 0;
+        q.docs.forEach((x) => { const u = fix(x.data()); if (u === "delete") { b.delete(x.ref); n++; } else if (u) { b.update(x.ref, u); n++; } });
+        if (n) await b.commit();
+        if (q.size < 300) return; last = q.docs[q.size - 1];
+      }
+    };
+    try {
+      await pages("lines", "t", (l) => (l.pname && l.pname !== "Guest" ? { pname: "Guest" } : null));
+      await pages("alerts", "t", (a) => (a.pname && a.pname !== "Guest" ? { pname: "Guest" } : null));
+      await pages("joins", "t", () => "delete");
+      await pages("groups", "opened", (g) => {
+        if (g.open !== false || g.forgot) return null;
+        const people = {}; Object.entries(g.people || {}).forEach(([pid, p], i) => { people[pid] = { name: `Guest ${i + 1}`, t: (p && p.t) || 0 }; });
+        const u = { people, forgot: true }; if (g.label) u.label = deleteField(); if (g.tab) u.tab = "Tab"; return u;
+      });
+      await setDoc(ref, { upto: cutoff, t: Date.now() });
+    } catch (e) { console.warn("Older guest names not cleared yet:", (e && e.code) || "error"); }
+  }
+  setTimeout(forgetOldNames, 8000);   // after the page has settled; never in the way
 
   // ----- menu editor -----
   function menuTab() {

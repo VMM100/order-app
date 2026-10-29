@@ -817,3 +817,19 @@ test("staff can take back what they added until the kitchen or bar starts it", a
   await assertFails(w2.doc(`${R}/lines/c4`).delete());                                 // someone else's
   await assertSucceeds(owner().doc(`${R}/lines/c2`).delete());                         // the owner can fix anything
 });
+test("after 30 days the owner or manager replaces guests' names with Guest, and nothing else", async () => {
+  const d1 = await seatAt("d1");
+  await d1.doc(`${R}/lines/n1`).set(line("d1", "4-a"));
+  await d1.doc(`${R}/alerts/n2`).set({ table: 4, session: "4-a", type: "call", pid: "d1", pname: "Amina", t: 1, ack: null, ackBy: null, done: false });
+  await assertSucceeds(owner().doc(`${R}/lines/n1`).update({ pname: "Guest" }));
+  await assertSucceeds(manager().doc(`${R}/alerts/n2`).update({ pname: "Guest" }));
+  await assertFails(owner().doc(`${R}/lines/n1`).update({ pname: "Someone" }));          // only "Guest"
+  await assertFails(owner().doc(`${R}/lines/n1`).update({ pname: "Guest", pr: 1 }));     // nothing else with it
+  const w = await waiterPhone("s1", "w1");
+  await assertFails(w.doc(`${R}/lines/n1`).update({ pname: "Guest" }));                  // staff phones can't
+  await assertFails(d1.doc(`${R}/alerts/n2`).update({ pname: "Guest" }));
+  await assertSucceeds(owner().doc(`${R}/live/retention`).set({ upto: 5, t: 6 }));
+  await assertFails(owner().doc(`${R}/live/retention`).set({ upto: 5, t: 6, x: 1 }));
+  await assertFails(w.doc(`${R}/live/retention`).set({ upto: 5, t: 6 }));
+  await assertFails(owner().doc(`${R}/live/other`).set({ upto: 5, t: 6 }));
+});
