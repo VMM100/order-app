@@ -316,6 +316,17 @@
       b.hidden = false;
       // A signed-in page can take over the back button first (it asks before logging out: see app.js).
       b.addEventListener("click", () => { if (window.wasabiBack && window.wasabiBack()) return; if (been && history.length > 1) history.back(); else location.href = up; });
+      // The phone's own back button or swipe does the same as the arrow on pages that take it over
+      // (signed-in pages, the waiter screen): after the first tap on the page, one extra history step
+      // catches "back" and asks first. It is set again on the next tap, so Chrome doesn't skip it.
+      let armed = false;
+      const arm = () => { if (armed || !window.wasabiBack) return; armed = true; try { history.pushState({ wguard: 1 }, ""); } catch { armed = false; } };
+      addEventListener("pointerdown", arm, true); addEventListener("keydown", arm, true);
+      addEventListener("popstate", () => {
+        if (!armed) return; armed = false;
+        if (window.wasabiBack && window.wasabiBack()) return;
+        if (been && history.length > 1) history.back(); else location.href = up;
+      });
     })();
     // The app: QR code library, then the app itself.
     const q = document.createElement("script"); q.src = "vendor/qrcode.min.js"; q.defer = true; document.body.appendChild(q);
