@@ -2,3 +2,10 @@ node_modules/
 _site/
 out.txt
 tail.txt
+
+# Never commit secrets (keys live in GitHub secrets and Cloudflare)
+.env
+.env.*
+*.pem
+*service-account*.json
+.dev.vars
