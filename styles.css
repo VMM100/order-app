@@ -497,4 +497,9 @@ body.otk-open{overflow:hidden}
 
 /* "By continuing, you agree to Wasabi's Terms" under sign-in buttons */
 .terms-note{margin:10px 0 0;text-align:center;font-size:13px}
-.terms-note a{font-weight:600}
+.terms-note a{font-weight:600;color:var(--fg);text-decoration:underline;text-underline-offset:2px}
+/* Sign in with Google: Google's neutral button (white in light, near-black in dark) with the four-colour G */
+.btn.gbtn{display:flex;align-items:center;justify-content:center;gap:12px;background:#fff;color:#1f1f1f;border:1px solid #747775;font-weight:500}
+.btn.gbtn:hover{background:#f8f9fa}
+.btn.gbtn .glogo{flex:none}
+@media (prefers-color-scheme:dark){.btn.gbtn{background:#131314;color:#e3e3e3;border-color:#8e918f}.btn.gbtn:hover{background:#1f1f20}}

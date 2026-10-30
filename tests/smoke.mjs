@@ -43,14 +43,14 @@ await check("Landing page", "", async (p) => {
   await p.locator(".wscan").waitFor(T);
   await p.locator(".wscan-x").click();
 }, { wait: 500 });
-await check("Sign in", "#account", async (p) => { await p.getByText("Continue with Google").waitFor(T); });
+await check("Sign in", "#account", async (p) => { await p.getByText("Sign in with Google").waitFor(T); });
 await check("Owner page (asks to sign in)", "?r=crafty-dees#owner", null, { wait: 6000 });
 await check("Table without a QR key (asks for a code)", "?r=crafty-dees&t=1", async (p) => { await p.locator("#codein").waitFor(T); });
 await check("Live demo page", "demo/", null, { wait: 5000 });
 await check("Privacy policy", "privacy.html", async (p) => { await p.locator("h1").first().waitFor(T); });
 await check("Terms", "terms.html", async (p) => { await p.locator("h1").first().waitFor(T); });
 await check("Sign in shows the Terms statement", "#account", async (p) => {
-  await p.getByText("Continue with Google").waitFor(T);
+  await p.getByText("Sign in with Google").waitFor(T);
   await p.locator(".terms-note a[href='terms.html']").waitFor(T);
 });
 await check("Page not found", "this-page-does-not-exist", async (p) => { await p.getByText("isn't on the menu").first().waitFor(T); });

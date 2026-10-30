@@ -190,6 +190,9 @@ function setTermsTick(on) {
 // Shown right under the sign-in buttons; tapping one of them (or Continue) is agreeing, and is logged.
 const termsBox = (verb = "continuing") => `<p class="note terms-note">By ${verb}, you agree to ${esc(COMPANY.name)}'s <a href="terms.html" target="_blank" rel="noopener">Terms</a>. Read our <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>.</p>`;
 const needTerms = () => "";
+// Google's own sign-in button look: the four-colour G and "Sign in with Google" (Google's branding rules).
+const G_LOGO = `<svg class="glogo" viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+const gBtn = (act, busy, label = "Sign in with Google") => `<button class="btn big gbtn" data-act="${act}" ${busy ? "disabled" : ""}>${G_LOGO}<span>${busy ? "Signing in…" : label}</span></button>`;
 const agree = () => setTermsTick(true);
 // Adds the agreement to a batch: on the profile (merged, so it can be the first thing on it) and in the log.
 function logTerms(batch, u, profile, source) {
@@ -746,7 +749,7 @@ function adminGate(page, go) {
     step("sign-in"); G.u = await authReady(); step("sign-in done");
     if (!isAccount(G.u) || !G.u.email) return show(`<section><div class="label" style="margin-top:0">${title} sign-in</div>
       <p>Sign in with the Google account registered for your restaurant.</p>
-      <button class="btn primary big" data-act="admin-in" ${G.busy ? "disabled" : ""}>${G.busy ? "Signing in…" : "Sign in with Google"}</button>${termsBox()}${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${signupLink}</section>`);
+      ${gBtn("admin-in", G.busy)}${termsBox()}${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${signupLink}</section>`);
     const who = esc(G.u.email), other = `<button class="btn" data-act="admin-out">Use a different Google account</button>`;
     // No restaurant in the link: find the ones this account runs.
     if (!RID) {
@@ -1061,8 +1064,8 @@ function dinerScreen() {
         <input class="field" id="askin" maxlength="16" autocomplete="given-name" placeholder="e.g. Amani" value="${esc(a.name)}">
         <button class="btn primary big">${a.state === "no" ? "Ask again" : "Ask to join"}</button></form>
       ${S.user ? "" : `<div class="orline"><span>or sign in</span></div>
-      <div class="grid two"><button class="btn big" data-act="auth-phone">Phone number</button>
-        <button class="btn big" data-act="auth-google" ${S.busy ? "disabled" : ""}>Google</button></div>${termsBox("signing in")}
+      <div class="grid"><button class="btn big" data-act="auth-phone">Sign in with phone number</button>
+        ${gBtn("auth-google", S.busy)}</div>${termsBox("signing in")}
       ${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}`}
       <p class="note">Sitting at the table? Scan its QR code to join straight away.</p></section>`);
   }
@@ -1134,8 +1137,8 @@ function dinerScreen() {
         <input class="field" id="namein" maxlength="16" placeholder="e.g. Amani" autocomplete="given-name" value="${esc(S.name)}">
         <button class="btn primary big">Join ${unit}</button></form>
       <div class="orline"><span>or sign in</span></div>
-      <div class="grid two"><button class="btn big" data-act="auth-phone">Phone number</button>
-        <button class="btn big" data-act="auth-google" ${S.busy ? "disabled" : ""}>Google</button></div>${termsBox("signing in")}${err}
+      <div class="grid"><button class="btn big" data-act="auth-phone">Sign in with phone number</button>
+        ${gBtn("auth-google", S.busy)}</div>${termsBox("signing in")}${err}
       <p class="note">Signing in is optional: it keeps your receipts and lets you order your usual in one tap. Ordering and splitting the bill work the same either way.</p></section>`;
   }
   // Welcome card for signed-in diners: visit number here, their usual, and a link to their account.
@@ -2588,7 +2591,7 @@ function companyScreen() {
         ${signedIn ? `<p><b>${esc(C.u.email)}</b> isn't on the company team.</p>` : `<p>For the ${esc(COMPANY.name)} team: approve restaurants, record payments and manage subscriptions.</p>`}
         ${!C.claimed ? `<p>No one has set up the company page yet. The first Google account to do so runs it, and can add partners later.</p>
           <button class="btn primary big" data-act="co-claim" ${C.busy ? "disabled" : ""}>${signedIn ? "Make this account the company admin" : "Sign in with Google and set up"}</button>`
-          : signedIn ? `<button class="btn" data-act="co-out">Use a different Google account</button>` : `<button class="btn primary big" data-act="co-in">Sign in with Google</button>${termsBox()}`}
+          : signedIn ? `<button class="btn" data-act="co-out">Use a different Google account</button>` : `${gBtn("co-in", false)}${termsBox()}`}
         ${C.err ? `<p class="err">${esc(C.err)}</p>` : ""}</section>`);
     }
     const by = (k) => C.list.filter((a) => subState(a).kind === k);
@@ -2693,7 +2696,7 @@ function signupScreen() {
       <p class="note">${price()}, after a free trial. Nothing to install.</p>`;
     if (!isAccount(U.u) || !U.u.email) return paint(`<section><div class="label" style="margin-top:0">Register your restaurant</div>${intro}
       <p>Sign in with the Google account you'll use as the owner.</p>
-      <button class="btn primary big" data-act="su-in" ${U.busy ? "disabled" : ""}>${U.busy ? "Signing in…" : "Sign in with Google"}</button>${termsBox()}${err}</section>`);
+      ${gBtn("su-in", U.busy)}${termsBox()}${err}</section>`);
     const list = U.mine.length ? `<div class="label">Your restaurants</div><div class="grid" style="max-width:520px">${U.mine.map((m) => { const st = subState(m.acct);
       return `<a class="ticket ${st.live ? "preparing" : ""}" style="display:block;text-decoration:none;color:inherit" href="${BASE}?r=${esc(m.rid)}#owner"><b>${esc(m.name)}</b>
         <div class="note" style="margin:2px 0 0">${st.kind === "pending" ? "Waiting for approval. We'll be in touch." : st.live ? "Running · open the owner page" : st.kind === "suspended" ? "Paused" : "Subscription ended"}</div></a>`; }).join("")}</div>` : "";
@@ -2789,8 +2792,8 @@ function accountScreen() {
           <input class="field num" id="acsmsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
           <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Checking…" : "Sign in"}</button></form>
           <button class="btn ghost" data-act="ac-phone" style="margin-top:10px">Use a different number</button>`
-      : `<div class="grid"><button class="btn primary big" data-act="ac-google" ${S.busy ? "disabled" : ""}>${S.busy ? "Signing in…" : "Continue with Google"}</button>
-          <button class="btn big" data-act="ac-phone">Continue with phone number</button></div>${termsBox()}
+      : `<div class="grid"><button class="btn primary big" data-act="ac-phone">Sign in with phone number</button>
+          ${gBtn("ac-google", S.busy)}</div>${termsBox()}
           <p class="note">Restaurant owners and managers: use the Google account registered for your restaurant.</p>`;
     return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Sign in</div>
         <div class="wsign-title">For diners, restaurant owners and managers</div></div>
