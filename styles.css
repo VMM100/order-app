@@ -521,3 +521,6 @@ header.top .sub{white-space:nowrap;max-width:34vw;overflow:hidden;text-overflow:
 .cur{font-size:max(12px,.75em);color:var(--muted);font-weight:500}
 .kv .cur{font-size:max(12px,.5em)}
 .kv.none{font-family:inherit;font-size:15px;font-weight:600;color:var(--muted)}
+.var{gap:6px;padding-inline:10px}
+.var .vl,.var .num{white-space:nowrap}
+.var .cur{margin-right:1px}
