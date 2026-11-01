@@ -36,11 +36,13 @@ const store = {
 };
 const BASE = location.origin + location.pathname;
 const ALERT = { call: "Call waiter", bill: "Bill please" };
+// What a diner sees for each order line (staff screens keep their own words).
+const DINER_S = { new: "Sent", preparing: "Preparing", ready: "Ready", served: "Served" };
 const label = (l) => esc(l.n) + (l.v ? ` · ${esc(l.v)}` : "");
 const soldOut = (name) => MENU.some((c) => c.items.some((it) => it.n === name && it.out));
 const wname = (id) => (WAITERS.find((w) => w.id === id) || {}).name || (id ? "Former staff" : "");
 
-function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 2200); }
+function toast(m) { const t = $("#toast"), h = document.querySelector("header.top"); if (h) t.style.top = Math.max(8, h.getBoundingClientRect().bottom + 8) + "px"; t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 2200); }
 // The waiter already using this name (ignoring capitals and spaces), other than waiter number `skip`.
 function takenName(n, skip = -1) { const k = String(n).trim().toLowerCase().replace(/\s+/g, " "); return WAITERS.find((w, i) => i !== skip && String(w.name).trim().toLowerCase().replace(/\s+/g, " ") === k); }
 function fail(e) { console.error(e); toast(denied(e) ? "Not allowed from this phone." : "Could not save. Check your connection and try again."); }
@@ -548,7 +550,7 @@ function billHtml(t, lines, staff, me) {
    ${mine ? `<div class="myshare"><span>Your share${mine.paid ? " · paid" : ""}</span><b class="num ${mine.paid ? "paid" : ""}">TSh ${fmt(mine.amt)}</b></div>` : ""}
    ${rows.map((s) => `<div class="billrow${s === mine ? " me" : ""}"><div style="min-width:0"><div class="${s.paid ? "paid" : ""}" style="font-weight:600">${esc(s.name)}${s === mine ? " (you)" : ""}</div>
      ${t.split !== "equal" ? `<div class="note" style="margin:0">${s.items.map((l) => esc(l.n)).join(", ") || "Nothing ordered"}</div>` : ""}</div>
-     <div class="row" style="flex-wrap:nowrap"><span class="amt num ${s.paid ? "paid" : ""}">${fmt(s.amt)}</span>
+     <div class="row" style="flex-wrap:nowrap"><span class="amt num ${s.paid ? "paid" : ""}">TSh ${fmt(s.amt)}</span>
      ${staff ? `<button class="btn ${s.paid ? "" : "primary"}" data-paid="${s.pid}" data-g="${t.session}">${s.paid ? "Undo" : "Mark paid"}</button>` : s.paid ? `<span class="pill s-ready">Paid</span>` : ""}</div></div>`).join("")}
    <div class="total"><span>${isShared(t.table) ? "Group total" : "Table total"}</span><span class="num">TSh ${fmt(total)}</span></div>
    ${t.split === "equal" ? `<p class="note">Equal shares round up to the nearest 100 shillings.</p>` : ""}`;
@@ -1198,10 +1200,10 @@ function dinerScreen() {
          ${it.img ? `<div class="ph"><img data-photo="${esc(it.img)}" alt="${esc(it.n)}" loading="lazy"></div>` : gp ? `<div class="ph loaded"><img src="${gp}" alt="${esc(it.n)}" loading="lazy"></div>` : ""}
          ${it.out ? "" : `<div class="vars${it.v.length === 1 ? " one" : ""}">${it.v.map(([l, p], vi) => { const q = inCart(l), key = `${ci}.${ii}.${vi}`;
            // In the basket: the option stays highlighted with a count badge; each tap adds one more.
-           return `<button class="var${q ? " on" : ""}" data-add="${key}" aria-label="Add ${esc(it.n)}${l ? " " + esc(l) : ""}, TSh ${fmt(p)}${q ? `, ${q} in basket` : ""}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num">${fmt(p)}</span>${q ? `<span class="vq num${S.bump === key ? " bump" : ""}" aria-hidden="true">${q}</span>` : ""}</button>`; }).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
+           return `<button class="var${q ? " on" : ""}" data-add="${key}" aria-label="Add ${esc(it.n)}${l ? " " + esc(l) : ""}, TSh ${fmt(p)}${q ? `, ${q} in basket` : ""}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num"><span class="cur">TSh</span> ${fmt(p)}</span>${q ? `<span class="vq num${S.bump === key ? " bump" : ""}" aria-hidden="true">${q}</span>` : ""}</button>`; }).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
     } else if (S.tab === "orders") {
       body = Object.entries(g.people || {}).sort(([a], [b]) => (a === S.me.pid ? -1 : b === S.me.pid ? 1 : 0)).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
-        return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}${l.byName ? ` <span class="note">added by ${esc(l.byName)}</span>` : ""}${l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}</span><span class="pill s-${l.s}">${l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing yet</p>`); }).join("");
+        return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}${l.byName ? ` <span class="note">added by ${esc(l.byName)}</span>` : ""}${l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}<span class="note" style="display:block;margin:0">TSh ${fmt(l.pr)}</span></span><span class="pill s-${l.s}">${DINER_S[l.s] || l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing ordered yet</p>`); }).join("");
     } else body = billHtml(g, S.lines, false, S.me.pid) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
     if (S.tab !== "orders") body += poweredBy();
     // ☰: inviting friends, the account and help. Waiter, Call waiter and Bill please stay on the page.
@@ -1226,7 +1228,8 @@ function dinerScreen() {
       <div class="tcard">
         <div class="trow"><div class="who2"><span>Waiter</span> <b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned"}</b></div>
           <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
-            return `<button class="btn small${a ? "" : " primary"}" data-alert="${k}" ${a ? "disabled" : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
+            const off = a || (k === "bill" && !S.lines.length);
+            return `<button class="btn small${!a && k === "bill" && S.lines.length ? " primary" : ""}" data-alert="${k}" ${off ? "disabled" : ""}${!a && off ? ` title="Order something first"` : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
       </div>
       ${asks}${banners}${welcomeCard()}
       <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
@@ -1272,7 +1275,7 @@ function dinerScreen() {
     const ck = `wasabi-cart-${RID}-${S.n || params.get("c") || "x"}`;
     if (!S.cartRestored) { S.cartRestored = true; try { const saved = JSON.parse(sessionStorage.getItem(ck) || "[]"); if (!S.cart.length && Array.isArray(saved)) S.cart = saved.filter((x) => x && x.n && !soldOut(x.n)); } catch {} }
     try { S.cart.length ? sessionStorage.setItem(ck, JSON.stringify(S.cart)) : sessionStorage.removeItem(ck); } catch {}
-    const c = $("#cart"); if (!S.me || S.tab !== "menu" || !S.cart.length) { c.hidden = true; c.innerHTML = ""; document.body.classList.remove("hascart"); return; }
+    const c = $("#cart"); if (!S.me || !S.cart.length) { c.hidden = true; c.innerHTML = ""; document.body.classList.remove("hascart"); return; }
     const tot = S.cart.reduce((a, l) => a + l.pr, 0), n = S.cart.length; c.hidden = false;
     const a = document.activeElement, focused = a && a.id === "note"; S.notes = S.notes || {};
     // The same item and size twice shows once, with a count and − / +.
@@ -1281,7 +1284,7 @@ function dinerScreen() {
       ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}${S.notes[g.k] && S.noteKey !== g.k ? `<span class="nt" style="display:block">${esc(S.notes[g.k])}</span>` : ""}
             <button class="linkbtn cnote" data-cnote="${esc(g.k)}">${S.notes[g.k] ? "Edit note" : "+ Note"}</button></span>
           <span class="qty"><button class="qb" data-dec="${esc(g.k)}" aria-label="One fewer ${esc(g.l.n)}">−</button><b class="num">${g.q}</b><button class="qb" data-inc="${esc(g.k)}" aria-label="One more ${esc(g.l.n)}">+</button></span>
-          <span class="num cp">${fmt(g.l.pr * g.q)}</span></div>
+          <span class="num cp">TSh ${fmt(g.l.pr * g.q)}</span></div>
           ${S.noteKey === g.k ? `<input id="note" class="cnotein" maxlength="200" aria-label="Note for ${esc(g.l.n)}" placeholder="Note for this item (e.g. no ice, well done)" value="${esc(S.notes[g.k] || "")}">` : ""}`).join("")}</div>` : ""}
       <div class="cbar"><button class="cview" data-act="cart" aria-expanded="${!!S.cartOpen}"><b class="num">${n}</b> item${n > 1 ? "s" : ""}<span>${S.cartOpen ? "Hide" : "View"}</span></button>
         <button class="cartbtn" data-act="place" ${S.placing ? "disabled" : ""}><span>${S.placing ? "Sending…" : "Place order"}</span><span class="num">TSh ${fmt(tot)}</span></button></div></div>`;
@@ -1399,7 +1402,7 @@ function dinerScreen() {
 // ================= STATION (kitchen / bar / grill) =================
 function stationScreen(st) {
   window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
-  $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st] + " screen"; document.title = STATIONS[st] + " · " + rname();
+  $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st]; document.title = STATIONS[st] + " · " + rname();
   const S = { lines: [], groups: {}, all: [] }; const notify = watcher();
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => {
     S.loaded = true; S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
@@ -1419,8 +1422,8 @@ function stationScreen(st) {
       return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="age num${late}" title="Waiting ${mins} min">${mins}<small> min</small></span></header>
         <div class="note" style="margin:2px 0 0">${esc(nowName(g, bl[0].pid, bl[0].pname))}${tab ? " · bar tab" : ` · waiter ${w ? esc(wname(w)) : "not assigned yet"}`}${via ? ` · taken by ${esc(via.byName)}` : ""}</div>
         <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}${!oneNote && l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}</span>${l.s === "ready"
-          ? `<span class="pill s-ready">Ready</span>` : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">${tab ? "Done" : "Ready"}</button>`}</li>`).join("")}</ul>${oneNote ? `<div class="nt">${esc(oneNote)}</div>` : ""}
-        <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
+          ? `<span class="pill s-ready">Ready</span>` : l.s === "new" ? "" : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">${tab ? "Done" : "Ready"}</button>`}</li>`).join("")}</ul>${oneNote ? `<div class="nt">${esc(oneNote)}</div>` : ""}
+        <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s === "new" ? "New" : "Preparing"}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
           ${bl.filter((l) => l.s !== "ready").length > 1 ? `<button class="btn primary" data-adv="${b}" data-to="ready">All ready</button>` : ""}</div></article>`;
     });
     setMenu([{ html: `<b>${esc(STATIONS[st])} screen</b><br>${esc(rname())}. Orders for the ${esc(STATIONS[st].toLowerCase())} appear here.` },
@@ -1542,7 +1545,7 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
       <div class="otk-list">${secs.map(({ c, ci, items }) => `${q ? `<div class="label">${esc(c.c)}</div>` : ""}${items.map(({ it, ii }) => `<div class="otk-item${out(it) ? " out" : ""}">
           <div class="otk-n"><b>${esc(it.n)}</b>${out(it) ? ` <span class="pill s-served">Sold out</span>` : ""}</div>
           ${out(it) ? "" : `<div class="row">${it.v.map(([l, p], vi) => { const n = T.cart.filter((x) => x.n === it.n && x.v === (l || "") && x.pid === T.who).length;
-            return `<button class="var${n ? " on" : ""}" data-otadd="${ci}.${ii}.${vi}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num">${fmt(p)}</span>${n ? `<span class="vq num">${n}</span>` : ""}</button>`; }).join("")}</div>`}</div>`).join("")}`).join("") || `<p class="note">Nothing on the menu matches "${esc(T.q)}".</p>`}</div>
+            return `<button class="var${n ? " on" : ""}" data-otadd="${ci}.${ii}.${vi}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num"><span class="cur">TSh</span> ${fmt(p)}</span>${n ? `<span class="vq num">${n}</span>` : ""}</button>`; }).join("")}</div>`}</div>`).join("")}`).join("") || `<p class="note">Nothing on the menu matches "${esc(T.q)}".</p>`}</div>
       <div class="otk-cart">${T.cart.length ? `<div class="otk-lines">${groups().map((gr, i) => `<div class="otk-line"><div><b>${gr.q > 1 ? `${gr.q}× ` : ""}${label(gr.l)}</b> <span class="note">for ${esc(nameOf(gr.l.pid))}</span>
             ${T.noteFor === gr.k ? `<div class="vrow" style="margin-top:4px"><input class="field" id="otnote" maxlength="200" placeholder="e.g. no ice, well done" value="${esc(gr.l.note || "")}" aria-label="Note for ${esc(gr.l.n)}"><button class="btn" data-ot="notedone">OK</button></div>`
               : gr.l.note ? `<div class="nt">${esc(gr.l.note)}</div>` : ""}</div>
@@ -1654,7 +1657,7 @@ function waiterScreen(boss) {
   const keepRing = () => { if (S.me && !boss && ring === "on") refreshPush(fbApp, pushRef(), pushUrl()); };
   // Always say where ringing stands, so nobody wonders whether it's on.
   const ringBar = () => !S.me || ring === "unsupported" ? ""
-    : boss ? `<div class="soundbar"><span><b>This phone won't ring with the screen off</b> while you're signed in as owner or manager. Waiters' own phones ring.</span></div>`
+    : boss ? `<p class="note">This phone won't ring with the screen off while you're signed in as owner or manager. Waiters' own phones ring.</p>`
     : ring === "on" ? `<div class="soundbar"><span><b>Rings with the screen off.</b> Calls, bill requests and ready orders ring this phone, even when it's locked.</span><button class="btn" data-act="testring">Test ring</button></div>`
     : ring === "blocked"
     ? `<div class="soundbar"><span><b>Notifications are blocked</b>, so this phone can't ring with the screen off. In Chrome: ⋮ → Settings → Site settings → Notifications → allow this site, then reload.</span></div>`
@@ -1700,7 +1703,7 @@ function waiterScreen(boss) {
     const hhmm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     let pick;
     if (boss) {
-      pick = `<div class="label" style="margin-top:0">Working as</div><div class="row">${WAITERS.map((w) => `<button class="chip" aria-pressed="${w.id === S.me}" data-me="${w.id}">${esc(w.name)}</button>`).join("")}</div>`;
+      pick = `<div class="label" style="margin-top:0">Working as</div><div class="row">${WAITERS.map((w) => `<button class="chip lg" aria-pressed="${w.id === S.me}" data-me="${w.id}">${esc(w.name)}</button>`).join("")}</div>`;
       if (!S.me) return paint(`<section>${pick}<p class="note">Owners and managers can work as any waiter.</p></section>`);
     } else if (!S.me) {
       $("#sub").textContent = "Waiter"; setMenu([]);
@@ -1740,6 +1743,7 @@ function waiterScreen(boss) {
         ${al.map((a) => alertRow(a, g)).join("")}
         <p class="note" style="margin:4px 0 0">${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "No guests yet"}</p>
         ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
+        ${S.lines.filter((l) => live(g)(l) && (l.s === "preparing" || l.s === "new" && !(l.by && l.by === S.me))).map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · ${STATIONS[l.st]}</span></span><span class="pill s-${l.s}">${l.s === "new" ? "Sent" : "Preparing"}</span></div>`).join("")}
         ${S.lines.filter((l) => live(g)(l) && l.s === "new" && l.by && l.by === S.me).map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · not started yet</span></span><button class="btn ghost small" data-unline="${l.id}" aria-label="Remove ${esc(l.n)}">Remove</button></div>`).join("")}
         <div class="acts"><button class="btn primary" data-addorder="${g.session}">Add order</button><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${g.session}">Hand over</button>
           ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>
@@ -1752,7 +1756,7 @@ function waiterScreen(boss) {
         <div class="row">${Array.from({ length: TABLES }, (_, i) => i + 1).map((n) => {
           // Taken: guests already sat down there, or another waiter has it. Shared tables take more than one group.
           const g = !isShared(n) && S.groups.find((x) => x.table === n), why = g ? (g.waiter ? (g.waiter === S.me ? "yours already" : `${wname(g.waiter)}'s`) : "guests waiting") : "";
-          return `<button class="chip" data-opennum="${n}" ${g ? `disabled aria-disabled="true" aria-label="Table ${n}, ${esc(why)}" title="${esc(why)}"` : `aria-label="Table ${n}"`}>${n}</button>`; }).join("")}</div>
+          return `<button class="chip lg" data-opennum="${n}" ${g ? `disabled aria-disabled="true" aria-label="Table ${n}, ${esc(why)}" title="${esc(why)}"` : `aria-label="Table ${n}"`}>${n}</button>`; }).join("")}</div>
         ${S.groups.some((x) => !isShared(x.table)) ? `<p class="note" style="margin:8px 0 0">Greyed out: already has guests or a waiter.</p>` : ""}</div>` : ""}
       ${!S.gotGroups ? skTickets(2) : mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down, or open one for guests ordering through you.</p>`}
     </section>`);
@@ -2361,19 +2365,19 @@ function ownerScreen(role) {
     // No "All time" for now: it downloaded every order ever placed, which gets slow and costly as history grows.
     // Longer ranges come back with daily summaries (see docs/security/Security Checklist.md → scaling).
     const periods = [["today", "Today"], ["7", "7 days"], ["30", "30 days"]];
-    const head = `<div class="periods">${periods.map(([k, l]) => `<button class="chip" aria-pressed="${S.period === k}" data-period="${k}">${l}</button>`).join("")}
+    const head = `<div class="periods">${periods.map(([k, l]) => `<button class="chip lg" aria-pressed="${S.period === k}" data-period="${k}">${l}</button>`).join("")}
       <button class="btn ghost small hide-phone" data-act="reload">${S.loading ? "Loading…" : "Refresh"}</button></div>`;
     if (!S.m) { if (!S.loading && !S.err) load(); return head + (S.err ? errorBox(S.err) : skKpis()); }
     const m = S.m;
     const sampleNote = m.sample ? `<div class="soundbar" style="margin-top:12px"><span>Includes <b>sample data</b> for demonstration, not real sales.</span><button class="btn" data-act="unsample">${S.busy === "unsample" ? "Removing…" : "Remove sample data"}</button></div>` : "";
     if (!m.items) return head + `<section><p class="empty">No orders in this period yet.<br>Numbers appear here as soon as diners order.</p></section>`;
-    const kpi = (v, l, sub) => `<div class="kpi"><div class="kv num">${v}</div><div class="kl">${l}</div>${sub ? `<div class="note" style="margin:2px 0 0">${sub}</div>` : ""}</div>`;
+    const kpi = (v, l, sub) => `<div class="kpi"><div class="kv num${v === "–" ? " none" : ""}">${v === "–" ? "No data yet" : v}</div><div class="kl">${l}</div>${sub ? `<div class="note" style="margin:2px 0 0">${sub}</div>` : ""}</div>`;
     const hours = m.byHour.filter((h) => h.items); const h0 = hours.length ? hours[0].h : 12, h1 = hours.length ? hours.at(-1).h : 22;
     const hourRows = m.byHour.filter((h) => h.h >= h0 && h.h <= h1);
     const peak = hours.length ? hours.reduce((a, b) => (b.revenue > a.revenue ? b : a)) : null;
     return head + sampleNote + `<section>
-      <div class="kpis">${kpi(fmt(m.revenue), "Sales · TSh", `${fmt(m.items)} items · ${fmt(m.orders)} orders`)}${kpi(fmt(m.tables), "Tables", `${fmt(m.guests)} guests`)}
-        ${kpi(m.avgBill ? fmt(Math.round(m.avgBill / 100) * 100) : "–", "Average bill", "per closed table")}${kpi(m.avgPerGuest ? fmt(Math.round(m.avgPerGuest / 100) * 100) : "–", "Spend per guest", "")}
+      <div class="kpis">${kpi(`<span class="cur">TSh</span> ${fmt(m.revenue)}`, "Sales", `${fmt(m.items)} items · ${fmt(m.orders)} orders`)}${kpi(fmt(m.tables), "Tables", `${fmt(m.guests)} guests`)}
+        ${kpi(m.avgBill ? `<span class="cur">TSh</span> ${fmt(Math.round(m.avgBill / 100) * 100)}` : "–", "Average bill", "per closed table")}${kpi(m.avgPerGuest ? `<span class="cur">TSh</span> ${fmt(Math.round(m.avgPerGuest / 100) * 100)}` : "–", "Spend per guest", "")}
         ${kpi(dur(m.toTable), "Order to table", "typical item")}${kpi(dur(m.tableTime), "Table stay", "typical visit")}</div>
 
       <div class="label">Speed</div>
@@ -2399,7 +2403,7 @@ function ownerScreen(role) {
       <div class="tablewrap"><table><thead><tr><th>Item</th><th style="text-align:left" class="opt">Station</th><th>Sold</th><th>Sales (TSh)</th></tr></thead><tbody>
         ${m.best.slice(0, 10).map((b) => `<tr><td>${esc(b.n)}</td><td class="opt">${esc(STATIONS[b.st] || "")}</td><td class="num">${fmt(b.qty)}</td><td class="num">${fmt(b.revenue)}</td></tr>`).join("")}
       </tbody></table></div>
-      <p class="note">Updated ${S.loaded ? ago(S.loaded) : ""}. <button class="linkbtn" data-act="reload">Refresh</button></p></section>`;
+      <p class="note">Updated ${S.loaded ? ago(S.loaded) : ""}. <button class="btn small" data-act="reload">Refresh</button></p></section>`;
   }
 
   // ----- events -----
@@ -2830,8 +2834,8 @@ function accountScreen() {
       <div class="picks">
         <button class="pick" data-act="ac-guest"><span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
           <span><b>As a guest</b><span class="note">Your visits at every restaurant, and offers</span></span></button>
-        ${S.roles.map((m) => `<a class="pick" href="${BASE}?r=${encodeURIComponent(m.rid)}#${m.role === "manager" ? "manager" : "owner"}"><span class="avatar">${ini(m.name)}</span>
-          <span><b>${esc(m.name)}</b><span class="note">${m.role === "owner" ? "Owner" : "Manager"}${state(m)}</span></span></a>`).join("")}
+        ${S.roles.map((m) => { const twin = S.roles.filter((x) => x.name === m.name).length > 1; return `<a class="pick" href="${BASE}?r=${encodeURIComponent(m.rid)}#${m.role === "manager" ? "manager" : "owner"}"><span class="avatar">${ini(m.name)}</span>
+          <span><b>${esc(m.name)}</b><span class="note">${m.role === "owner" ? "Owner" : "Manager"}${twin ? ` · ${esc(m.rid)}` : ""}${state(m)}</span></span></a>`; }).join("")}
         ${S.co ? `<a class="pick" href="${BASE}#company"><span class="avatar">${wasabiLeaf("wleaf", "#4a6716")}</span>
           <span><b>${esc(COMPANY.name)} company page</b><span class="note">Restaurants, approvals and payments</span></span></a>
         <a class="pick" href="${BASE}demo/"><span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20v.01M17 20h4v-3"/></svg></span>

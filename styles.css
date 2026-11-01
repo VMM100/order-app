@@ -507,3 +507,17 @@ body.otk-open{overflow:hidden}
 /* Plain text links: the page's own text colour, underlined (not the browser's blue and purple) */
 a:not([class]){color:inherit;font-weight:600;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
 .scanbig{display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
+/* Polish part 2: one-row header, 44px touch targets, money labels */
+header.top{flex-wrap:nowrap}
+header.top .brand{flex:1 1 auto}
+header.top .bname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hright{flex:none}
+header.top .sub{white-space:nowrap;max-width:34vw;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:420px){header.top .bname{font-size:22px}#brandlogo{height:34px}.hright{gap:8px}}
+.menubtn{width:44px;height:44px}
+.seg button{min-height:44px}
+.chip.lg{min-height:44px;padding-inline:16px}
+.sline .btn{min-height:44px;padding-inline:16px}
+.cur{font-size:max(12px,.75em);color:var(--muted);font-weight:500}
+.kv .cur{font-size:max(12px,.5em)}
+.kv.none{font-family:inherit;font-size:15px;font-weight:600;color:var(--muted)}
