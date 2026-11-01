@@ -7,6 +7,8 @@ Risks: [Threat Model.md](docs/security/Threat%20Model.md). Outside code register
 How screens should look and behave (colours, type, touch sizes, words): **[DESIGN.md](DESIGN.md)**.
 Before a release or launch, also check against the engineering checklists in `docs/engineering/vendor/agent-skills/`
 (shipping-and-launch, security-and-hardening, performance-optimization, code-review-and-quality): read-only references.
+For a screen's design review or polish, use `docs/engineering/vendor/impeccable/` (never run its launcher); for marketing
+copy, emails and docs, check against `stop-slop/` and `humanizer/` there. DESIGN.md always wins. See `docs/engineering/vendor/README.md`.
 
 Ground rules in short:
 - `firestore.rules` is the security. New data → new rules + tests in the same change. Keep `firestore.rules`
