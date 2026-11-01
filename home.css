@@ -225,3 +225,11 @@ footer.foot a:hover{color:var(--text);text-decoration:underline}
 .soon-foot{position:relative;display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:center;font-size:13px;color:var(--on-ink-muted);padding-top:28px}
 .soon-foot a{color:var(--on-ink);text-decoration:none;font-weight:600}
 .soon-foot a:hover{color:var(--wasabi)}
+
+/* Phones: every control at least 44px to tap (DESIGN.md); text links keep their look with a bigger tap area */
+@media (pointer:coarse){
+  .bar .btn,.plan .tabs button{min-height:44px}
+  .bar .logo{display:inline-flex;align-items:center;min-height:44px}
+  main a:not(.btn),footer a{position:relative}
+  main a:not(.btn)::after,footer a::after{content:"";position:absolute;inset:-12px -4px}
+}

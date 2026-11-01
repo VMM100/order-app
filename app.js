@@ -190,6 +190,7 @@ function setTermsTick(on) {
 // Shown right under the sign-in buttons; tapping one of them (or Continue) is agreeing, and is logged.
 const termsBox = (verb = "continuing") => `<p class="note terms-note">By ${verb}, you agree to ${esc(COMPANY.name)}'s <a href="terms.html" target="_blank" rel="noopener">Terms</a>. Read our <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>.</p>`;
 const needTerms = () => "";
+const SCAN_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx=".5"/><rect x="13" y="7" width="4" height="4" rx=".5"/><rect x="7" y="13" width="4" height="4" rx=".5"/><path d="M14 14h3v3"/></svg>`;
 // Google's own sign-in button look: the four-colour G and "Sign in with Google" (Google's branding rules).
 const G_LOGO = `<svg class="glogo" viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
 const gBtn = (act, busy, label = "Sign in with Google") => `<button class="btn big gbtn" data-act="${act}" ${busy ? "disabled" : ""}>${G_LOGO}<span>${busy ? "Signing in…" : label}</span></button>`;
@@ -720,8 +721,8 @@ function staffGate(go) {
   paint(skPage());
   (async () => {
     const notSet = (t) => paint(`<section><div class="label" style="margin-top:0">This phone isn't set up for staff</div>
-      <p>${t ? "The staff link on this phone has been replaced." : "Staff screens only open on restaurant phones."} Ask the owner or manager to open <b>Setup</b> and scan the <b>staff QR code</b> with this phone.</p>
-      <p class="note">Owner or manager? <a href="${BASE}${RID ? "?r=" + RID : ""}#setup">Sign in on the Setup page</a>, then come back.</p></section>`);
+      <p>${t ? "The staff link on this phone has been replaced." : "Staff screens only open on restaurant phones."} Ask the owner or manager to open <b>Tables &amp; QR codes</b> and scan the <b>staff code</b> with this phone.</p>
+      <p class="note">Owner or manager? <a href="${BASE}${RID ? "?r=" + RID : ""}#setup">Sign in and open Tables &amp; QR codes</a>, then come back.</p></section>`);
     if (!RID) return notSet(null);
     startConfig();
     const u = await ensureUser();
@@ -1085,6 +1086,8 @@ function dinerScreen() {
     $("#sub").textContent = n ? `Table ${n}` : "Join a table";
     paint(`<section><div class="label">${n ? `Join table ${esc(n)}` : "Join your friends"}</div>
       <p>Scan the QR code on your table, or enter the 4-digit code shown on a friend's phone.</p>
+      <button class="btn primary big scanbig" type="button" data-scan>${SCAN_ICON}Scan table QR</button>
+      <div class="orline"><span>or enter a friend's code</span></div>
       <form id="codeform" class="grid"><input class="field num" id="codein" inputmode="numeric" maxlength="4" placeholder="4-digit code" aria-label="4-digit table code" autocomplete="off">
       <button class="btn primary big">Join</button></form>${S.err ? `<p class="err">${esc(S.err)}</p>` : ""}</section>`);
   }
@@ -1168,7 +1171,7 @@ function dinerScreen() {
     if (!S.gLoaded) { $("#cart").hidden = true; return paint(skMenu()); }
     if (!g || !g.open) {
       $("#cart").hidden = true;
-      return paint(`<section><p class="empty">${shared ? "Your group's bill has been closed" : "This table has been closed"}. Thanks for visiting!</p>${S.viaKey
+      return paint(`<section><p class="empty">${shared ? "Your group's bill has been closed" : "This table has been closed"}. Thanks for visiting.</p>${S.viaKey
         ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
         : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
@@ -1712,7 +1715,7 @@ function waiterScreen(boss) {
       ...(!boss ? [{ html: `<b>${esc(wname(S.me))}</b><br>On shift since ${hhmm(S.since)}` },
         { label: S.endArmed ? "Tap again to end your shift" : "End shift", sub: S.endArmed ? "" : "Your tables stay yours until handed over", danger: true, keep: !S.endArmed,
           run: () => { if (!S.endArmed) { S.endArmed = true; setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); render(); }
-            else { const mine = S.groups.filter((g) => g.waiter === S.me).length; endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); } } }] : []),
+            else { const mine = S.groups.filter((g) => g.waiter === S.me).length; endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time."); } } }] : []),
       ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : []),
       ...(!boss && ring === "on" ? [{ label: "Test ring", sub: "Rings when the screen is off", keep: true, run: () => testRing(wname(S.me)).catch(() => toast("Couldn't show a test ring.")) }] : []),
       { html: othersList.length ? `<b>Other waiters' tables</b><br>${othersList.map((g) => `${esc(name(g))}: ${esc(wname(g.waiter))}`).join("<br>")}` : "<b>Other waiters' tables</b><br>None right now" },
@@ -1776,7 +1779,7 @@ function waiterScreen(boss) {
     const pin = S.pin, w = S.picking; if (!w || S.busy || !/^\d{4}$/.test(pin)) return;
     S.busy = true; S.pinErr = ""; render();
     try { const now = Date.now(); await setDoc(myRef(), { token: store.get("dees-staff-" + RID), t: now, waiter: w, pin, shift: now });
-      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}!`); keepRing(); update(); return; }
+      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}.`); keepRing(); update(); return; }
     catch (err) { S.pinErr = denied(err) ? "That PIN didn't work. Try again, or ask the owner or manager." : "Couldn't connect. Try again."; S.pin = ""; S.shake = true; }
     S.busy = false; render();
   }
@@ -1810,7 +1813,7 @@ function waiterScreen(boss) {
       else if (d.act === "notme") { S.picking = null; S.pin = ""; S.pinErr = ""; render(); }
       else if (d.act === "endshift") { if (!S.endArmed) { S.endArmed = true; render(); setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); return; }
         const mine = S.groups.filter((g) => g.waiter === S.me).length;
-        await endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); }
+        await endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time."); }
       else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(groupRef(d.accept)); if (!s.exists() || s.data().waiter) throw new Error("taken"); tx.update(groupRef(d.accept), { waiter: S.me, accepted: Date.now() }); }); toast(`${name(find(d.accept) || { table: "" })} is yours`); }
       else if (d.release) { await updateDoc(groupRef(d.release), { waiter: null }); toast("Open for another waiter"); }
       else if (d.ack) { await updateDoc(rdoc("alerts", d.ack), { ack: Date.now(), ackBy: S.me }); toast("Diner told you're on the way"); }
@@ -1851,7 +1854,7 @@ function waiterScreen(boss) {
     if (!S.me) return true;   // already on the sign-in names: stay here
     const mine = S.groups.filter((g) => g.waiter === S.me).length;
     askSure("End your shift?", `You'll go back to the waiter sign-in.${mine ? ` Your ${mine} table${mine > 1 ? "s stay" : " stays"} yours until handed over.` : ""}`, "End shift", "Stay on shift")
-      .then((yes) => { if (yes) endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); });
+      .then((yes) => { if (yes) endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time."); });
     return true;
   };
   async function closeGroup(sid) {
@@ -2523,7 +2526,7 @@ function ownerScreen(role) {
   if (!CFG_SAVED || (CFG_STALE && owner)) cfgReady.then(() => {
     if (CFG_SAVED && !(CFG_STALE && owner)) return;
     if (!CFG_SAVED && ACCOUNT) { BRAND = { ...BRAND, name: ACCOUNT.name || BRAND.name }; TABLES = ACCOUNT.tables || TABLES; applyBrand(); }
-    save(CFG_SAVED ? "Settings updated" : RID === RESTAURANT_ID ? "Menu copied into the editor" : "Welcome! Add your menu below."); render(); });
+    save(CFG_SAVED ? "Settings updated" : RID === RESTAURANT_ID ? "Menu copied into the editor" : "Welcome. Add your menu below."); render(); });
 }
 
 // ================= COMPANY (the Wasabi business) =================
@@ -2681,7 +2684,7 @@ function companyScreen() {
 
 // ================= SIGN-UP (a new restaurant applies) =================
 function signupScreen() {
-  $("#sub").textContent = "Register your restaurant"; document.title = "Register · " + COMPANY.name;
+  $("#sub").textContent = "Sign up"; document.title = "Register · " + COMPANY.name;
   wasabiPage();
   const U = { u: null, mine: [], busy: false, err: "", done: null, form: false };
   async function check() {
@@ -2692,7 +2695,7 @@ function signupScreen() {
   }
   function render() {
     const err = U.err ? `<p class="err">${esc(U.err)}</p>` : "", D = U.draft || {};
-    const intro = `<p style="margin-top:0">Guests order and pay from their own phones by scanning a QR code on the table. Orders go straight to your kitchen and bar screens, the bill splits itself, and you see the night's numbers on your dashboard.</p>
+    const intro = `<p style="margin-top:0">Guests order from their own phones by scanning a QR code on the table. Orders go straight to your kitchen and bar screens, the bill splits itself, and you see the night's numbers on your dashboard.</p>
       <p class="note">${price()}, after a free trial. Nothing to install.</p>`;
     if (!isAccount(U.u) || !U.u.email) return paint(`<section><div class="label" style="margin-top:0">Register your restaurant</div>${intro}
       <p>Sign in with the Google account you'll use as the owner.</p>
@@ -2798,7 +2801,7 @@ function accountScreen() {
     return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Sign in</div>
         <div class="wsign-title">For diners, restaurant owners and managers</div></div>
       <div class="wsign-step">${step}${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}</div></div>
-      <p class="note wsign-foot">Diners don't need to sign in to order. Signing in keeps your visits and offers in one place. <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy policy</a></p>
+      <p class="note wsign-foot">Diners don't need to sign in to order. Signing in keeps your visits and offers in one place.</p>
       <div style="text-align:center;margin-top:12px">${back()}</div></section>`;
   }
   function termsGateHtml() {

@@ -686,8 +686,8 @@ function staffGate(go) {
   paint(skPage());
   (async () => {
     const notSet = (t) => paint(`<section><div class="label" style="margin-top:0">This phone isn't set up for staff</div>
-      <p>${t ? "The staff link on this phone has been replaced." : "Staff screens only open on restaurant phones."} Ask the owner or manager to open <b>Setup</b> and scan the <b>staff QR code</b> with this phone.</p>
-      <p class="note">Owner or manager? <a href="${BASE}${RID ? "?r=" + RID : ""}#setup">Sign in on the Setup page</a>, then come back.</p></section>`);
+      <p>${t ? "The staff link on this phone has been replaced." : "Staff screens only open on restaurant phones."} Ask the owner or manager to open <b>Tables &amp; QR codes</b> and scan the <b>staff code</b> with this phone.</p>
+      <p class="note">Owner or manager? <a href="${BASE}${RID ? "?r=" + RID : ""}#setup">Sign in and open Tables &amp; QR codes</a>, then come back.</p></section>`);
     if (!RID) return notSet(null);
     startConfig();
     const u = await ensureUser();
@@ -1103,7 +1103,7 @@ function dinerScreen() {
     if (!S.gLoaded) { $("#cart").hidden = true; return paint(skMenu()); }
     if (!g || !g.open) {
       $("#cart").hidden = true;
-      return paint(`<section><p class="empty">${shared ? "Your group's bill has been closed" : "This table has been closed"}. Thanks for visiting!</p>${S.viaKey
+      return paint(`<section><p class="empty">${shared ? "Your group's bill has been closed" : "This table has been closed"}. Thanks for visiting.</p>${S.viaKey
         ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
         : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
@@ -1642,7 +1642,7 @@ function waiterScreen(boss) {
       ...(!boss ? [{ html: `<b>${esc(wname(S.me))}</b><br>On shift since ${hhmm(S.since)}` },
         { label: S.endArmed ? "Tap again to end your shift" : "End shift", sub: S.endArmed ? "" : "Your tables stay yours until handed over", danger: true, keep: !S.endArmed,
           run: () => { if (!S.endArmed) { S.endArmed = true; setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); render(); }
-            else { const mine = S.groups.filter((g) => g.waiter === S.me).length; endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); } } }] : []),
+            else { const mine = S.groups.filter((g) => g.waiter === S.me).length; endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time."); } } }] : []),
       ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : []),
       ...(!boss && ring === "on" ? [{ label: "Test ring", sub: "Rings when the screen is off", keep: true, run: () => testRing(wname(S.me)).catch(() => toast("Couldn't show a test ring.")) }] : []),
       { html: othersList.length ? `<b>Other waiters' tables</b><br>${othersList.map((g) => `${esc(name(g))}: ${esc(wname(g.waiter))}`).join("<br>")}` : "<b>Other waiters' tables</b><br>None right now" },
@@ -1706,7 +1706,7 @@ function waiterScreen(boss) {
     const pin = S.pin, w = S.picking; if (!w || S.busy || !/^\d{4}$/.test(pin)) return;
     S.busy = true; S.pinErr = ""; render();
     try { const now = Date.now(); await setDoc(myRef(), { token: store.get("dees-staff-" + RID), t: now, waiter: w, pin, shift: now });
-      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}!`); keepRing(); update(); return; }
+      S.me = w; S.since = now; S.picking = null; S.pin = ""; S.busy = false; toast(`Shift started. Welcome, ${wname(w)}.`); keepRing(); update(); return; }
     catch (err) { S.pinErr = denied(err) ? "That PIN didn't work. Try again, or ask the owner or manager." : "Couldn't connect. Try again."; S.pin = ""; S.shake = true; }
     S.busy = false; render();
   }
@@ -1740,7 +1740,7 @@ function waiterScreen(boss) {
       else if (d.act === "notme") { S.picking = null; S.pin = ""; S.pinErr = ""; render(); }
       else if (d.act === "endshift") { if (!S.endArmed) { S.endArmed = true; render(); setTimeout(() => { if (S.endArmed) { S.endArmed = false; render(); } }, 4000); return; }
         const mine = S.groups.filter((g) => g.waiter === S.me).length;
-        await endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time!"); }
+        await endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time."); }
       else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(groupRef(d.accept)); if (!s.exists() || s.data().waiter) throw new Error("taken"); tx.update(groupRef(d.accept), { waiter: S.me, accepted: Date.now() }); }); toast(`${name(find(d.accept) || { table: "" })} is yours`); }
       else if (d.release) { await updateDoc(groupRef(d.release), { waiter: null }); toast("Open for another waiter"); }
       else if (d.ack) { await updateDoc(rdoc("alerts", d.ack), { ack: Date.now(), ackBy: S.me }); toast("Diner told you're on the way"); }
@@ -2341,7 +2341,7 @@ function ownerScreen(role) {
   if (!CFG_SAVED || (CFG_STALE && owner)) cfgReady.then(() => {
     if (CFG_SAVED && !(CFG_STALE && owner)) return;
     if (!CFG_SAVED && ACCOUNT) { BRAND = { ...BRAND, name: ACCOUNT.name || BRAND.name }; TABLES = ACCOUNT.tables || TABLES; applyBrand(); }
-    save(CFG_SAVED ? "Settings updated" : true ? "Menu copied into the editor" : "Welcome! Add your menu below."); render(); });
+    save(CFG_SAVED ? "Settings updated" : true ? "Menu copied into the editor" : "Welcome. Add your menu below."); render(); });
 }
 
 // ================= COMPANY (the Wasabi business) =================
@@ -2509,7 +2509,7 @@ function signupScreen() {
   }
   function render() {
     const err = U.err ? `<p class="err">${esc(U.err)}</p>` : "", D = U.draft || {};
-    const intro = `<p style="margin-top:0">Guests order and pay from their own phones by scanning a QR code on the table. Orders go straight to your kitchen and bar screens, the bill splits itself, and you see the night's numbers on your dashboard.</p>
+    const intro = `<p style="margin-top:0">Guests order from their own phones by scanning a QR code on the table. Orders go straight to your kitchen and bar screens, the bill splits itself, and you see the night's numbers on your dashboard.</p>
       <p class="note">${price()}, after a free trial. Nothing to install.</p>`;
     if (!isAccount(U.u) || !U.u.email) return paint(`<section><div class="label" style="margin-top:0">Register your restaurant</div>${intro}
       <p>Sign in with the Google account you'll use as the owner.</p>
