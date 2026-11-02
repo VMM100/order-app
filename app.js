@@ -2642,7 +2642,7 @@ function companyScreen() {
       <p class="note" style="margin:4px 0 10px">This removes its menu, photos, look, tables, staff, every order, bill, call and guest name, and diners' visit history there. Its account and payment record stay on this page, marked Deleted. Printed QR codes stop working. <b>This can't be undone.</b></p>
       <div class="row"><button class="btn" data-dlall="${a.rid}" ${busy ? "disabled" : ""}>Download everything (.json)</button><button class="btn" data-dlcsv="${a.rid}" ${busy ? "disabled" : ""}>Download all orders (.csv)</button></div>
       <p class="note" style="margin:6px 0 12px">Keep the file somewhere safe: it holds guests' names. The .json file has everything; the .csv opens in Excel.</p>
-      <label class="flabel" for="delc-${a.rid}">Type <b>${esc(a.rid)}</b> to confirm</label>
+      <label class="note" for="delc-${a.rid}" style="display:block;margin:0 0 6px;color:var(--fg)">Type <code class="num">${esc(a.rid)}</code> to confirm</label>
       <div class="vrow"><input class="field" id="delc-${a.rid}" autocomplete="off" autocapitalize="off" spellcheck="false" ${busy ? "disabled" : ""}>
         <button class="btn danger" data-dodel="${a.rid}" disabled>Delete permanently</button></div>
       ${busy ? `<p class="note" role="status">${esc(busy)}</p>` : ""}</div>`;
@@ -2747,7 +2747,7 @@ function companyScreen() {
       <div class="label">Restaurants</div>
       <div class="row">${[["all", "All"], ["overdue", "Overdue"], ["stopped", "Stopped or paused"], ...(deleted.length ? [["deleted", "Deleted"]] : [])].map(([k, l]) => `<button class="chip" data-filter="${k}" aria-pressed="${C.filter === k}">${l}</button>`).join("")}</div>
       <div class="grid" style="margin-top:10px">${shown.map(card).join("") || `<p class="note">None.</p>`}</div>
-      <p class="note">Payments add a month or a year from the paid-until date (or from today if it has passed). Custom extension adds any number of days or sets a paid-until date, as a payment or free; each one is kept in the restaurant's payment record. After the paid-until date a restaurant keeps working for ${COMPANY.graceDays} days with a warning, then stops until paid. Pause stops it straight away. Nothing is ever deleted.</p>
+      <p class="note">Payments add a month or a year from the paid-until date (or from today if it has passed). Custom extension adds any number of days or sets a paid-until date, as a payment or free; each one is kept in the restaurant's payment record. After the paid-until date a restaurant keeps working for ${COMPANY.graceDays} days with a warning, then stops until paid. Pause stops it straight away. Nothing is deleted unless you use Delete restaurant.</p>
       <div class="label">Add a restaurant yourself</div>
       <form id="coadd" class="grid" style="max-width:520px"><input class="field" id="coname" placeholder="Restaurant name" aria-label="Restaurant name" maxlength="60">
         <input class="field" id="coemail" type="email" placeholder="Owner's Google email" aria-label="Owner's Google email">
