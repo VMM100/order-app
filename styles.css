@@ -572,3 +572,13 @@ a.btn{color:inherit;text-decoration:none;display:inline-flex;align-items:center;
 .bars.dense .bv{font-size:12px;writing-mode:vertical-rl;transform:rotate(180deg);margin-bottom:4px}
 .bars.two{padding-bottom:44px}
 .bars.two .bl{bottom:-38px;text-align:center;line-height:1.3}
+/* Bar amounts: hidden until a bar is hovered (computer), tapped (phone) or focused (keyboard) */
+.bars .bar{cursor:pointer;outline:none}
+.bars .bv{display:none}
+.btip{position:absolute;left:50%;transform:translateX(-50%);z-index:2;display:none;flex-direction:column;align-items:center;gap:1px;background:var(--fg);color:var(--bg);border-radius:8px;padding:5px 8px;font-size:12px;line-height:1.25;white-space:nowrap;pointer-events:none;box-shadow:0 4px 12px rgb(0 0 0/.25)}
+.btip b{font-size:13px}
+.bar.at-l .btip{left:0;transform:none}.bar.at-r .btip{left:auto;right:0;transform:none}
+.bar:hover .btip,.bar.on .btip,.bar:focus-visible .btip{display:flex}
+.bar:hover .bf,.bar.on .bf,.bar:focus-visible .bf{filter:brightness(1.15);box-shadow:0 0 0 2px var(--fg)}
+@media (hover:none){.bar:hover .btip{display:none}.bar.on .btip{display:flex}}
+.bars{overflow-y:visible}

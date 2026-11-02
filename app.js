@@ -2376,9 +2376,14 @@ function ownerScreen(role) {
   // lab(r) gives the label under a bar; an array puts its parts on two lines (e.g. ["Mon", "2"]).
   function bars(rows, key, lab, cls = "") {
     const max = Math.max(...rows.map((r) => r[key]), 1), txt = (r) => [].concat(lab(r)).join(" ");
-    return `<div class="bars ${cls}" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar${r.split ? " split" : ""}" title="${esc(txt(r))}: TSh ${fmt(r[key])}">${r.split ? `<span class="bsplit">${esc(r.split)}</span>` : ""}
-      <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${[].concat(lab(r)).map(esc).join("<br>")}</span></div>`).join("")}</div>`;
+    // No numbers above the bars: hover a bar (computer) or tap it (phone) to see its amount.
+    const n = rows.length, edge = (i) => (i < 2 ? " at-l" : i > n - 3 ? " at-r" : "");
+    return `<div class="bars ${cls}" role="group" aria-label="Bar chart: hover or tap a bar for its amount">${rows.map((r, i) => { const h = Math.round((r[key] / max) * 100);
+      return `<div class="bar${r.split ? " split" : ""}${edge(i)}" tabindex="0" aria-label="${esc(txt(r))}: TSh ${fmt(r[key])}">${r.split ? `<span class="bsplit">${esc(r.split)}</span>` : ""}
+      <span class="btip" style="bottom:calc(min(${h}%, 100% - 44px) + 6px)" aria-hidden="true">${esc(txt(r))}<b class="num">TSh ${fmt(r[key])}</b></span><span class="bf" style="height:${h}%"></span><span class="bl" aria-hidden="true">${[].concat(lab(r)).map(esc).join("<br>")}</span></div>`; }).join("")}</div>`;
   }
+  document.addEventListener("click", (e) => { const b = e.target.closest(".bars .bar");
+    document.querySelectorAll(".bars .bar.on").forEach((x) => x !== b && x.classList.remove("on")); if (b) b.classList.toggle("on"); });
   function dashTab() {
     // No "All time" for now: it downloaded every order ever placed, which gets slow and costly as history grows.
     // Longer ranges come back with daily summaries (see docs/security/Security Checklist.md → scaling).
