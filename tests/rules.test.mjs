@@ -457,6 +457,9 @@ test("diners read only their own visits and profile", async () => {
   await assertFails(db.doc("diners/g2").get());
   await assertFails(db.doc("visits/c").set({ uid: "g1", rid: "r1", date: 1 }));
 });
+test("only the company team can read and delete everything under a restaurant", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("restaurants/r9/lines/l1").set({ n: "Beer", pr: 1000, t: 1 });
 test("a linked WhatsApp number must look like one, and a diner can't mark it checked", async () => {
   const db = env.authenticatedContext("w1", { email: "w1@example.com" }).firestore();
   await assertSucceeds(db.doc("diners/w1").set({ name: "Neema" }));
