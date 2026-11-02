@@ -623,7 +623,7 @@ function askSure(title, text, yes, no) {
     d.addEventListener("click", (e) => { if (e.target.closest("[data-yes]")) end(true); else if (e.target.closest("[data-no]") || e.target === d) end(false); });
   });
 }
-if (LOGIN_PAGES.includes(view)) {
+if (LOGIN_PAGES.includes(view) || view === "signup") {
   const lb = $("#logoutbtn");
   onUser((u) => { SIGNED_IN = isAccount(u); if (lb) lb.hidden = !SIGNED_IN; });
   if (lb) lb.addEventListener("click", async () => { if (await askLogOut()) logOut(); });
@@ -631,7 +631,8 @@ if (LOGIN_PAGES.includes(view)) {
     // Tables & QR always goes straight back to its owner or manager page, in one press, however many
     // times the person went back and forth (history would walk through every visit).
     if (view === "setup" && RID) { location.href = `${BASE}?r=${encodeURIComponent(RID)}#${SETUP_ROLE}`; return true; }
-    if (!SIGNED_IN) return false;
+    // Signed out: straight to the Wasabi front page, not back through every page opened before.
+    if (!SIGNED_IN) { location.href = BASE; return true; }
     if (view !== "account") { location.href = `${BASE}?choose=1#account`; return true; }
     // My account as a guest, for someone who also runs a restaurant: back to the choices, still signed in.
     if (window.wasabiAccountBack && window.wasabiAccountBack()) return true;
