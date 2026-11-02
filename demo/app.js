@@ -1827,7 +1827,7 @@ function setupScreen(role) {
   function render() {
     const screens = [["waiter", "Waiter"], ...Object.entries(STATIONS)];
     const tableCard = (n) => `<div class="qr"><div class="box" id="qr${n}"></div><b>Table ${n}</b>
-      <button class="chip sharetog" data-share="${n}" aria-pressed="${isShared(n)}">${isShared(n) ? "Shared table" : "Normal table"}</button>
+      <button class="sharesw" type="button" role="switch" data-share="${n}" aria-checked="${isShared(n)}" aria-label="Table ${n}: shared table"><span class="swl">Normal</span><span class="swtrack" aria-hidden="true"><span class="swthumb"></span></span><span class="swl">Shared</span></button>
       ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : skInline(40)}
       <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
     bossMenu(role, [{ label: armed ? "Tap again to erase all orders" : "Reset demo", sub: armed ? "Orders, alerts and history go; menu and staff stay" : "Clear orders and history before a demo", danger: true, keep: !armed,
@@ -1881,6 +1881,8 @@ function setupScreen(role) {
       rotStaff = false; staffTok = null; render(); await loadStaff(true); toast("New staff codes made. Scan them with each staff phone."); return; }
     const sh = e.target.closest("button[data-share]");
     if (sh && unlocked) { const n = +sh.dataset.share; SHARED = isShared(n) ? SHARED.filter((x) => x !== n) : [...SHARED, n].sort((x, y) => x - y);
+      // Let the switch glide across before the page redraws.
+      sh.setAttribute("aria-checked", String(isShared(n))); await new Promise((r) => setTimeout(r, 220));
       render(); try { await saveConfig(); toast(`Table ${n} is now ${isShared(n) ? "shared" : "a normal table"}`); } catch (err) { fail(err); } return; }
     const r = e.target.closest("button[data-act=rotate]");
     if (r && unlocked) { if (!rot) { rot = true; render(); setTimeout(() => { rot = false; render(); }, 4000); return; }

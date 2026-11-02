@@ -515,3 +515,14 @@ header.top .sub{white-space:nowrap;max-width:34vw;overflow:hidden;text-overflow:
 .qr .sharetog[aria-pressed="true"]{background:#3f5a2c;border-color:#3f5a2c;color:#fff}
 .qr a.note{color:#22261f;font-weight:600}
 .qr .btn.ghost{color:#22261f;border-color:#c9cdc2;background:#fff}
+/* Shared / Normal: a sliding switch on the white QR card */
+.qr .sharesw{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto 4px;min-height:44px;padding:0 4px;background:none;border:0;color:#5b6253;font-size:13px;font-weight:500;cursor:pointer}
+.sharesw .swtrack{position:relative;width:46px;height:26px;border-radius:999px;background:#c9cdc2;transition:background .2s ease;flex:none}
+.sharesw .swthumb{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s ease}
+.sharesw[aria-checked="true"] .swtrack{background:#3f5a2c}
+.sharesw[aria-checked="true"] .swthumb{transform:translateX(20px)}
+.sharesw[aria-checked="false"] .swl:first-child,.sharesw[aria-checked="true"] .swl:last-child{color:#22261f;font-weight:700}
+.sharesw:focus-visible .swtrack{outline:2px solid #3f5a2c;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.sharesw .swtrack,.sharesw .swthumb{transition:none}}
+@media (max-width:420px){.qr .sharesw{gap:6px;font-size:12px}.sharesw .swtrack{width:40px;height:24px}.sharesw .swthumb{width:18px;height:18px}.sharesw[aria-checked="true"] .swthumb{transform:translateX(16px)}}
+.qr .sharesw{padding:0;max-width:100%}
