@@ -2805,7 +2805,8 @@ function accountScreen() {
     return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Sign in</div>
         <div class="wsign-title">For diners, restaurant owners and managers</div></div>
       <div class="wsign-step">${step}${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}</div></div>
-      <p class="note wsign-foot">Diners don't need to sign in to order. Signing in keeps your visits and offers in one place.</p>
+      <p class="wsign-foot wsign-scan">To order without signing in, <button class="linkbtn" type="button" data-scan>scan the table QR code</button></p>
+      <p class="note wsign-foot">Signing in keeps your visits and offers in one place.</p>
       <div style="text-align:center;margin-top:12px">${back()}</div></section>`;
   }
   function termsGateHtml() {
@@ -2847,6 +2848,8 @@ function accountScreen() {
     $("#sub").textContent = S.user && !(runs() && !S.guest) ? "My account" : "Sign in";
     document.title = $("#sub").textContent + " · " + COMPANY.name;
     if (S.loading) return paint(skCards(2));
+    // Signed out: a Scan QR button in the top bar (in place of the "Sign in" label) for diners who just want to order.
+    const hs = $("#hscan"); if (hs) { hs.hidden = !!S.user; $("#sub").hidden = !S.user; }
     if (!S.user) return paint(signInHtml());
     if (S.real && !termsOk(S.profile)) {
       // Ticked before signing in: record it now, quietly. Otherwise ask once (new or changed terms).

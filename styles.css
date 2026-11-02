@@ -525,3 +525,9 @@ header.top .sub{white-space:nowrap;max-width:34vw;overflow:hidden;text-overflow:
 .var .vl,.var .num{white-space:nowrap}
 .var .cur{margin-right:1px}
 .toast{width:max-content;max-width:calc(100vw - 32px)}
+/* Sign in page: Scan QR in the top bar, and the "order without signing in" line */
+.hscan{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border-radius:10px;border:1.5px solid var(--hop);background:transparent;color:var(--hop);font-size:14px;font-weight:600;white-space:nowrap}
+.hscan[hidden]{display:none}
+.wsign-scan{color:var(--fg);font-weight:500;text-align:center}
+.wsign-scan .linkbtn{color:var(--hop);font-weight:700;text-decoration:underline;text-underline-offset:3px;font-size:inherit;padding:0;border:0;background:none}
+a.btn{color:inherit;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
