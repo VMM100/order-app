@@ -30,7 +30,7 @@
   });
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="home.css?v=10">
+<link rel="stylesheet" href="home.css?v=11">
 </head>
 <body>
 <div id="home">
@@ -105,9 +105,9 @@
           <div class="plan">
             <div class="tabs" role="group" aria-label="Billing period">
               <button type="button" aria-pressed="true" data-plan="m">Monthly</button>
-              <button type="button" aria-pressed="false" data-plan="y">Yearly</button>
+              <button type="button" aria-pressed="false" data-plan="y">Yearly <small class="tabtag">2 months free</small></button>
             </div>
-            <div class="amount" aria-live="polite"><b id="amt">TSh 130,000</b><span id="per">a month</span></div>
+            <div class="amount" aria-live="polite"><s id="was" hidden aria-label="Usually TSh 1,560,000">TSh 1,560,000</s><b id="amt">TSh 130,000</b><span id="per">a month</span></div>
             <span class="save" id="save">&nbsp;</span>
             <ul>
               <li>All your tables, QR cards and staff phones</li>
@@ -175,11 +175,14 @@
   // "Find us" and "How it works" live on the front page: go there and scroll to the section.
   document.querySelectorAll("a[data-goto]").forEach((l) => l.addEventListener("click", () => { try { sessionStorage.setItem("wasabi-goto", l.dataset.goto); } catch {} }));
   // Pricing: monthly or yearly.
-  const P = { m: ["TSh 130,000", "a month", " "], y: ["TSh 1,300,000", "a year", "Two months free compared with paying monthly"] };
+  // Yearly is shown as an offer: 12 months' price crossed out, and the "2 months free" label.
+  const P = { m: ["TSh 130,000", "a month", ""], y: ["TSh 1,300,000", "a year", "2 months free"] };
   document.querySelectorAll("[data-plan]").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll("[data-plan]").forEach((x) => x.setAttribute("aria-pressed", x === b));
     const [amt, per, save] = P[b.dataset.plan];
-    document.getElementById("amt").textContent = amt; document.getElementById("per").textContent = per; document.getElementById("save").textContent = save;
+    document.getElementById("amt").textContent = amt; document.getElementById("per").textContent = per;
+    const sv = document.getElementById("save"); sv.textContent = save; sv.classList.toggle("on", !!save);
+    document.getElementById("was").hidden = b.dataset.plan !== "y";
   }));
 </script>
 <script src="scan.js?v=2" defer></script>

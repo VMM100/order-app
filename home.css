@@ -275,3 +275,8 @@ footer.foot a:hover{color:var(--text);text-decoration:underline}
 /* Floating notes sit beside the phone, over the waiter card and the basket, not over the menu items. */
 .f1{top:19%;left:max(-6px,calc(50% - 300px))}
 .f2{bottom:13%;right:max(-6px,calc(50% - 290px))}
+/* Yearly price as an offer: the full 12-month price crossed out, then a "2 months free" badge */
+.amount s{flex-basis:100%;color:var(--on-ink-muted);font-size:20px;font-weight:600;text-decoration-thickness:2px;text-decoration-color:#e0457b}
+.amount s[hidden]{display:none}
+.save.on{background:var(--wasabi);color:#1a2117;border-radius:999px;padding:4px 12px;font-weight:700}
+.tabtag{display:inline-block;margin-left:4px;font-size:11px;font-weight:700;color:#1a2117;background:var(--wasabi);border-radius:999px;padding:1px 7px;vertical-align:1px}
