@@ -457,6 +457,15 @@ test("diners read only their own visits and profile", async () => {
   await assertFails(db.doc("diners/g2").get());
   await assertFails(db.doc("visits/c").set({ uid: "g1", rid: "r1", date: 1 }));
 });
+test("a linked WhatsApp number must look like one, and a diner can't mark it checked", async () => {
+  const db = env.authenticatedContext("w1", { email: "w1@example.com" }).firestore();
+  await assertSucceeds(db.doc("diners/w1").set({ name: "Neema" }));
+  await assertSucceeds(db.doc("diners/w1").update({ waPhone: "+255748227000", waVerified: false, waAt: 1 }));
+  await assertSucceeds(db.doc("diners/w1").update({ waPhone: null }));
+  await assertFails(db.doc("diners/w1").update({ waPhone: "call me" }));
+  await assertFails(db.doc("diners/w1").update({ waPhone: "+255748227000", waVerified: true }));
+  await assertFails(env.authenticatedContext("w2").firestore().doc("diners/w1").update({ waPhone: "+255700000001" }));
+});
 test("owner's Setup reset can clear codes and passes; diners can't", async () => {
   await seatAt("d1");
   await assertFails(diner("d1").doc(`${R}/codes/1234`).delete());
