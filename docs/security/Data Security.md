@@ -11,6 +11,7 @@ order data a restaurant's diners create, under Tanzania's **Personal Data Protec
 | Diner first name at a table | `restaurants/{rid}/groups` (people), `lines.pname`, `alerts.pname` | Personal, low | So the table and waiter know whose order is whose |
 | What a diner ordered, their share, paid flag | `lines`, `sessions`, `groups.paid` | Personal | Orders and the split bill |
 | Diner account: name, phone **or** email, offers choices | `diners/{uid}` | **Personal, contact details** | Sign-in, visit history, WhatsApp offers they opted into |
+| WhatsApp number linked by a Google account (`waPhone`, `waVerified`) | `diners/{uid}` | **Personal, contact details** | Offers only, for restaurants the diner ticked. **Not checked yet:** no offer may be sent to it until the number is confirmed by a code (`waVerified` true, which the diner can't set themselves). Removed with "Remove this number" or account deletion |
 | Proof of consent to offers (date, restaurant, on/off) | `diners/{uid}/consents` | Personal | Legal proof of consent; never edited |
 | Visits (restaurant, date, items, share) | `visits` | Personal | "My account" history and "your usual" |
 | Restaurant owner and manager emails | `accounts`, `restaurants/{rid}/admins` | Personal | Sign-in and roles |
