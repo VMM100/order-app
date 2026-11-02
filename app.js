@@ -1913,7 +1913,7 @@ function setupScreen(role) {
   function render() {
     const screens = [["waiter", "Waiter"], ...Object.entries(STATIONS)];
     const tableCard = (n) => `<div class="qr"><div class="box" id="qr${n}"></div><b>Table ${n}</b>
-      <button class="sharesw" type="button" role="switch" data-share="${n}" aria-checked="${isShared(n)}" aria-label="Table ${n}: shared table"><span class="swl">Normal</span><span class="swtrack" aria-hidden="true"><span class="swthumb"></span></span><span class="swl">Shared</span></button>
+      <button class="sharesw" type="button" role="switch" data-share="${n}" aria-checked="${isShared(n)}" aria-label="Table ${n}: shared table"><span class="swtrack" aria-hidden="true"><span class="swthumb"></span></span><span class="swl">${isShared(n) ? "Shared table" : "Normal table"}</span></button>
       ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : skInline(40)}
       <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
     bossMenu(role);
@@ -1967,7 +1967,7 @@ function setupScreen(role) {
     const sh = e.target.closest("button[data-share]");
     if (sh && unlocked) { const n = +sh.dataset.share; SHARED = isShared(n) ? SHARED.filter((x) => x !== n) : [...SHARED, n].sort((x, y) => x - y);
       // Let the switch glide across before the page redraws.
-      sh.setAttribute("aria-checked", String(isShared(n))); await new Promise((r) => setTimeout(r, 220));
+      sh.setAttribute("aria-checked", String(isShared(n))); const sl = sh.querySelector(".swl"); if (sl) sl.textContent = isShared(n) ? "Shared table" : "Normal table"; await new Promise((r) => setTimeout(r, 220));
       render(); try { await saveConfig(); toast(`Table ${n} is now ${isShared(n) ? "shared" : "a normal table"}`); } catch (err) { fail(err); } return; }
     const r = e.target.closest("button[data-act=rotate]");
     if (r && unlocked) { if (!rot) { rot = true; render(); setTimeout(() => { rot = false; render(); }, 4000); return; }
