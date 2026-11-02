@@ -279,4 +279,3 @@ footer.foot a:hover{color:var(--text);text-decoration:underline}
 .amount s{flex-basis:100%;color:var(--on-ink-muted);font-size:20px;font-weight:600;text-decoration-thickness:2px;text-decoration-color:#e0457b}
 .amount s[hidden]{display:none}
 .save.on{background:var(--wasabi);color:#1a2117;border-radius:999px;padding:4px 12px;font-weight:700}
-.tabtag{display:inline-block;margin-left:4px;font-size:11px;font-weight:700;color:#1a2117;background:var(--wasabi);border-radius:999px;padding:1px 7px;vertical-align:1px}
