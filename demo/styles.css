@@ -509,3 +509,4 @@ header.top .sub{white-space:nowrap;max-width:34vw;overflow:hidden;text-overflow:
 .var{gap:6px;padding-inline:10px}
 .var .vl,.var .num{white-space:nowrap}
 .var .cur{margin-right:1px}
+.toast{width:max-content;max-width:calc(100vw - 32px)}
