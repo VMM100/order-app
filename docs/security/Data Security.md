@@ -68,10 +68,29 @@ restaurant's offers.
 | Account notices emailed to owners (service ended, deletion coming) | Same as the account record | Each notice logged against the account (what, to whom, when, delivered) plus a blind copy to a company mailbox |
 | Restaurant account record (name, owner's contact details, invoices, payments) | **At least 5 years** after the year of income | TRA record-keeping rule. Kept, marked deleted, after the restaurant's other data goes; phone and area dropped |
 | Live demo rooms | 30 days | Deleted |
-| Backups | 7 days rolling | Overwritten |
+| Full database backups (contain diners' data) | **7 days rolling** (at most 30) | Overwritten. Kept in a separate storage area, in a separate Google project, with a delete lock so a hacked admin account can't wipe them. Deleted data disappears from backups within this time (said in the Privacy Policy) |
+| Records log (what happened: closures, notices sent and delivered, deletions with reason and requester, payments, file made/sent/deleted). **Never** contains the deleted data itself or diners' data | **6 years** (tax rule: 5 years after the year of income, plus a margin) | Write-once in Firebase (added, never changed or deleted, by rule), plus the off-Firebase copies below. **Not built yet** (After registration 5/5) |
+| Monthly records pack (readable spreadsheet of the month's events and payments, with the log's latest fingerprint) and blind copies of every notice to owners | **6 years** | Emailed to the records mailbox (e.g. records@wasabi.co.tz, a different provider and password from Firebase, 2-step sign-in). Owners also keep the notices and invoices they receive. **Not built yet** |
 | Old version-1 data in top-level `alerts`, `config`, `groups`, `lines`, `sessions`, `tables`, `tablekeys` | Unused since restaurants moved under `restaurants/{rid}` | **Delete before launch** (unreachable by apps today, but still stored) |
 
 The automatic deletions run as a scheduled job (to be built; see the checklist).
+
+### Records that survive a compromise (decided 3 Nov 2026, not built yet)
+
+Two kinds of thing are kept, handled differently:
+
+- **Records** say *what happened* (who, what, when, why). They hold very little personal data and never diners' data, so they're kept long (6 years) and in several independent places.
+- **Data backups** are full copies of the database, with diners' data, so they're kept short (7 days rolling, 30 at most) and tightly locked.
+
+Records live in three places that don't depend on each other:
+
+1. **In the app:** a write-once records log (the rules allow adding entries, never changing or deleting them, even for the company team), shown on a *Records* tab on the company page and downloadable as a spreadsheet.
+2. **In the records mailbox, off Firebase:** a blind copy of every notice to an owner, and a monthly records pack.
+3. **With the other side:** owners receive every notice and invoice in their own inbox.
+
+**Tamper check:** each log entry carries a fingerprint (hash) of the entry before it, so the entries form a chain. The monthly records pack includes the latest fingerprint. If an old entry is changed or removed in Firebase, the chain stops matching the emailed fingerprints.
+
+**If Firebase is compromised:** an attacker can at worst stop new entries. Past records survive in the records mailbox (separate provider and sign-in) and in owners' inboxes, and backups can't be deleted during their lock period.
 
 ## 5. Diners' rights (PDPA)
 
