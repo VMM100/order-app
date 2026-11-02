@@ -2550,7 +2550,7 @@ const poweredBy = () => `<p class="poweredby">${wasabiLeaf()}<span>Ordered with 
 function companyScreen() {
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Company"; document.title = "Company · " + COMPANY.name;
   wasabiPage();
-  const C = { u: null, ok: false, claimed: true, list: [], team: [], filter: "all", busy: "", err: "", armed: null, edit: null };
+  const C = { u: null, ok: false, claimed: true, list: [], team: [], filter: "all", busy: "", err: "", armed: null, edit: null, ext: null };
   async function check() {
     paint(skPage());
     C.u = await authReady(); C.ok = await isCompanyUser(C.u);
@@ -2583,14 +2583,41 @@ function companyScreen() {
       <div class="acts">
         <button class="btn primary" data-pay="${a.rid}" data-months="1">${k("pay1") ? `Tap again: TSh ${fmt(COMPANY.monthly)} received` : "+1 month paid"}</button>
         <button class="btn primary" data-pay="${a.rid}" data-months="12">${k("pay12") ? `Tap again: TSh ${fmt(COMPANY.yearly)} received` : "+1 year paid"}</button>
+        <button class="btn" data-ext="${a.rid}" aria-expanded="${C.ext === a.rid}">${C.ext === a.rid ? "Cancel" : "Custom extension"}</button>
         <button class="btn ${a.status === "suspended" ? "" : "danger"}" data-sus="${a.rid}">${a.status === "suspended" ? "Switch back on" : k("sus") ? "Tap again to pause" : "Pause"}</button>
         <button class="btn ghost" data-own="${a.rid}">Change owner</button>
         <a class="btn ghost" href="${BASE}?r=${esc(a.rid)}#owner">Open</a>
         <a class="btn ghost" href="${BASE}demo/">Live demo</a></div>
+      ${C.ext === a.rid ? extForm(a) : ""}
       ${C.edit === a.rid ? `<form class="vrow ownform" data-rid="${a.rid}" style="margin-top:8px"><input class="field" type="email" id="own-${a.rid}" placeholder="New owner's Google email" aria-label="New owner's Google email" value="${esc(a.ownerEmail)}"><button class="btn primary">Save owner</button></form>
         <p class="note">The new owner signs in with this Google account. The old owner loses access straight away. Managers stay.</p>` : ""}
       ${a.status === "suspended" && st.kind !== "suspended" ? "" : a.status === "active" && !st.live ? `<p class="note">Switched on but unpaid: record a payment to start it again.</p>` : ""}</article>`;
   }
+  // Custom extension: any number of days, or a chosen paid-until date, with or without a payment.
+  const isoDay = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const extBase = (a) => Math.max(Date.now(), a.paidUntil || 0);
+  function extForm(a) {
+    const r = a.rid;
+    return `<form class="grid extform" data-rid="${r}" style="margin-top:10px;max-width:520px">
+      <p class="note" style="margin:0">Now paid until <b>${a.paidUntil ? day(a.paidUntil) : "not set"}</b>. Extra days count from ${a.paidUntil > Date.now() ? "that date" : "today"}.</p>
+      <div class="vrow"><label class="note" for="exd-${r}" style="margin:0">Add days</label><input class="field num" id="exd-${r}" inputmode="numeric" maxlength="4" placeholder="e.g. 14"></div>
+      <div class="vrow"><label class="note" for="exu-${r}" style="margin:0">or paid until</label><input class="field" type="date" id="exu-${r}" min="${isoDay(Date.now() + DAY)}"></div>
+      <div class="vrow"><label class="note" for="exa-${r}" style="margin:0">Amount received, TSh (0 if free)</label><input class="field num" id="exa-${r}" inputmode="numeric" value="0"></div>
+      <input class="field" id="exn-${r}" maxlength="120" placeholder="Note, e.g. free week for the launch" aria-label="Note (optional)">
+      <button class="btn primary" id="exb-${r}" disabled>Choose days or a date</button></form>`;
+  }
+  // Work out the new date from whichever box was typed in, and keep the other box and the button in step.
+  function extCalc(r, from) {
+    const a = find(r), dIn = $("#exd-" + r), uIn = $("#exu-" + r), btn = $("#exb-" + r); if (!a || !dIn || !uIn || !btn) return null;
+    let until = null;
+    if (from === "days") { const n = Math.floor(Number(dIn.value)); if (n >= 1 && n <= 3650) { until = extBase(a) + n * DAY; uIn.value = isoDay(until); } else uIn.value = ""; }
+    else { const [y, m, d] = (uIn.value || "").split("-").map(Number); const t = y ? new Date(y, m - 1, d, 23, 59).getTime() : 0;
+      if (t > Date.now()) { until = t; dIn.value = Math.max(0, Math.round((t - extBase(a)) / DAY)); } else dIn.value = ""; }
+    btn.disabled = !until; btn.textContent = !until ? "Choose days or a date" : until < (a.paidUntil || 0) ? `Shorten · paid until ${day(until)}` : `Save · paid until ${day(until)}`;
+    return until;
+  }
+  document.addEventListener("input", (e) => { const f = e.target.closest(".extform"); if (!f || !C.ok) return;
+    if (e.target.id.startsWith("exd-")) extCalc(f.dataset.rid, "days"); else if (e.target.id.startsWith("exu-")) extCalc(f.dataset.rid, "date"); });
   function render() {
     if (!C.ok) {
       const signedIn = isAccount(C.u) && C.u.email;
@@ -2617,7 +2644,7 @@ function companyScreen() {
       <div class="label">Restaurants</div>
       <div class="row">${[["all", "All"], ["overdue", "Overdue"], ["stopped", "Stopped or paused"]].map(([k, l]) => `<button class="chip" data-filter="${k}" aria-pressed="${C.filter === k}">${l}</button>`).join("")}</div>
       <div class="grid" style="margin-top:10px">${shown.map(card).join("") || `<p class="note">None.</p>`}</div>
-      <p class="note">Payments add a month or a year from the paid-until date (or from today if it has passed). After the paid-until date a restaurant keeps working for ${COMPANY.graceDays} days with a warning, then stops until paid. Pause stops it straight away. Nothing is ever deleted.</p>
+      <p class="note">Payments add a month or a year from the paid-until date (or from today if it has passed). Custom extension adds any number of days or sets a paid-until date, as a payment or free; each one is kept in the restaurant's payment record. After the paid-until date a restaurant keeps working for ${COMPANY.graceDays} days with a warning, then stops until paid. Pause stops it straight away. Nothing is ever deleted.</p>
       <div class="label">Add a restaurant yourself</div>
       <form id="coadd" class="grid" style="max-width:520px"><input class="field" id="coname" placeholder="Restaurant name" aria-label="Restaurant name" maxlength="60">
         <input class="field" id="coemail" type="email" placeholder="Owner's Google email" aria-label="Owner's Google email">
@@ -2664,6 +2691,7 @@ function companyScreen() {
         if (C.armed !== "sus" + d.sus) return arm("sus" + d.sus); C.armed = null;
         await updateDoc(acc(d.sus), { status: "suspended" }); toast(`${a.name} paused`); return load(); }
       if (d.own) { C.edit = C.edit === d.own ? null : d.own; return render(); }
+      if (d.ext) { C.ext = C.ext === d.ext ? null : d.ext; render(); const i = $("#exd-" + d.ext); if (i) i.focus(); return; }
       if (d.deltm) { if (C.armed !== "tm" + d.deltm) return arm("tm" + d.deltm); C.armed = null; await deleteDoc(doc(db, "company", d.deltm)); toast("Removed"); return load(); }
     } catch (err) { fail(err); }
   });
@@ -2674,6 +2702,13 @@ function companyScreen() {
       if (f.classList.contains("ownform")) { const rid = f.dataset.rid, em = $("#own-" + rid).value.trim().toLowerCase();
         if (!valid(em)) return toast("Enter their Google email");
         await updateDoc(acc(rid), { ownerEmail: em }); C.edit = null; toast(`Owner is now ${em}`); return load(); }
+      if (f.classList.contains("extform")) { const r = f.dataset.rid, a = find(r);
+        const until = extCalc(r, $("#exu-" + r).value && !$("#exd-" + r).value ? "date" : "days"); if (!until) return toast("Choose days or a date");
+        const amount = Math.floor(Number(($("#exa-" + r).value || "0").replace(/[^\d]/g, ""))) || 0, note = $("#exn-" + r).value.trim().slice(0, 120);
+        const days = Math.round((until - extBase(a)) / DAY), batch = writeBatch(db);
+        batch.update(acc(r), { status: a.status === "suspended" ? "suspended" : "active", paidUntil: until, ...(amount ? { plan: "custom", lastPayment: Date.now() } : {}) });
+        batch.set(doc(collection(db, "accounts", r, "payments")), { amount, days, until, from: a.paidUntil || null, kind: amount ? "payment" : "free", note, by: C.u.email, t: Date.now() });
+        await batch.commit(); C.ext = null; toast(`${a.name}: paid until ${day(until)}${amount ? ` · TSh ${fmt(amount)} recorded` : " · free extension"}`); return load(); }
       if (f.id === "coadd") { const name = $("#coname").value.trim(), em = $("#coemail").value.trim().toLowerCase(), days = Math.max(1, Number($("#codays").value) || 30);
         if (!name) return toast("Enter the restaurant's name"); if (!valid(em)) return toast("Enter the owner's Google email");
         let rid = slug(name); for (let i = 2; C.list.some((a) => a.rid === rid) || (await getDoc(acc(rid))).exists(); i++) rid = slug(name) + "-" + i;
