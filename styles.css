@@ -554,3 +554,12 @@ a.btn{color:inherit;text-decoration:none;display:inline-flex;align-items:center;
 .sharesw[aria-checked="true"] .swl{color:#3f5a2c;font-weight:700}
 .sharesw[aria-checked="false"] .swl:first-child,.sharesw[aria-checked="true"] .swl:last-child{color:inherit}
 .sharesw[aria-checked="true"] .swl:last-child{color:#3f5a2c}
+/* Wider table cards (one per row on a phone), so Normal · switch · Shared sit side by side */
+.tqrs{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+.tqrs .qr .box{max-width:240px;margin-inline:auto}
+.qr .sharesw{flex-direction:row;gap:10px;font-size:14px}
+.qr .sharesw .swtrack{width:46px;height:26px}.qr .sharesw .swthumb{width:20px;height:20px}.qr .sharesw[aria-checked="true"] .swthumb{transform:translateX(20px)}
+.sharesw .swl{color:#8a9180;font-weight:500}
+.sharesw[aria-checked="false"] .swl:first-child{color:#22261f;font-weight:700}
+.sharesw[aria-checked="true"] .swl:last-child{color:#3f5a2c;font-weight:700}
+.sharesw[aria-checked="true"] .swl:first-child{color:#8a9180;font-weight:500}

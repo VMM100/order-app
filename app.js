@@ -1913,14 +1913,14 @@ function setupScreen(role) {
   function render() {
     const screens = [["waiter", "Waiter"], ...Object.entries(STATIONS)];
     const tableCard = (n) => `<div class="qr"><div class="box" id="qr${n}"></div><b>Table ${n}</b>
-      <button class="sharesw" type="button" role="switch" data-share="${n}" aria-checked="${isShared(n)}" aria-label="Table ${n}: shared table"><span class="swtrack" aria-hidden="true"><span class="swthumb"></span></span><span class="swl">${isShared(n) ? "Shared table" : "Normal table"}</span></button>
+      <button class="sharesw" type="button" role="switch" data-share="${n}" aria-checked="${isShared(n)}" aria-label="Table ${n}: shared table"><span class="swl">Normal</span><span class="swtrack" aria-hidden="true"><span class="swthumb"></span></span><span class="swl">Shared</span></button>
       ${keys[n] ? `<a class="note" href="${tableLink(n, keys[n])}">Open</a>` : skInline(40)}
       <button class="btn ghost small" data-rekey="${n}">${rekey === n ? "Tap again" : "New code"}</button></div>`;
     bossMenu(role);
     paint(subBanner() + tabBar(ownerTabs(role), "tables") + `<section><h2 class="ptitle">Tables and QR codes</h2><p class="note" style="margin-top:0">Diners scan these.</p>
       <div class="row"><button class="btn" data-tables="-1" aria-label="One table fewer">−</button><b class="num">${TABLES} tables</b><button class="btn" data-tables="1" aria-label="One more table">+</button>
         <button class="btn primary" data-act="print" ${Object.keys(keys).length < TABLES ? "disabled" : ""}>Print table cards</button></div>
-      <div class="qrs">${Array.from({ length: TABLES }, (_, i) => tableCard(i + 1)).join("")}</div>
+      <div class="qrs tqrs">${Array.from({ length: TABLES }, (_, i) => tableCard(i + 1)).join("")}</div>
       <p class="note">Each code carries a secret key, so nobody can order from outside by guessing a table number. If one table's card is damaged or photographed, tap <b>New code</b> under it and reprint just that one.</p>
       <p class="note">Mark big communal tables as <b>Shared</b>: several groups can then order there, each with its own code and bill. On normal tables everyone who scans joins the same bill.</p>
       <button class="btn" data-act="rotate">${rot ? "Tap again: every printed table card will stop working" : "Make new codes for all tables"}</button>
@@ -1967,7 +1967,7 @@ function setupScreen(role) {
     const sh = e.target.closest("button[data-share]");
     if (sh && unlocked) { const n = +sh.dataset.share; SHARED = isShared(n) ? SHARED.filter((x) => x !== n) : [...SHARED, n].sort((x, y) => x - y);
       // Let the switch glide across before the page redraws.
-      sh.setAttribute("aria-checked", String(isShared(n))); const sl = sh.querySelector(".swl"); if (sl) sl.textContent = isShared(n) ? "Shared table" : "Normal table"; await new Promise((r) => setTimeout(r, 220));
+      sh.setAttribute("aria-checked", String(isShared(n))); await new Promise((r) => setTimeout(r, 220));
       render(); try { await saveConfig(); toast(`Table ${n} is now ${isShared(n) ? "shared" : "a normal table"}`); } catch (err) { fail(err); } return; }
     const r = e.target.closest("button[data-act=rotate]");
     if (r && unlocked) { if (!rot) { rot = true; render(); setTimeout(() => { rot = false; render(); }, 4000); return; }
