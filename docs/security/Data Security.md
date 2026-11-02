@@ -62,7 +62,7 @@ restaurant's offers.
 | Consent records after an account is deleted | Deleted with the account | (we keep no contact details, so no offers can be sent) |
 | Alerts (calls, bill requests), `rung` records | 30 days | Deleted |
 | Push addresses | Until the phone stops accepting them | Deleted automatically when Google reports them invalid |
-| Restaurant data after it leaves Wasabi | 90 days (so it can come back) | Deleted on request or after 90 days |
+| Restaurant data after it leaves Wasabi | 90 days (so it can come back) | Deleted on request or after 90 days, with **Delete restaurant** on the company page (since 2 Nov 2026): offers a full download first (.json with everything except keys and device addresses; .csv of all orders), then deletes everything under `restaurants/{rid}` and diners' visits there. The account and its payments stay, marked *deleted* (Wasabi's own business records). Downloaded files hold guests' names: keep them only as long as needed, or hand them to the restaurant |
 | Live demo rooms | 30 days | Deleted |
 | Backups | 7 days rolling | Overwritten |
 | Old version-1 data in top-level `alerts`, `config`, `groups`, `lines`, `sessions`, `tables`, `tablekeys` | Unused since restaurants moved under `restaurants/{rid}` | **Delete before launch** (unreachable by apps today, but still stored) |
