@@ -39,8 +39,8 @@
     if (!q.get("r") || q.get("join")) h.innerHTML = '<picture><source srcset="img/brand/wasabi-lockup-reverse.svg" media="(prefers-color-scheme: dark)"><img src="img/brand/wasabi-lockup.svg" alt="Wasabi" style="height:26px;width:auto;display:block"></picture>';
     // Back arrow: from any screen in a room, back to "Pick your role" for that room.
     const b = document.getElementById("backbtn"), r = q.get("r");
-    // The presenter page (no room yet): back to "How do you want to continue?" on the main site, still signed in.
-    if (!r && !q.get("ended")) { b.hidden = false; b.addEventListener("click", () => (location.href = new URL("../?choose=1#account", location.href).href)); }
+    // The presenter page and "Demo ended" (no room): back to "How do you want to continue?" on the main site.
+    if (!r) { b.hidden = false; b.addEventListener("click", () => (location.href = new URL("../?choose=1#account", location.href).href)); }
     if (r && !q.get("join")) {
       let join = null; try { join = JSON.parse(localStorage.getItem("wasabi-demo-join")); } catch {}
       if (!join || !join.includes("r=" + r)) join = `${location.origin}${location.pathname}?r=${encodeURIComponent(r)}&join=1`;
