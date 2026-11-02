@@ -12,3 +12,17 @@ enabled = true
 name = "LIMIT"
 namespace_id = "1001"
 simple = { limit = 60, period = 60 }
+
+# The same event asked about more than 10 times a minute (from anywhere): ignored. The app asks once,
+# the service rings once; repeats only cost database reads.
+[[ratelimits]]
+name = "LIMIT_EVENT"
+namespace_id = "1002"
+simple = { limit = 10, period = 60 }
+
+# One restaurant (or demo room): at most 300 ring requests a minute from all addresses together, so many
+# addresses can't flood one restaurant. A full 30-table night sends a few dozen.
+[[ratelimits]]
+name = "LIMIT_PLACE"
+namespace_id = "1003"
+simple = { limit = 300, period = 60 }

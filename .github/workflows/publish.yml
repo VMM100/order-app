@@ -40,6 +40,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Every script parses
         run: node tests/syntax.mjs
+      - name: Ring service rate limits
+        run: node tests/ring-limit.mjs
       - name: Install a headless browser
         run: npx --no-install playwright install --with-deps chromium
       - name: Open the main pages

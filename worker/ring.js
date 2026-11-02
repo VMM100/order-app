@@ -29,12 +29,15 @@ export default {
     let body; try { body = JSON.parse(await req.text()); } catch { return new Response("Bad request", { status: 400, headers: cors }); }
     const m = PATH.exec(String(body && body.path || ""));
     if (!m) return new Response("Bad path", { status: 400, headers: cors });
-    // Each request costs a database read, so one address gets at most 60 a minute (a busy bar's whole
-    // Wi-Fi sends a few). Cloudflare's free rate limiter; if it isn't set up, requests just go through.
-    if (env.LIMIT) {
-      const { success } = await env.LIMIT.limit({ key: req.headers.get("cf-connecting-ip") || "unknown" }).catch(() => ({ success: true }));
-      if (!success) return new Response("Too many requests", { status: 429, headers: cors });
-    }
+    // Each request costs a database read, so three limits (Cloudflare's free rate limiter, see wrangler.toml):
+    //   one address: 60 a minute (a busy bar's whole Wi-Fi sends a few);
+    //   one event: 10 a minute (the app asks once; repeats are someone hammering);
+    //   one restaurant or demo room: 300 a minute from all addresses together.
+    // If a limiter isn't set up or has a hiccup, requests go through: ringing matters more than the limit.
+    const over = async (lim, key) => !!lim && !(await lim.limit({ key }).catch(() => ({ success: true }))).success;
+    if (await over(env.LIMIT, req.headers.get("cf-connecting-ip") || "unknown")
+      || await over(env.LIMIT_EVENT, m[0])
+      || await over(env.LIMIT_PLACE, `${m[1]}/${m[2]}`)) return new Response("Too many requests", { status: 429, headers: cors });
     const count = Math.max(1, Math.min(20, Number(body.count) || 1));
     // Answer straight away; the ringing carries on in the background.
     ctx.waitUntil(handle(env, m, count).catch((e) => console.error("ring failed", m[0], e && e.stack || e)));
