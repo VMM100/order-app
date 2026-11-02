@@ -532,3 +532,8 @@ header.top .sub{white-space:nowrap;max-width:34vw;overflow:hidden;text-overflow:
 .wsign-scan .linkbtn{color:var(--hop);font-weight:700;text-decoration:underline;text-underline-offset:3px;font-size:inherit;padding:0;border:0;background:none}
 a.btn{color:inherit;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .extform .vrow label{flex:0 0 120px}.extform .vrow .field{flex:1;min-width:0}
+/* QR cards are always white: their own readable colours for the Shared / Normal switch and the Open link */
+.qr .sharetog{background:#f3f4f0;border:1.5px solid #8a9180;color:#22261f;font-size:13px;font-weight:600;min-height:36px;padding:6px 14px}
+.qr .sharetog[aria-pressed="true"]{background:#3f5a2c;border-color:#3f5a2c;color:#fff}
+.qr a.note{color:#22261f;font-weight:600}
+.qr .btn.ghost{color:#22261f;border-color:#c9cdc2;background:#fff}

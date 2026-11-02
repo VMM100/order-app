@@ -510,3 +510,8 @@ header.top .sub{white-space:nowrap;max-width:34vw;overflow:hidden;text-overflow:
 .var .vl,.var .num{white-space:nowrap}
 .var .cur{margin-right:1px}
 .toast{width:max-content;max-width:calc(100vw - 32px)}
+/* QR cards are always white: their own readable colours for the Shared / Normal switch and the Open link */
+.qr .sharetog{background:#f3f4f0;border:1.5px solid #8a9180;color:#22261f;font-size:13px;font-weight:600;min-height:36px;padding:6px 14px}
+.qr .sharetog[aria-pressed="true"]{background:#3f5a2c;border-color:#3f5a2c;color:#fff}
+.qr a.note{color:#22261f;font-weight:600}
+.qr .btn.ghost{color:#22261f;border-color:#c9cdc2;background:#fff}
