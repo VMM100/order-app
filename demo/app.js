@@ -1097,7 +1097,7 @@ function dinerScreen() {
     await updateDoc(groupRef(S.sid), patch);
     if (first) ringFor(groupRef(S.sid).path);
     store.set(meKey(), { pid, name, session: S.sid }); S.me = { pid, name, session: S.sid };
-    store.set("dees-lasttable", location.href); render();
+    render();   // DEMO: no "Back to your table" link saved; the demo has its own back arrow
   }
   function render() {
     if (!S.n || !S.access) return;

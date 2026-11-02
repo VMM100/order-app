@@ -1164,7 +1164,7 @@ function dinerScreen() {
     await updateDoc(groupRef(S.sid), patch);
     if (first) ringFor(groupRef(S.sid).path);
     store.set(meKey(), { pid, name, session: S.sid }); S.me = { pid, name, session: S.sid };
-    store.set("dees-lasttable", location.href); render();
+    store.set("dees-lasttable", { url: location.href, rid: RID, sid: S.sid }); render();
   }
   function render() {
     if (S.ask && !S.access) return renderAsk();
@@ -2787,7 +2787,18 @@ function accountScreen() {
     }
     S.loading = false; render();
   });
-  const back = () => { const t = store.get("dees-lasttable"); return t ? `<a class="btn" href="${esc(t)}">Back to your table</a>` : ""; };
+  // "Back to your table": only while that table is still open. Checked once when this page opens;
+  // a closed table (or a link saved by an older version) is forgotten.
+  let backUrl = "";
+  (async () => {
+    const t = store.get("dees-lasttable"); if (!t) return;
+    if (typeof t !== "object" || !t.url || !t.rid || !t.sid) { store.set("dees-lasttable", null); return; }
+    try { const u = await authReady(); if (!u) return;
+      const d = await getDoc(doc(db, "restaurants", t.rid, "groups", String(t.sid)));
+      if (d.exists() && d.data().open) { backUrl = t.url; render(); } else store.set("dees-lasttable", null);
+    } catch {}
+  })();
+  const back = () => backUrl ? `<a class="btn" href="${esc(backUrl)}">Back to your table</a>` : "";
   const day = (t) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const runs = () => S.roles.length > 0 || S.co;
   function signInHtml() {
