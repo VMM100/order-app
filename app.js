@@ -2374,8 +2374,8 @@ function ownerScreen(role) {
       return { start: a.getTime(), end: b.getTime(), date: a }; });
   }
   // lab(r) gives the label under a bar; an array puts its parts on two lines (e.g. ["Mon", "2"]).
-  function bars(rows, key, lab, cls = "") {
-    const max = Math.max(...rows.map((r) => r[key]), 1), txt = (r) => [].concat(lab(r)).join(" ");
+  function bars(rows, key, lab, cls = "", tip) {
+    const max = Math.max(...rows.map((r) => r[key]), 1), txt = tip || ((r) => [].concat(lab(r)).join(" "));
     // No numbers above the bars: hover a bar (computer) or tap it (phone) to see its amount.
     const n = rows.length, edge = (i) => (i < 2 ? " at-l" : i > n - 3 ? " at-r" : "");
     return `<div class="bars ${cls}" role="group" aria-label="Bar chart: hover or tap a bar for its amount">${rows.map((r, i) => { const h = Math.round((r[key] / max) * 100);
@@ -2422,9 +2422,9 @@ function ownerScreen(role) {
       </tbody></table></div><p class="note">Times are typical (median). Pickup is how long finished items wait before the waiter serves them.</p>` : `<p class="note">No waiter activity yet.</p>`}
 
       <div class="label">Sales by hour${peak ? ` · busiest ${String(peak.h).padStart(2, "0")}:00` : ""}</div>
-      ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"), "dense")}
+      ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"), "dense", (r) => `${String(r.h).padStart(2, "0")}:00–${String((r.h + 1) % 24).padStart(2, "0")}:00`)}
       ${outside ? `<p class="note">TSh ${fmt(outside)} was sold between 03:00 and 11:00, outside this chart.</p>` : ""}
-      ${S.days ? `<div class="label">Sales by day · last 14 days</div>${bars(S.days, "revenue", (r) => [["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][r.date.getDay()], String(r.date.getDate())], "dense two")}
+      ${S.days ? `<div class="label">Sales by day · last 14 days</div>${bars(S.days, "revenue", (r) => [["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][r.date.getDay()], String(r.date.getDate())], "dense two", (r) => r.date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }))}
       <p class="note">Each day runs to 04:00, so late nights count with the evening they started.</p>` : ""}
 
       <div class="label">Best sellers</div>
