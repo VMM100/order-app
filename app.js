@@ -255,7 +255,7 @@ const stockRef = () => rdoc("live", "stock");
 const DEFAULT_LOGOS = { "crafty-dees": "img/logos/crafty-dees.png" };
 const withDefaultLogo = (b) => (b.logo == null && RID && DEFAULT_LOGOS[RID] ? { ...b, logo: DEFAULT_LOGOS[RID] } : b);
 const isFileLogo = (id) => typeof id === "string" && id.startsWith("img/");
-let BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...((RID && store.get("dees-brand-" + RID)) || {}) });
+let BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: DEFAULT_FONT(), ...((RID && store.get("dees-brand-" + RID)) || {}) });
 let TABLES = TABLE_COUNT, PAUSED = false;
 const cfgListeners = new Set();
 // Resolves once the restaurant settings (menu, shared tables…) have loaded, or failed to.
@@ -274,7 +274,7 @@ function listenConfig() {
     step("settings arrived");
     // Ordering was shown as off, but the settings came through after all: start again cleanly.
     if (PAUSED) { location.reload(); return; }
-    if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: "brew", ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
+    if (snap.exists()) { const d = snap.data(); if (d.sections) MENU = menuFromDb(d.sections); if (d.waiters) WAITERS = d.waiters; CFG_STALE = !d.prices || "pin" in d || "mpin" in d; SHARED = d.shared || []; if (d.tables) TABLES = d.tables; if (d.brand) { BRAND = withDefaultLogo({ name: RESTAURANT, logo: null, c1: null, c2: null, font: DEFAULT_FONT(), ...d.brand }); store.set("dees-brand-" + RID, BRAND); } CFG_SAVED = true; }
     applyStock(); applyBrand();
     cfgLoaded(); cfgListeners.forEach((f) => f());
   }, async (e) => {
@@ -321,12 +321,16 @@ function brandCss(c1, c2) {
   const dark = `--accent:${a1};--accent-ink:${inkOn(a1)};--accent-soft:${mix(c1, D.bg, 0.72)};--hop:${a2};--hop-ink:${inkOn(a2)};--hop-soft:${mix(c2, D.bg, 0.75)}`;
   return `:root{${light}}@media (prefers-color-scheme:dark){:root{${dark}}}`;
 }
+// A restaurant that hasn't chosen fonts or colours looks like the Wasabi app itself.
+function DEFAULT_FONT() { return RID && RID !== RESTAURANT_ID ? "wasabi" : "brew"; }
 function applyBrand() {
   let el = document.getElementById("brandvars");
   if (!el) { el = document.createElement("style"); el.id = "brandvars"; document.head.appendChild(el); }
   // A new restaurant that hasn't picked colours yet starts in Wasabi green (the demo restaurant keeps its amber).
   const fresh = !BRAND.c1 && RID && RID !== RESTAURANT_ID;
   el.textContent = brandCss(fresh ? "#9cc43c" : BRAND.c1, fresh ? "#4a6716" : BRAND.c2) + fontCss(BRAND.font);
+  // No colours chosen yet: Wasabi's exact colours and buttons (the same as Wasabi's own pages).
+  if (fresh) document.body.classList.add("wasabi"); else if (RID) document.body.classList.remove("wasabi");
   if (BRAND.font && BRAND.font !== "brew" && FONTS[BRAND.font]) loadFonts("brandfont", [BRAND.font]);
   // Wasabi's own pages (no restaurant) keep the Wasabi logo; a restaurant shows its saved name, never
   // the demo restaurant's name as a stand-in.
@@ -338,6 +342,7 @@ const rname = () => BRAND.name || RESTAURANT;
 
 // Font pairs: a heading face and a text face. "upper" sets headings in capitals (suits condensed and geometric faces).
 const FONTS = {
+  wasabi:  { name: "Wasabi",       d: "Bricolage Grotesque", b: "Work Sans",    upper: false, dt: "sans-serif", bt: "sans-serif" },
   brew:    { name: "Brewhouse",    d: "Barlow Condensed",   b: "Work Sans",     upper: true,  dt: "sans-serif", bt: "sans-serif" },
   bistro:  { name: "Classic bistro", d: "Playfair Display", b: "Source Sans 3", upper: false, dt: "serif", bt: "sans-serif" },
   modern:  { name: "Modern cafe",  d: "Poppins",            b: "DM Sans",       upper: false, dt: "sans-serif", bt: "sans-serif" },
@@ -2274,11 +2279,11 @@ function ownerScreen(role) {
   }
 
   // ----- look: name, logo, colours -----
-  const PRESETS = [["Brewhouse", "#b9741a", "#3f5a2c"], ["Coastal", "#0f7c8c", "#e0603c"], ["Classic red", "#b3262e", "#3b3230"],
+  const PRESETS = [["Wasabi", "#9cc43c", "#4a6716"], ["Brewhouse", "#b9741a", "#3f5a2c"], ["Coastal", "#0f7c8c", "#e0603c"], ["Classic red", "#b3262e", "#3b3230"],
     ["Navy & gold", "#1f3a68", "#b58a2a"], ["Garden", "#3f7d3a", "#8a5a2b"], ["Sunset", "#e2572b", "#4a3f6b"]];
   function brandTab() {
     loadFonts("fontsamples", Object.keys(FONTS));
-    const c1 = BRAND.c1 || "#b9741a", c2 = BRAND.c2 || "#3f5a2c";
+    const c1 = BRAND.c1 || (RID === RESTAURANT_ID ? "#b9741a" : "#9cc43c"), c2 = BRAND.c2 || (RID === RESTAURANT_ID ? "#3f5a2c" : "#4a6716");
     return `<section style="max-width:640px">
       <div class="label" style="margin-top:0"><label for="bname">Restaurant name</label></div>
       <input class="field" id="bname" data-f="bname" maxlength="40" value="${esc(BRAND.name || RESTAURANT)}">
@@ -2298,7 +2303,7 @@ function ownerScreen(role) {
       ${BRAND.c1 ? `<button class="btn ghost" data-act="resetcolors">Back to the original colours</button>` : ""}
       <div class="label">Fonts</div>
       <p class="note" style="margin-top:0">A heading font for names and titles, paired with an easy-to-read font for menu text.</p>
-      <div class="fontopts">${Object.entries(FONTS).map(([k, f]) => `<button class="fontopt" data-font="${k}" aria-pressed="${(BRAND.font || "brew") === k}">
+      <div class="fontopts">${Object.entries(FONTS).map(([k, f]) => `<button class="fontopt" data-font="${k}" aria-pressed="${(BRAND.font || DEFAULT_FONT()) === k}">
         <span class="fd" style="font-family:${esc(stack(f.d, f.dt))};text-transform:${f.upper ? "uppercase" : "none"}">${esc(BRAND.name || RESTAURANT)}</span>
         <span class="fb" style="font-family:${esc(stack(f.b, f.bt))}">Pilsner, full 400ml · TSh 10,000</span>
         <span class="fn">${esc(f.name)} · ${esc(f.d)} + ${esc(f.b)}</span></button>`).join("")}</div>
