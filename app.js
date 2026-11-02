@@ -2372,10 +2372,11 @@ function ownerScreen(role) {
     return Array.from({ length: n }, (_, i) => { const a = new Date(start); a.setDate(a.getDate() - (n - 1 - i)); const b = new Date(a); b.setDate(b.getDate() + 1);
       return { start: a.getTime(), end: b.getTime(), date: a }; });
   }
-  function bars(rows, key, lab) {
-    const max = Math.max(...rows.map((r) => r[key]), 1);
-    return `<div class="bars" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar${r.split ? " split" : ""}" title="${esc(lab(r))}: TSh ${fmt(r[key])}">${r.split ? `<span class="bsplit">${esc(r.split)}</span>` : ""}
-      <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${esc(lab(r))}</span></div>`).join("")}</div>`;
+  // lab(r) gives the label under a bar; an array puts its parts on two lines (e.g. ["Mon", "2"]).
+  function bars(rows, key, lab, cls = "") {
+    const max = Math.max(...rows.map((r) => r[key]), 1), txt = (r) => [].concat(lab(r)).join(" ");
+    return `<div class="bars ${cls}" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar${r.split ? " split" : ""}" title="${esc(txt(r))}: TSh ${fmt(r[key])}">${r.split ? `<span class="bsplit">${esc(r.split)}</span>` : ""}
+      <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${[].concat(lab(r)).map(esc).join("<br>")}</span></div>`).join("")}</div>`;
   }
   function dashTab() {
     // No "All time" for now: it downloaded every order ever placed, which gets slow and costly as history grows.
@@ -2415,9 +2416,9 @@ function ownerScreen(role) {
       </tbody></table></div><p class="note">Times are typical (median). Pickup is how long finished items wait before the waiter serves them.</p>` : `<p class="note">No waiter activity yet.</p>`}
 
       <div class="label">Sales by hour${peak ? ` · busiest ${String(peak.h).padStart(2, "0")}:00` : ""}</div>
-      ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"))}
+      ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"), "dense")}
       ${outside ? `<p class="note">TSh ${fmt(outside)} was sold between 03:00 and 11:00, outside this chart.</p>` : ""}
-      ${S.days ? `<div class="label">Sales by day · last 14 days</div>${bars(S.days, "revenue", (r) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][r.date.getDay()] + " " + r.date.getDate())}
+      ${S.days ? `<div class="label">Sales by day · last 14 days</div>${bars(S.days, "revenue", (r) => [["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][r.date.getDay()], String(r.date.getDate())], "dense two")}
       <p class="note">Each day runs to 04:00, so late nights count with the evening they started.</p>` : ""}
 
       <div class="label">Best sellers</div>
@@ -2956,7 +2957,7 @@ function accountScreen() {
         const rids = Object.keys(names), wa = S.profile && S.profile.waPhone;
         // Signed in with Google: offers come by WhatsApp, so ask for the number first.
         const link = S.user.phoneNumber ? "" : `<form id="acwa" class="grid" style="margin-top:0">
-          <label class="flabel" for="acwain">To receive offers, link your mobile number <span>Your WhatsApp number. Offers only come from places you tick below.</span></label>
+          <label class="flabel" for="acwain">To receive offers, link your mobile number <span>Your WhatsApp number. Then tick the places you want offers from; nobody else can message you.</span></label>
           <div class="vrow"><input class="field" id="acwain" type="tel" inputmode="tel" autocomplete="tel" placeholder="0748 227 000" value="${esc(wa ? wa.replace(/^\+255/, "0") : "")}" aria-describedby="acwanote">
             <button class="btn primary" ${S.busy === "wa" ? "disabled" : ""}>${S.busy === "wa" ? "Saving…" : wa ? "Update" : "Link"}</button></div>
           <p class="note" id="acwanote" style="margin:0">${wa ? `Linked: <b>${esc(wa)}</b>. ` : ""}We'll check it's your number before any offer is sent.</p>

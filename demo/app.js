@@ -2169,10 +2169,11 @@ function ownerScreen(role) {
     return Array.from({ length: n }, (_, i) => { const a = new Date(start); a.setDate(a.getDate() - (n - 1 - i)); const b = new Date(a); b.setDate(b.getDate() + 1);
       return { start: a.getTime(), end: b.getTime(), date: a }; });
   }
-  function bars(rows, key, lab) {
-    const max = Math.max(...rows.map((r) => r[key]), 1);
-    return `<div class="bars" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar${r.split ? " split" : ""}" title="${esc(lab(r))}: TSh ${fmt(r[key])}">${r.split ? `<span class="bsplit">${esc(r.split)}</span>` : ""}
-      <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${esc(lab(r))}</span></div>`).join("")}</div>`;
+  // lab(r) gives the label under a bar; an array puts its parts on two lines (e.g. ["Mon", "2"]).
+  function bars(rows, key, lab, cls = "") {
+    const max = Math.max(...rows.map((r) => r[key]), 1), txt = (r) => [].concat(lab(r)).join(" ");
+    return `<div class="bars ${cls}" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar${r.split ? " split" : ""}" title="${esc(txt(r))}: TSh ${fmt(r[key])}">${r.split ? `<span class="bsplit">${esc(r.split)}</span>` : ""}
+      <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${[].concat(lab(r)).map(esc).join("<br>")}</span></div>`).join("")}</div>`;
   }
   function dashTab() {
     // No "All time" for now: it downloaded every order ever placed, which gets slow and costly as history grows.
@@ -2214,9 +2215,9 @@ function ownerScreen(role) {
       </tbody></table></div><p class="note">Times are typical (median). Pickup is how long finished items wait before the waiter serves them.</p>` : `<p class="note">No waiter activity yet.</p>`}
 
       <div class="label">Sales by hour${peak ? ` · busiest ${String(peak.h).padStart(2, "0")}:00` : ""}</div>
-      ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"))}
+      ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"), "dense")}
       ${outside ? `<p class="note">TSh ${fmt(outside)} was sold between 03:00 and 11:00, outside this chart.</p>` : ""}
-      ${S.days ? `<div class="label">Sales by day · last 14 days</div>${bars(S.days, "revenue", (r) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][r.date.getDay()] + " " + r.date.getDate())}
+      ${S.days ? `<div class="label">Sales by day · last 14 days</div>${bars(S.days, "revenue", (r) => [["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][r.date.getDay()], String(r.date.getDate())], "dense two")}
       <p class="note">Each day runs to 04:00, so late nights count with the evening they started.</p>` : ""}
 
       <div class="label">Best sellers</div>
@@ -2839,7 +2840,7 @@ function presenterScreen() {
           <li>A diner taps <b>Bill please</b>; the waiter is on the way</li><li>Split the bill, then open the owner dashboard</li></ol>
         <div class="row" style="margin-top:14px"><a class="btn primary" href="${BASE}?r=${room.id}#owner">Open owner dashboard here</a>
           <button class="btn" data-act="dcopy">Copy join link</button><button class="btn ghost" data-act="dnew">Start a new room</button></div>
-        <p class="note">No sign-in for anyone. Everything happens in this room only, with Crafty Dee's menu; real restaurants are never touched. The room closes by itself after ${DEMO_HOURS} hours, or end it any time under <b>Tables</b>.</p>
+        <p class="note">No sign-in for anyone. Everything happens in this room only, with Crafty Dee's menu; real restaurants are never touched. The room closes by itself after ${DEMO_HOURS} hours, or end it any time under <b>Open tables</b>.</p>
       </div></section>`);
     const drawQr = () => { const el = document.getElementById("dqr"); if (el && !el.childNodes.length && window.QRCode) brandQr(el, join, 512); };
     draw(); if (!window.QRCode) addEventListener("load", drawQr, { once: true });
