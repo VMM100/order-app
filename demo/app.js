@@ -2146,22 +2146,32 @@ function ownerScreen(role) {
   async function load() {
     S.loading = true; render();
     const since = S.period === "all" ? 0 : S.period === "today" ? new Date().setHours(0, 0, 0, 0) : Date.now() - Number(S.period) * 864e5;
+    // Sales by day always shows the last 14 nights, so orders are fetched for 14 days even on "Today".
+    const days14 = bizDays(14), from = since ? Math.min(since, days14[0].start) : 0;
     try {
       const [ls, as, ss, ts] = await Promise.all([
-        getDocs(since ? query(rcol("lines"), where("t", ">=", since)) : rcol("lines")),
+        getDocs(from ? query(rcol("lines"), where("t", ">=", from)) : rcol("lines")),
         getDocs(since ? query(rcol("alerts"), where("t", ">=", since)) : rcol("alerts")),
         getDocs(since ? query(rcol("sessions"), where("closed", ">=", since)) : rcol("sessions")),
         getDocs(query(rcol("groups"), where("open", "==", true)))]);
       const open = ts.docs.map((d) => d.data()).filter((t) => Object.keys(t.people || {}).length);
-      S.m = computeMetrics({ lines: ls.docs.map((d) => d.data()), alerts: as.docs.map((d) => d.data()), sessions: ss.docs.map((d) => d.data()),
+      const all = ls.docs.map((d) => d.data());
+      S.days = days14.map((d) => ({ ...d, revenue: all.filter((l) => l.t >= d.start && l.t < d.end).reduce((a, l) => a + (l.pr || 0), 0) }));
+      S.m = computeMetrics({ lines: all.filter((l) => !since || l.t >= since), alerts: as.docs.map((d) => d.data()), sessions: ss.docs.map((d) => d.data()),
         openTables: open, waiters: WAITERS, stations: STATIONS });
       S.loaded = Date.now();
     } catch (e) { S.m = null; S.err = e; }
     S.loading = false; render();
   }
+  // A trading day runs 04:00 to 04:00, so a night that goes past midnight counts as one day.
+  function bizDays(n) {
+    const now = new Date(), start = new Date(now); start.setHours(4, 0, 0, 0); if (now < start) start.setDate(start.getDate() - 1);
+    return Array.from({ length: n }, (_, i) => { const a = new Date(start); a.setDate(a.getDate() - (n - 1 - i)); const b = new Date(a); b.setDate(b.getDate() + 1);
+      return { start: a.getTime(), end: b.getTime(), date: a }; });
+  }
   function bars(rows, key, lab) {
     const max = Math.max(...rows.map((r) => r[key]), 1);
-    return `<div class="bars" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar" title="${esc(lab(r))}: TSh ${fmt(r[key])}">
+    return `<div class="bars" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar${r.split ? " split" : ""}" title="${esc(lab(r))}: TSh ${fmt(r[key])}">${r.split ? `<span class="bsplit">${esc(r.split)}</span>` : ""}
       <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${esc(lab(r))}</span></div>`).join("")}</div>`;
   }
   function dashTab() {
@@ -2177,8 +2187,11 @@ function ownerScreen(role) {
       <div style="text-align:center"><button class="btn" data-act="sample">${S.busy === "sample" ? "Adding…" : "Fill with a sample week for a demo"}</button>
       <p class="note">Sample orders are clearly marked and can be removed in one tap.</p></div></section>`;
     const kpi = (v, l, sub) => `<div class="kpi"><div class="kv num${v === "–" ? " none" : ""}">${v === "–" ? "No data yet" : v}</div><div class="kl">${l}</div>${sub ? `<div class="note" style="margin:2px 0 0">${sub}</div>` : ""}</div>`;
-    const hours = m.byHour.filter((h) => h.items); const h0 = hours.length ? hours[0].h : 12, h1 = hours.length ? hours.at(-1).h : 22;
-    const hourRows = m.byHour.filter((h) => h.h >= h0 && h.h <= h1);
+    const hours = m.byHour.filter((h) => h.items);
+    // Opening hours: 11:00 to 02:00, with a dotted line at midnight where the next day starts.
+    const OPEN = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+    const hourRows = OPEN.map((h) => ({ ...m.byHour[h], split: h === 0 ? "Next day" : "" }));
+    const outside = m.byHour.filter((h) => !OPEN.includes(h.h)).reduce((a, h) => a + h.revenue, 0);
     const peak = hours.length ? hours.reduce((a, b) => (b.revenue > a.revenue ? b : a)) : null;
     return head + sampleNote + `<section>
       <div class="kpis">${kpi(`<span class="cur">TSh</span> ${fmt(m.revenue)}`, "Sales", `${fmt(m.items)} items · ${fmt(m.orders)} orders`)}${kpi(fmt(m.tables), "Tables", `${fmt(m.guests)} guests`)}
@@ -2202,7 +2215,9 @@ function ownerScreen(role) {
 
       <div class="label">Sales by hour${peak ? ` · busiest ${String(peak.h).padStart(2, "0")}:00` : ""}</div>
       ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"))}
-      ${m.byDay.length > 1 ? `<div class="label">Sales by day</div>${bars(m.byDay, "revenue", (r) => { const d = new Date(r.day + "T12:00"); return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + d.getDate(); })}` : ""}
+      ${outside ? `<p class="note">TSh ${fmt(outside)} was sold between 03:00 and 11:00, outside this chart.</p>` : ""}
+      ${S.days ? `<div class="label">Sales by day · last 14 days</div>${bars(S.days, "revenue", (r) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][r.date.getDay()] + " " + r.date.getDate())}
+      <p class="note">Each day runs to 04:00, so late nights count with the evening they started.</p>` : ""}
 
       <div class="label">Best sellers</div>
       <div class="tablewrap"><table><thead><tr><th>Item</th><th style="text-align:left" class="opt">Station</th><th>Sold</th><th>Sales (TSh)</th></tr></thead><tbody>

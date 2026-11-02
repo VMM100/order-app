@@ -416,7 +416,14 @@ service cloud.firestore {
 
     // ---------- diner accounts (shared across restaurants) ----------
     match /diners/{uid} {
-      allow read, write: if signedIn() && uid == me();
+      allow read, delete: if signedIn() && uid == me();
+      // A WhatsApp number linked on My account (Google accounts): a +country number, never marked
+      // checked by the diner's own phone (only a future verification step may set waVerified true).
+      allow create, update: if signedIn() && uid == me()
+        && (!('waPhone' in request.resource.data) || request.resource.data.waPhone == null
+            || (request.resource.data.waPhone is string && request.resource.data.waPhone.matches('^[+][0-9]{9,15}$')))
+        && (!('waVerified' in request.resource.data) || request.resource.data.waVerified != true
+            || (resource != null && resource.data.get('waVerified', false) == true && resource.data.waPhone == request.resource.data.waPhone));
       // Proof of consent to offers: a diner can add entries and read their own, never change one.
       // The whole log goes when they delete their account.
       match /consents/{id} {

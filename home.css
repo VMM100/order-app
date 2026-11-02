@@ -233,3 +233,45 @@ footer.foot a:hover{color:var(--text);text-decoration:underline}
   main a:not(.btn),footer a{position:relative}
   main a:not(.btn)::after,footer a::after{content:"";position:absolute;inset:-12px -4px}
 }
+
+/* The phone, matching the current diner menu (2 Nov): waiter card, Menu / Table order / Bill tabs, section
+   headings, items with the photo on the right and a button per size with its TSh price, basket bar. */
+.s-head{gap:8px;padding:38px 12px 9px}
+.s-head b{flex:1;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-burger{width:22px;height:22px;border-radius:6px;border:1px solid #dfdcd1;background:#fff linear-gradient(#22261f,#22261f) center/10px 1.5px no-repeat;box-shadow:inset 0 -4px 0 -2.5px #fff;flex:none;position:relative}
+.s-burger::before,.s-burger::after{content:"";position:absolute;left:5.5px;width:10px;height:1.5px;background:#22261f}
+.s-burger::before{top:6px}.s-burger::after{bottom:6px}
+.s-wait{margin:8px 10px 0;background:#e3ead9;border-radius:10px;padding:7px 8px;display:flex;align-items:center;gap:5px;font-size:10px;color:#5d6255}
+.s-wait>span:first-child{flex:1;white-space:nowrap}
+.s-wait b{color:#22261f}
+.s-bt{border:1px solid #cfd4c5;background:#fff;color:#22261f;border-radius:7px;padding:4px 6px;font-weight:600;font-size:9.5px;white-space:nowrap}
+.s-bt.go{background:#a8650f;border-color:#a8650f;color:#fff}
+.s-tabs{display:flex;margin:8px 10px 0;border:1px solid #dfdcd1;border-radius:8px;overflow:hidden;background:#fff}
+.s-tabs span{flex:1;text-align:center;padding:5px 2px;font-weight:600;font-size:10px;white-space:nowrap}
+.s-tabs span.on{background:#22261f;color:#fff}
+.s-chips{padding:8px 10px 2px;overflow:hidden}
+.s-chips span{white-space:nowrap}
+.s-chips span.on{background:#e3ead9;border-color:#3f5a2c;color:#22261f}
+.s-items{padding:2px 10px;gap:6px;overflow:hidden}
+.s-sec{font:700 12px var(--display);text-transform:uppercase;letter-spacing:.02em;background:#e3ead9;border-radius:6px;padding:4px 8px;margin-top:4px}
+.s-item{display:block;padding:7px 8px}
+.s-top{display:flex;gap:8px;align-items:flex-start}
+.s-top>div{flex:1;min-width:0}
+.s-top small{display:block;color:#3f5a2c;font-size:9.5px;font-weight:600;margin-top:1px}
+.s-item img{width:40px;height:40px}
+.s-vars{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
+.s-vars.one{grid-template-columns:1fr}
+.s-vars span{position:relative;display:flex;justify-content:space-between;align-items:center;gap:4px;border:1px solid #dfdcd1;border-radius:7px;padding:5px 6px;font-size:10px;background:#fff;white-space:nowrap}
+.s-vars span.on{background:#e3ead9;border-color:#3f5a2c}
+.s-vars em{font-style:normal;font-weight:700}
+.s-vars em i{font-style:normal;font-weight:500;color:#6b705f;font-size:8.5px}
+.s-vars u{position:absolute;top:-6px;right:-5px;width:15px;height:15px;border-radius:50%;background:#3f5a2c;color:#fff;text-decoration:none;font-size:9px;font-weight:700;display:grid;place-items:center;border:1.5px solid #fff}
+.s-cart{margin:6px 10px 12px;background:none;color:#22261f;padding:0;gap:6px;font-size:10.5px}
+.s-view{border:1px solid #dfdcd1;background:#fff;border-radius:9px;padding:9px 8px;white-space:nowrap}
+.s-place{flex:1;display:flex;justify-content:space-between;background:#a8650f;color:#fff;border-radius:9px;padding:9px 9px;white-space:nowrap}
+.s-place em{font-style:normal}
+/* Find us sits right under How it works on the same background: one gap, not two. */
+.findus{padding-top:8px}
+/* Floating notes sit beside the phone, over the waiter card and the basket, not over the menu items. */
+.f1{top:19%;left:max(-6px,calc(50% - 300px))}
+.f2{bottom:13%;right:max(-6px,calc(50% - 290px))}

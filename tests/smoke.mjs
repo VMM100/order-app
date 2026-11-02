@@ -49,6 +49,7 @@ await check("Table without a QR key (asks for a code)", "?r=crafty-dees&t=1", as
 await check("Live demo page", "demo/", null, { wait: 5000 });
 await check("Privacy policy", "privacy.html", async (p) => { await p.locator("h1").first().waitFor(T); });
 await check("Terms", "terms.html", async (p) => { await p.locator("h1").first().waitFor(T); });
+await check("For owners page has pricing", "owners.html", async (p) => { await p.locator("#pricing #amt").waitFor(T); });
 await check("Sign in shows the Terms statement", "#account", async (p) => {
   await p.getByText("Sign in with Google").waitFor(T);
   await p.locator(".terms-note a[href='terms.html']").waitFor(T);

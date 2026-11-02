@@ -172,9 +172,11 @@ const dinerRef = (u) => doc(db, "diners", u);
 // Change OFFERS_VERSION whenever the wording changes.
 const OFFERS_VERSION = "2026-10-22";
 const offersText = (name) => `Send me ${name}'s offers and news on WhatsApp. I can stop any time in My account.`;
+// The WhatsApp number a Google account linked on My account (not yet checked; see Data Security.md).
+const S_WA = { phone: null };
 const offersOn = (profile, rid) => !!(profile && profile.offers && typeof profile.offers === "object" && profile.offers[rid]);
 function logConsent(batch, u, rid, name, on, source) {
-  batch.set(doc(collection(db, "diners", u.uid, "consents")), { rid, rname: name, on, channel: "whatsapp", phone: u.phoneNumber || null,
+  batch.set(doc(collection(db, "diners", u.uid, "consents")), { rid, rname: name, on, channel: "whatsapp", phone: u.phoneNumber || (S_WA.phone) || null,
     text: on ? offersText(name) : `Stop ${name}'s offers on WhatsApp.`, version: OFFERS_VERSION, source, at: Date.now() });
 }
 // Terms: signing in (phone or Google) needs a ticked "I agree to the Terms and Privacy policy" box.
@@ -631,6 +633,8 @@ if (LOGIN_PAGES.includes(view)) {
     if (view === "setup" && RID) { location.href = `${BASE}?r=${encodeURIComponent(RID)}#${SETUP_ROLE}`; return true; }
     if (!SIGNED_IN) return false;
     if (view !== "account") { location.href = `${BASE}?choose=1#account`; return true; }
+    // My account as a guest, for someone who also runs a restaurant: back to the choices, still signed in.
+    if (window.wasabiAccountBack && window.wasabiAccountBack()) return true;
     askLogOut().then((yes) => { if (yes) logOut(); });
     return true;
   };
@@ -2345,22 +2349,32 @@ function ownerScreen(role) {
   async function load() {
     S.loading = true; render();
     const since = S.period === "all" ? 0 : S.period === "today" ? new Date().setHours(0, 0, 0, 0) : Date.now() - Number(S.period) * 864e5;
+    // Sales by day always shows the last 14 nights, so orders are fetched for 14 days even on "Today".
+    const days14 = bizDays(14), from = since ? Math.min(since, days14[0].start) : 0;
     try {
       const [ls, as, ss, ts] = await Promise.all([
-        getDocs(since ? query(rcol("lines"), where("t", ">=", since)) : rcol("lines")),
+        getDocs(from ? query(rcol("lines"), where("t", ">=", from)) : rcol("lines")),
         getDocs(since ? query(rcol("alerts"), where("t", ">=", since)) : rcol("alerts")),
         getDocs(since ? query(rcol("sessions"), where("closed", ">=", since)) : rcol("sessions")),
         getDocs(query(rcol("groups"), where("open", "==", true)))]);
       const open = ts.docs.map((d) => d.data()).filter((t) => Object.keys(t.people || {}).length);
-      S.m = computeMetrics({ lines: ls.docs.map((d) => d.data()), alerts: as.docs.map((d) => d.data()), sessions: ss.docs.map((d) => d.data()),
+      const all = ls.docs.map((d) => d.data());
+      S.days = days14.map((d) => ({ ...d, revenue: all.filter((l) => l.t >= d.start && l.t < d.end).reduce((a, l) => a + (l.pr || 0), 0) }));
+      S.m = computeMetrics({ lines: all.filter((l) => !since || l.t >= since), alerts: as.docs.map((d) => d.data()), sessions: ss.docs.map((d) => d.data()),
         openTables: open, waiters: WAITERS, stations: STATIONS });
       S.loaded = Date.now();
     } catch (e) { S.m = null; S.err = e; }
     S.loading = false; render();
   }
+  // A trading day runs 04:00 to 04:00, so a night that goes past midnight counts as one day.
+  function bizDays(n) {
+    const now = new Date(), start = new Date(now); start.setHours(4, 0, 0, 0); if (now < start) start.setDate(start.getDate() - 1);
+    return Array.from({ length: n }, (_, i) => { const a = new Date(start); a.setDate(a.getDate() - (n - 1 - i)); const b = new Date(a); b.setDate(b.getDate() + 1);
+      return { start: a.getTime(), end: b.getTime(), date: a }; });
+  }
   function bars(rows, key, lab) {
     const max = Math.max(...rows.map((r) => r[key]), 1);
-    return `<div class="bars" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar" title="${esc(lab(r))}: TSh ${fmt(r[key])}">
+    return `<div class="bars" role="img" aria-label="Bar chart">${rows.map((r) => `<div class="bar${r.split ? " split" : ""}" title="${esc(lab(r))}: TSh ${fmt(r[key])}">${r.split ? `<span class="bsplit">${esc(r.split)}</span>` : ""}
       <span class="bv num">${r[key] ? fmt(Math.round(r[key] / 1000)) + "k" : ""}</span><span class="bf" style="height:${Math.round((r[key] / max) * 100)}%"></span><span class="bl">${esc(lab(r))}</span></div>`).join("")}</div>`;
   }
   function dashTab() {
@@ -2374,8 +2388,11 @@ function ownerScreen(role) {
     const sampleNote = m.sample ? `<div class="soundbar" style="margin-top:12px"><span>Includes <b>sample data</b> for demonstration, not real sales.</span><button class="btn" data-act="unsample">${S.busy === "unsample" ? "Removing…" : "Remove sample data"}</button></div>` : "";
     if (!m.items) return head + `<section><p class="empty">No orders in this period yet.<br>Numbers appear here as soon as diners order.</p></section>`;
     const kpi = (v, l, sub) => `<div class="kpi"><div class="kv num${v === "–" ? " none" : ""}">${v === "–" ? "No data yet" : v}</div><div class="kl">${l}</div>${sub ? `<div class="note" style="margin:2px 0 0">${sub}</div>` : ""}</div>`;
-    const hours = m.byHour.filter((h) => h.items); const h0 = hours.length ? hours[0].h : 12, h1 = hours.length ? hours.at(-1).h : 22;
-    const hourRows = m.byHour.filter((h) => h.h >= h0 && h.h <= h1);
+    const hours = m.byHour.filter((h) => h.items);
+    // Opening hours: 11:00 to 02:00, with a dotted line at midnight where the next day starts.
+    const OPEN = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+    const hourRows = OPEN.map((h) => ({ ...m.byHour[h], split: h === 0 ? "Next day" : "" }));
+    const outside = m.byHour.filter((h) => !OPEN.includes(h.h)).reduce((a, h) => a + h.revenue, 0);
     const peak = hours.length ? hours.reduce((a, b) => (b.revenue > a.revenue ? b : a)) : null;
     return head + sampleNote + `<section>
       <div class="kpis">${kpi(`<span class="cur">TSh</span> ${fmt(m.revenue)}`, "Sales", `${fmt(m.items)} items · ${fmt(m.orders)} orders`)}${kpi(fmt(m.tables), "Tables", `${fmt(m.guests)} guests`)}
@@ -2399,7 +2416,9 @@ function ownerScreen(role) {
 
       <div class="label">Sales by hour${peak ? ` · busiest ${String(peak.h).padStart(2, "0")}:00` : ""}</div>
       ${bars(hourRows, "revenue", (r) => String(r.h).padStart(2, "0"))}
-      ${m.byDay.length > 1 ? `<div class="label">Sales by day</div>${bars(m.byDay, "revenue", (r) => { const d = new Date(r.day + "T12:00"); return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + d.getDate(); })}` : ""}
+      ${outside ? `<p class="note">TSh ${fmt(outside)} was sold between 03:00 and 11:00, outside this chart.</p>` : ""}
+      ${S.days ? `<div class="label">Sales by day · last 14 days</div>${bars(S.days, "revenue", (r) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][r.date.getDay()] + " " + r.date.getDate())}
+      <p class="note">Each day runs to 04:00, so late nights count with the evening they started.</p>` : ""}
 
       <div class="label">Best sellers</div>
       <div class="tablewrap"><table><thead><tr><th>Item</th><th style="text-align:left" class="opt">Station</th><th>Sold</th><th>Sales (TSh)</th></tr></thead><tbody>
@@ -2817,7 +2836,7 @@ function accountScreen() {
         getDoc(dinerRef(u.uid)).catch(() => null), myVisits(u.uid).catch(() => null),
         u.email ? myRestaurants(u).catch(() => []) : [], u.email ? isCompanyUser(u).catch(() => false) : false]);
       if (S.user !== u) return;   // signed out or switched while loading
-      S.profile = p && p.exists() ? p.data() : null; S.visits = visits || []; S.real = !!p;
+      S.profile = p && p.exists() ? p.data() : null; S.visits = visits || []; S.real = !!p; S_WA.phone = (S.profile && S.profile.waPhone) || null;
       S.err = visits ? "" : "Couldn't load your visits. Check your connection.";
       S.roles = roles; S.co = co;
       try { localStorage.setItem(memo, JSON.stringify({ roles: roles.map(({ rid, name, role }) => ({ rid, name, role })), co, name: (S.profile && S.profile.name) || "" })); } catch {}
@@ -2874,6 +2893,8 @@ function accountScreen() {
         ${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}</div></div>
       <p class="note wsign-foot">Signed in as ${esc(S.user.email || S.user.phoneNumber || "")} · <button class="linkbtn" data-act="signout">Use a different account</button></p></section>`;
   }
+  window.wasabiAccountBack = () => { if (!S.user || !S.guest || !runs()) return false;
+    S.guest = false; try { sessionStorage.removeItem(guestKey()); } catch {} render(); window.scrollTo(0, 0); return true; };
   function chooserHtml(who) {
     const state = (m) => { if (!m.acct) return ""; const k = subState(m.acct).kind;
       return k === "pending" ? " · waiting for approval" : k === "suspended" ? " · paused" : k === "expired" ? " · subscription ended" : ""; };
@@ -2930,11 +2951,19 @@ function accountScreen() {
           <header><b>${esc(g.name)}</b><span class="note" style="margin:0">${g.list.length} visit${g.list.length > 1 ? "s" : ""} · TSh ${fmt(g.list.reduce((a, v) => a + (v.share || 0), 0))}</span></header>
           ${g.list.map((v) => `<div class="oline"><span class="l">${day(v.date)} · Table ${v.table}<br><span class="note">${(v.items || []).map((i) => esc(i.n)).join(", ") || "Nothing ordered"}</span></span><span class="num">TSh ${fmt(v.share)}</span></div>`).join("")}
         </div>`).join("") : `<p class="note">No visits yet. They'll appear here after your table's bill is closed.</p>`}
-      <div class="label">WhatsApp offers</div>
+      <div class="label">Offers for you</div>
       ${(() => { const names = { ...((S.profile && S.profile.offerNames) || {}) }; Object.entries(by).forEach(([rid, g]) => (names[rid] ||= g.name));
-        const rids = Object.keys(names); if (!S.user.phoneNumber) return `<p class="note" style="margin-top:0">Offers come by WhatsApp, so they need a phone sign-in.</p>`;
-        return rids.length ? `<div class="grid">${rids.map((rid) => `<label class="optin"><input type="checkbox" data-offers="${esc(rid)}" data-name="${esc(names[rid])}" ${offersOn(S.profile, rid) ? "checked" : ""}> <span>${esc(offersText(names[rid]))}</span></label>`).join("")}</div>
-          <p class="note">Each restaurant can only message you if its box is ticked. Every change is saved with the date.</p>` : `<p class="note" style="margin-top:0">Restaurants you visit will appear here. You choose for each one.</p>`; })()}
+        const rids = Object.keys(names), wa = S.profile && S.profile.waPhone;
+        // Signed in with Google: offers come by WhatsApp, so ask for the number first.
+        const link = S.user.phoneNumber ? "" : `<form id="acwa" class="grid" style="margin-top:0">
+          <label class="flabel" for="acwain">To receive offers, link your mobile number <span>Your WhatsApp number. Offers only come from places you tick below.</span></label>
+          <div class="vrow"><input class="field" id="acwain" type="tel" inputmode="tel" autocomplete="tel" placeholder="0748 227 000" value="${esc(wa ? wa.replace(/^\+255/, "0") : "")}" aria-describedby="acwanote">
+            <button class="btn primary" ${S.busy === "wa" ? "disabled" : ""}>${S.busy === "wa" ? "Saving…" : wa ? "Update" : "Link"}</button></div>
+          <p class="note" id="acwanote" style="margin:0">${wa ? `Linked: <b>${esc(wa)}</b>. ` : ""}We'll check it's your number before any offer is sent.</p>
+          ${wa ? `<button type="button" class="linkbtn" data-act="ac-waoff" style="justify-self:start">Remove this number</button>` : ""}</form>`;
+        if (!S.user.phoneNumber && !wa) return link;
+        return link + (rids.length ? `<div class="grid">${rids.map((rid) => `<label class="optin"><input type="checkbox" data-offers="${esc(rid)}" data-name="${esc(names[rid])}" ${offersOn(S.profile, rid) ? "checked" : ""}> <span>${esc(offersText(names[rid]))}</span></label>`).join("")}</div>
+          <p class="note">Each restaurant can only message you if its box is ticked. Every change is saved with the date.</p>` : `<p class="note" style="margin-top:0">Restaurants you visit will appear here. You choose for each one.</p>`); })()}
       <div class="label">Settings</div>
       <div class="grid" style="margin-top:20px">${back()}
         <button class="btn" data-act="signout">Log out</button>
@@ -2951,7 +2980,17 @@ function accountScreen() {
       await b.commit(); S.profile = { ...(S.profile || {}), offers, offerNames }; toast(on ? `You'll get ${name}'s offers` : `No more offers from ${name}`);
     } catch (err) { e.target.checked = !on; fail(err); }
   });
+  async function saveWa(phone) {
+    S.busy = "wa"; S.err = ""; render();
+    try { await updateDoc(dinerRef(S.user.uid), { waPhone: phone, waVerified: false, waAt: Date.now() });
+      S.profile = { ...(S.profile || {}), waPhone: phone, waVerified: false }; S_WA.phone = phone; toast(phone ? "Number linked" : "Number removed"); }
+    catch (err) { fail(err); }
+    S.busy = false; render();
+  }
   document.addEventListener("submit", async (e) => {
+    if (e.target.id === "acwa") { e.preventDefault(); if (!S.user || S.busy) return;
+      const ph = normalisePhone($("#acwain").value); if (!ph) { S.err = "Enter a mobile number, like 0748 227 000."; return render(); }
+      return saveWa(ph); }
     if (e.target.id === "acname") { e.preventDefault(); if (!S.user || S.busy) return;
       const name = $("#acnamein").value.trim(); if (!name) { S.authErr = "Enter your first name."; return render(); }
       S.busy = true; S.authErr = ""; render();
@@ -2987,8 +3026,9 @@ function accountScreen() {
     if (d.act === "ac-editname") { S.editName = !S.editName; S.authErr = ""; render(); if (S.editName) { const i = $("#acnamein"); if (i) { i.focus(); i.select(); } } return; }
     if (d.act === "ac-back") { S.step = ""; S.authErr = ""; render(); return; }
     if (!S.user) return;
+    if (d.act === "ac-waoff") return saveWa(null);
     if (d.act === "ac-guest") { S.guest = true; try { sessionStorage.setItem(guestKey(), "1"); } catch {} render(); return; }
-    if (d.act === "ac-choose") { S.guest = false; try { sessionStorage.removeItem(guestKey()); } catch {} render(); return; }
+    if (d.act === "ac-choose") { S.guest = false; try { sessionStorage.removeItem(guestKey()); } catch {} render(); window.scrollTo(0, 0); return; }
     if (d.act === "signout") { try { await signOutUser(); } catch {} toast("Signed out"); }
     if (d.act === "delete") {
       if (!S.armed) { S.armed = true; render(); setTimeout(() => { S.armed = false; render(); }, 4000); return; }

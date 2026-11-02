@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="img/brand/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="demo/styles.css?v=19">
+<link rel="stylesheet" href="demo/styles.css?v=20">
 </head>
 <body>
 <div class="wrap" id="wrap">
@@ -37,8 +37,10 @@
   (() => {
     const q = new URLSearchParams(location.search), h = document.getElementById("brandname");
     if (!q.get("r") || q.get("join")) h.innerHTML = '<picture><source srcset="img/brand/wasabi-lockup-reverse.svg" media="(prefers-color-scheme: dark)"><img src="img/brand/wasabi-lockup.svg" alt="Wasabi" style="height:26px;width:auto;display:block"></picture>';
-    // Back arrow: from any screen in a room, back to "Pick your role" for that room. Hidden on the presenter page.
+    // Back arrow: from any screen in a room, back to "Pick your role" for that room.
     const b = document.getElementById("backbtn"), r = q.get("r");
+    // The presenter page (no room yet): back to "How do you want to continue?" on the main site, still signed in.
+    if (!r && !q.get("ended")) { b.hidden = false; b.addEventListener("click", () => (location.href = new URL("../?choose=1#account", location.href).href)); }
     if (r && !q.get("join")) {
       let join = null; try { join = JSON.parse(localStorage.getItem("wasabi-demo-join")); } catch {}
       if (!join || !join.includes("r=" + r)) join = `${location.origin}${location.pathname}?r=${encodeURIComponent(r)}&join=1`;
@@ -47,7 +49,7 @@
   })();
 </script>
 <script src="vendor/qrcode.min.js" defer></script>
-<script type="module" src="demo/app.js?v=8"></script>
+<script type="module" src="demo/app.js?v=9"></script>
 <script src="ptr.js?v=2" defer></script>
 </body>
 </html>
