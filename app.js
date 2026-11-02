@@ -2583,7 +2583,7 @@ const poweredBy = () => `<p class="poweredby">${wasabiLeaf()}<span>Ordered with 
 function companyScreen() {
   $("#wrap").classList.add("wide"); $("#sub").textContent = "Company"; document.title = "Company · " + COMPANY.name;
   wasabiPage();
-  const C = { u: null, ok: false, claimed: true, list: [], team: [], filter: "all", busy: "", err: "", armed: null, edit: null, ext: null };
+  const C = { u: null, ok: false, claimed: true, list: [], team: [], filter: "all", busy: "", err: "", armed: null, edit: null, ext: null, del: null, delStep: "" };
   async function check() {
     paint(skPage());
     C.u = await authReady(); C.ok = await isCompanyUser(C.u);
@@ -2605,6 +2605,8 @@ function companyScreen() {
     return { pending: ["s-new", "Waiting for approval"], suspended: ["s-served", "Paused"], expired: ["s-new", `Stopped · unpaid since ${day(st.until)}`],
       grace: ["s-preparing", `Overdue · stops ${day(st.stops)}`], soon: ["s-preparing", `Paid until ${day(st.until)}`], ok: ["s-ready", `Paid until ${day(st.until)}`], none: ["", "?"] }[st.kind]; };
   function card(a) {
+    if (a.status === "deleted") return `<article class="ticket"><header><b>${esc(a.name)}</b><span class="pill s-served">Deleted</span></header>
+      <p class="note" style="margin:4px 0 0">Link name ${esc(a.rid)} · deleted ${a.deletedAt ? day(a.deletedAt) : ""}${a.deletedBy ? ` by ${esc(a.deletedBy)}` : ""}. Its payment record is kept.</p></article>`;
     const st = subState(a), [cls, txt] = badge(a), k = (x) => C.armed === x + a.rid;
     const who = `${esc(a.ownerEmail)}${a.ownerName ? ` (${esc(a.ownerName)})` : ""}${a.phone ? ` · ${esc(a.phone)}` : ""}${a.area ? ` · ${esc(a.area)}` : ""}`;
     if (st.kind === "pending") return `<article class="ticket new"><header><b>${esc(a.name)}</b><span class="pill ${cls}">${txt}</span></header>
@@ -2620,12 +2622,79 @@ function companyScreen() {
         <button class="btn ${a.status === "suspended" ? "" : "danger"}" data-sus="${a.rid}">${a.status === "suspended" ? "Switch back on" : k("sus") ? "Tap again to pause" : "Pause"}</button>
         <button class="btn ghost" data-own="${a.rid}">Change owner</button>
         <a class="btn ghost" href="${BASE}?r=${esc(a.rid)}#owner">Open</a>
-        <a class="btn ghost" href="${BASE}demo/">Live demo</a></div>
+        <a class="btn ghost" href="${BASE}demo/">Live demo</a>
+        <button class="btn ghost danger" data-del="${a.rid}" aria-expanded="${C.del === a.rid}">${C.del === a.rid ? "Cancel delete" : "Delete restaurant"}</button></div>
+      ${C.del === a.rid ? delPanel(a) : ""}
       ${C.ext === a.rid ? extForm(a) : ""}
       ${C.edit === a.rid ? `<form class="vrow ownform" data-rid="${a.rid}" style="margin-top:8px"><input class="field" type="email" id="own-${a.rid}" placeholder="New owner's Google email" aria-label="New owner's Google email" value="${esc(a.ownerEmail)}"><button class="btn primary">Save owner</button></form>
         <p class="note">The new owner signs in with this Google account. The old owner loses access straight away. Managers stay.</p>` : ""}
       ${a.status === "suspended" && st.kind !== "suspended" ? "" : a.status === "active" && !st.live ? `<p class="note">Switched on but unpaid: record a payment to start it again.</p>` : ""}</article>`;
   }
+  // ----- Delete a restaurant completely (company only) -----
+  // Everything under restaurants/{rid} goes, plus diners' visits there. The account stays, marked
+  // "deleted", with its payment record (Wasabi's own accounts). Offer a full download first.
+  const SUBS = ["live", "photos", "admins", "secrets", "staff", "push", "tablekeys", "passes", "joins", "tables", "codes", "groups", "lines", "alerts", "sessions", "rung"];
+  const NOT_EXPORTED = ["secrets", "push", "passes", "joins", "codes", "tablekeys", "rung"];   // keys, device addresses, short-lived table passes
+  function delPanel(a) {
+    const busy = C.delStep;
+    return `<div class="delbox" style="margin-top:12px">
+      <b>Delete ${esc(a.name)} completely</b>
+      <p class="note" style="margin:4px 0 10px">This removes its menu, photos, look, tables, staff, every order, bill, call and guest name, and diners' visit history there. Its account and payment record stay on this page, marked Deleted. Printed QR codes stop working. <b>This can't be undone.</b></p>
+      <div class="row"><button class="btn" data-dlall="${a.rid}" ${busy ? "disabled" : ""}>Download everything (.json)</button><button class="btn" data-dlcsv="${a.rid}" ${busy ? "disabled" : ""}>Download all orders (.csv)</button></div>
+      <p class="note" style="margin:6px 0 12px">Keep the file somewhere safe: it holds guests' names. The .json file has everything; the .csv opens in Excel.</p>
+      <label class="flabel" for="delc-${a.rid}">Type <b>${esc(a.rid)}</b> to confirm</label>
+      <div class="vrow"><input class="field" id="delc-${a.rid}" autocomplete="off" autocapitalize="off" spellcheck="false" ${busy ? "disabled" : ""}>
+        <button class="btn danger" data-dodel="${a.rid}" disabled>Delete permanently</button></div>
+      ${busy ? `<p class="note" role="status">${esc(busy)}</p>` : ""}</div>`;
+  }
+  async function readAll(rid, withSecrets) {
+    const out = { exported: new Date().toISOString(), by: C.u.email, rid, account: null, payments: [], restaurant: null, collections: {}, visits: [] };
+    const acct = await getDoc(doc(db, "accounts", rid)); out.account = acct.exists() ? acct.data() : null;
+    out.payments = (await getDocs(collection(db, "accounts", rid, "payments"))).docs.map((d) => ({ id: d.id, ...d.data() }));
+    const r = await getDoc(doc(db, "restaurants", rid)); out.restaurant = r.exists() ? r.data() : null;
+    for (const c of SUBS) { if (!withSecrets && NOT_EXPORTED.includes(c)) continue; C.delStep = `Reading ${c}…`; render();
+      out.collections[c] = (await getDocs(collection(db, "restaurants", rid, c))).docs.map((d) => ({ id: d.id, ...d.data() })); }
+    out.visits = (await getDocs(query(collection(db, "visits"), where("rid", "==", rid)))).docs.map((d) => ({ id: d.id, ...d.data() }));
+    return out;
+  }
+  function saveFile(name, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type })), lk = document.createElement("a");
+    lk.href = url; lk.download = name; document.body.appendChild(lk); lk.click(); lk.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  const stamp = () => new Date().toISOString().slice(0, 10);
+  async function downloadAll(rid, csv) {
+    C.delStep = "Reading…"; render();
+    try {
+      const data = await readAll(rid, false);
+      if (!csv) { saveFile(`wasabi-${rid}-everything-${stamp()}.json`, JSON.stringify(data, null, 1), "application/json"); toast("Downloaded everything"); }
+      else {
+        const cell = (v) => { let t = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+        const when = (t) => (t ? new Date(t).toLocaleString("en-GB", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
+        const ls = (data.collections.lines || []).sort((x, y) => (x.t || 0) - (y.t || 0));
+        const rows = [["Ordered", "Table", "Guest", "Item", "Option", "Price (TSh)", "Station", "Added by", "Note", "Status", "Ready", "Served", "Visit"],
+          ...ls.map((l) => [when(l.t), l.table ? l.table : "Bar tab", l.pname || "", l.n, l.v || "", l.pr, STATIONS[l.st] || l.st || "", l.byName || "Diner", l.note || "", l.closedUnserved ? "Not served" : l.s, when(l.tReady), when(l.tServed), l.session || ""])];
+        saveFile(`wasabi-${rid}-orders-${stamp()}.csv`, "\ufeff" + rows.map((r) => r.map(cell).join(",")).join("\r\n"), "text/csv;charset=utf-8");
+        toast(`Downloaded ${ls.length} order line${ls.length === 1 ? "" : "s"}`);
+      }
+    } catch (e) { fail(e); }
+    C.delStep = ""; render();
+  }
+  async function deleteRestaurant(rid) {
+    const a = find(rid); if (!a) return;
+    let gone = 0; const step = (t) => { C.delStep = t; render(); };
+    try {
+      const refs = [];
+      for (const c of SUBS) { step(`Finding ${c}…`); (await getDocs(collection(db, "restaurants", rid, c))).docs.forEach((d) => refs.push(d.ref)); }
+      (await getDocs(query(collection(db, "visits"), where("rid", "==", rid)))).docs.forEach((d) => refs.push(d.ref));
+      // At most 400 deletes per batch (Firestore's limit is 500).
+      for (let i = 0; i < refs.length; i += 400) { const b = writeBatch(db); refs.slice(i, i + 400).forEach((r) => b.delete(r)); await b.commit(); gone += Math.min(400, refs.length - i); step(`Deleted ${gone} of ${refs.length}…`); }
+      const b = writeBatch(db); b.delete(doc(db, "restaurants", rid));
+      b.update(doc(db, "accounts", rid), { status: "deleted", deletedAt: Date.now(), deletedBy: C.u.email }); await b.commit();
+      C.del = null; C.delStep = ""; toast(`${a.name} deleted (${refs.length} records)`); return load();
+    } catch (e) { C.delStep = ""; fail(e); render(); }
+  }
+  document.addEventListener("input", (e) => { if (!e.target.id || !e.target.id.startsWith("delc-") || !C.ok) return;
+    const rid = e.target.id.slice(5), btn = document.querySelector(`[data-dodel="${CSS.escape(rid)}"]`); if (btn) btn.disabled = e.target.value.trim() !== rid; });
   // Custom extension: any number of days, or a chosen paid-until date, with or without a payment.
   const isoDay = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const extBase = (a) => Math.max(Date.now(), a.paidUntil || 0);
@@ -2662,9 +2731,10 @@ function companyScreen() {
         ${C.err ? `<p class="err">${esc(C.err)}</p>` : ""}</section>`);
     }
     const by = (k) => C.list.filter((a) => subState(a).kind === k);
-    const pending = by("pending"), overdue = by("grace"), stopped = [...by("expired"), ...by("suspended")];
-    const rest = C.list.filter((a) => subState(a).kind !== "pending").sort((a, b) => a.name.localeCompare(b.name));
-    const shown = C.filter === "overdue" ? overdue : C.filter === "stopped" ? stopped : rest;
+    const deleted = C.list.filter((a) => a.status === "deleted");
+    const pending = by("pending"), overdue = by("grace"), stopped = [...by("expired"), ...by("suspended")].filter((a) => a.status !== "deleted");
+    const rest = C.list.filter((a) => subState(a).kind !== "pending" && a.status !== "deleted").sort((a, b) => a.name.localeCompare(b.name));
+    const shown = C.filter === "overdue" ? overdue : C.filter === "stopped" ? stopped : C.filter === "deleted" ? deleted : rest;
     const live = C.list.filter((a) => subState(a).live).length;
     paint(`<section>
       <div class="kpis">
@@ -2675,7 +2745,7 @@ function companyScreen() {
       ${C.err ? `<p class="err">${esc(C.err)}</p>` : ""}
       ${pending.length ? `<div class="label">Waiting for approval</div><div class="grid">${pending.map(card).join("")}</div>` : ""}
       <div class="label">Restaurants</div>
-      <div class="row">${[["all", "All"], ["overdue", "Overdue"], ["stopped", "Stopped or paused"]].map(([k, l]) => `<button class="chip" data-filter="${k}" aria-pressed="${C.filter === k}">${l}</button>`).join("")}</div>
+      <div class="row">${[["all", "All"], ["overdue", "Overdue"], ["stopped", "Stopped or paused"], ...(deleted.length ? [["deleted", "Deleted"]] : [])].map(([k, l]) => `<button class="chip" data-filter="${k}" aria-pressed="${C.filter === k}">${l}</button>`).join("")}</div>
       <div class="grid" style="margin-top:10px">${shown.map(card).join("") || `<p class="note">None.</p>`}</div>
       <p class="note">Payments add a month or a year from the paid-until date (or from today if it has passed). Custom extension adds any number of days or sets a paid-until date, as a payment or free; each one is kept in the restaurant's payment record. After the paid-until date a restaurant keeps working for ${COMPANY.graceDays} days with a warning, then stops until paid. Pause stops it straight away. Nothing is ever deleted.</p>
       <div class="label">Add a restaurant yourself</div>
@@ -2724,6 +2794,12 @@ function companyScreen() {
         if (C.armed !== "sus" + d.sus) return arm("sus" + d.sus); C.armed = null;
         await updateDoc(acc(d.sus), { status: "suspended" }); toast(`${a.name} paused`); return load(); }
       if (d.own) { C.edit = C.edit === d.own ? null : d.own; return render(); }
+      if (d.del) { if (C.delStep) return; C.del = C.del === d.del ? null : d.del; return render(); }
+      if (d.dlall) return downloadAll(d.dlall, false);
+      if (d.dlcsv) return downloadAll(d.dlcsv, true);
+      if (d.dodel) { const i = $("#delc-" + d.dodel); if (!i || i.value.trim() !== d.dodel || C.delStep) return;
+        if (!(await askSure(`Delete ${find(d.dodel).name}?`, "Everything about this restaurant is removed for good. Have you downloaded what you need?", "Delete permanently", "Not yet"))) return;
+        return deleteRestaurant(d.dodel); }
       if (d.ext) { C.ext = C.ext === d.ext ? null : d.ext; render(); const i = $("#exd-" + d.ext); if (i) i.focus(); return; }
       if (d.deltm) { if (C.armed !== "tm" + d.deltm) return arm("tm" + d.deltm); C.armed = null; await deleteDoc(doc(db, "company", d.deltm)); toast("Removed"); return load(); }
     } catch (err) { fail(err); }

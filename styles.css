@@ -582,3 +582,6 @@ a.btn{color:inherit;text-decoration:none;display:inline-flex;align-items:center;
 .bar:hover .bf,.bar.on .bf,.bar:focus-visible .bf{filter:brightness(1.15);box-shadow:0 0 0 2px var(--fg)}
 @media (hover:none){.bar:hover .btip{display:none}.bar.on .btip{display:flex}}
 .bars{overflow-y:visible}
+/* Company page: Delete restaurant panel */
+.delbox{border:1.5px solid var(--crit);border-radius:12px;padding:14px;background:color-mix(in srgb,var(--crit) 6%,transparent)}
+.delbox .row{gap:8px}

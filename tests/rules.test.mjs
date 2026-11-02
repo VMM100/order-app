@@ -457,6 +457,21 @@ test("diners read only their own visits and profile", async () => {
   await assertFails(db.doc("diners/g2").get());
   await assertFails(db.doc("visits/c").set({ uid: "g1", rid: "r1", date: 1 }));
 });
+test("only the company team can read and delete everything under a restaurant", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("restaurants/r9/lines/l1").set({ n: "Beer", pr: 1000, t: 1 });
+    await ctx.firestore().doc("restaurants/r9/secrets/staff").set({ token: "x" });
+    await ctx.firestore().doc("restaurants/r9/rung/a-1").set({ t: 1 });
+  });
+  const stranger = env.authenticatedContext("s9", { email: "s9@example.com", email_verified: true }).firestore();
+  await assertFails(stranger.doc("restaurants/r9/lines/l1").delete());
+  await assertFails(stranger.doc("restaurants/r9/secrets/staff").get());
+  await assertFails(owner().doc("restaurants/r9/rung/a-1").delete());
+  await assertSucceeds(boss().doc("restaurants/r9/secrets/staff").get());
+  await assertSucceeds(boss().doc("restaurants/r9/rung/a-1").get());
+  await assertSucceeds(boss().doc("restaurants/r9/lines/l1").delete());
+  await assertSucceeds(boss().doc("restaurants/r9/rung/a-1").delete());
+});
 test("a linked WhatsApp number must look like one, and a diner can't mark it checked", async () => {
   const db = env.authenticatedContext("w1", { email: "w1@example.com" }).firestore();
   await assertSucceeds(db.doc("diners/w1").set({ name: "Neema" }));
