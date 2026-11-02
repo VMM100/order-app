@@ -1640,7 +1640,7 @@ function waiterScreen(boss) {
     } else pick = "";
     // ☰: the shift, sound test and other waiters' tables. Table cards and their buttons stay on the page.
     const othersList = S.groups.filter((g) => g.waiter && g.waiter !== S.me);
-    $("#sub").textContent = S.me && !boss ? `${wname(S.me)} · on shift` : "Waiter";
+    $("#sub").textContent = S.me && !boss ? wname(S.me) : "Waiter";
     setMenu(!S.me ? [] : [
       ...(!boss ? [{ html: `<b>${esc(wname(S.me))}</b><br>On shift since ${hhmm(S.since)}` },
         { label: S.endArmed ? "Tap again to end your shift" : "End shift", sub: S.endArmed ? "" : "Your tables stay yours until handed over", danger: true, keep: !S.endArmed,
