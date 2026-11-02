@@ -28,6 +28,7 @@
   .doc{max-width:720px;margin:0 auto;padding:40px var(--gut) 64px}
   .doc h1{font-size:clamp(34px,7vw,48px)}
   .doc .upd{color:var(--muted);margin-top:10px}
+  .doc .fill{background:#fff4d6;color:#3d3312;border-radius:4px;padding:0 4px}
   .doc h2{font-size:24px;margin:40px 0 10px}
   .doc h3{font-size:18px;margin:22px 0 6px}
   .doc p,.doc li{color:var(--text);line-height:1.65}
@@ -50,7 +51,7 @@
 
 <main class="doc">
   <h1>Privacy policy</h1>
-  <p class="upd">Last updated: 30 October 2026</p>
+  <p class="upd">Last updated: 3 November 2026</p>
 
   <div class="box">
     <p><b>In short:</b> Wasabi lets you order at a restaurant table from your phone and split the bill. You don't need an account to order. We only keep what's needed to run your table, your restaurant and, if you sign in, your history. We don't sell your information, we don't show ads, and restaurants only see your visits to them.</p>
@@ -90,13 +91,14 @@
     <li>Your name as you'd like restaurants to see it.</li>
     <li>A history of your visits: the restaurant, date, table, what you ordered and your share of the bill.</li>
     <li>Your choices about WhatsApp offers from each restaurant, with the date of each choice.</li>
+    <li>If you sign in with Google and want offers, the WhatsApp number you add. We don't use it for offers until we've confirmed it's yours.</li>
   </ul>
   <h3>If you run or work at a restaurant</h3>
   <ul>
     <li>Owners and managers: Google account email, and for new restaurants the details given when registering (restaurant name, contact name, phone number, area and number of tables).</li>
     <li>Waiters: the name the owner or manager enters, and a 4-digit PIN used to start a shift.</li>
     <li>The restaurant's menu, prices, photos, logo, colours, table setup, and records of orders and service times used for its dashboard.</li>
-    <li>Subscription records: plan, payment dates and the date the restaurant is paid until.</li>
+    <li>Subscription records: plan, payment dates and the date the restaurant is paid until, and the account notices we email to the owner.</li>
   </ul>
   <p>We don't collect payment card details. Diners pay the restaurant directly, as they normally would.</p>
 
@@ -114,7 +116,7 @@
     <li><b>The restaurant you're at</b> sees your first name, your orders and your table's activity, so its staff can serve you. If you're signed in, it can see your visits to it, but never your visits to other restaurants.</li>
     <li><b>Other people at your table</b> see your first name, what you ordered and your share of the bill.</li>
     <li><b>Wasabi</b> can see restaurant account and subscription records, and can see other information when needed to help a restaurant, fix a problem or keep the service secure.</li>
-    <li><b>Our service providers:</b> Wasabi runs on Google Firebase (Google LLC), which stores the data in Johannesburg, South Africa and handles sign-in, including sending SMS codes; Cloudflare (Cloudflare, Inc.), which runs the service that rings waiters' phones; and GitHub Pages (GitHub, Inc.), which hosts the website. These providers process data on our behalf and may store or handle it outside Tanzania.</li>
+    <li><b>Our service providers:</b> Wasabi runs on Google Firebase (Google LLC), which stores the data in Johannesburg, South Africa and handles sign-in, including sending SMS codes; Cloudflare (Cloudflare, Inc.), which runs the service that rings waiters' phones; GitHub Pages (GitHub, Inc.), which hosts the website; and <span class="fill">[email service provider]</span>, which sends account notices to restaurant owners. These providers process data on our behalf and may store or handle it outside Tanzania.</li>
     <li><b>The authorities</b>, if the law requires it.</li>
   </ul>
   <p>We don't sell personal information and we don't use it for advertising.</p>
@@ -132,9 +134,10 @@
 
   <h2 id="keep">8. How long we keep it</h2>
   <ul>
-    <li>Signed-in diners: your profile, visits and offer choices are kept until you delete your account.</li>
-    <li>Table and order records: kept so restaurants can see their sales and service history. Orders made without signing in are linked only to a first name and a random phone identifier. After 30 days, the first name is replaced with "Guest".</li>
-    <li>Restaurant accounts: kept while the restaurant uses Wasabi, and afterwards for as long as needed for accounting and legal reasons.</li>
+    <li>Signed-in diners: your profile, visits and offer choices are kept until you delete your account. A WhatsApp number you add is kept until you remove it or delete your account.</li>
+    <li>Table and order records: kept so restaurants can see their sales and service history. Orders made without signing in are linked only to a first name and a random phone identifier. After 30 days, the first name is replaced with "Guest". Order records are deleted after 12 months, keeping only totals without names.</li>
+    <li>When a restaurant leaves Wasabi: its records are kept for 90 days so it can come back, then deleted. This includes signed-in diners' visit history at that restaurant. The restaurant's setup (menu, photos, look, tables and waiters' names, with no diners' details) is kept for 2 years so it can come back without setting up again, unless it asks us to delete it sooner.</li>
+    <li>Restaurant accounts: the restaurant's name, the owner's contact details, invoices, payments and the notices we sent are kept for at least 5 years after the year they relate to, as Tanzanian tax law requires.</li>
   </ul>
 
   <h2 id="rights">9. Your choices and rights</h2>
