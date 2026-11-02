@@ -2602,8 +2602,8 @@ function companyScreen() {
       <p class="note" style="margin:0">Now paid until <b>${a.paidUntil ? day(a.paidUntil) : "not set"}</b>. Extra days count from ${a.paidUntil > Date.now() ? "that date" : "today"}.</p>
       <div class="vrow"><label class="note" for="exd-${r}" style="margin:0">Add days</label><input class="field num" id="exd-${r}" inputmode="numeric" maxlength="4" placeholder="e.g. 14"></div>
       <div class="vrow"><label class="note" for="exu-${r}" style="margin:0">or paid until</label><input class="field" type="date" id="exu-${r}" min="${isoDay(Date.now() + DAY)}"></div>
-      <div class="vrow"><label class="note" for="exa-${r}" style="margin:0">Amount received, TSh (0 if free)</label><input class="field num" id="exa-${r}" inputmode="numeric" value="0"></div>
-      <input class="field" id="exn-${r}" maxlength="120" placeholder="Note, e.g. free week for the launch" aria-label="Note (optional)">
+      <div class="vrow"><label class="note" for="exa-${r}" style="margin:0">Received, TSh</label><input class="field num" id="exa-${r}" inputmode="numeric" value="0" aria-describedby="exh-${r}"></div><p class="note" id="exh-${r}" style="margin:-4px 0 0">Leave 0 for a free extension.</p>
+      <input class="field" id="exn-${r}" maxlength="120" placeholder="Note (optional)" aria-label="Note (optional)">
       <button class="btn primary" id="exb-${r}" disabled>Choose days or a date</button></form>`;
   }
   // Work out the new date from whichever box was typed in, and keep the other box and the button in step.
