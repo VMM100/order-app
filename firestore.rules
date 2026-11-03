@@ -417,6 +417,62 @@ service cloud.firestore {
         allow create: if isStaff();
         allow update, delete: if boss(rid);
       }
+
+      // ---------- kitchen and bar printers (the print box at the restaurant) ----------
+      // printers/{pid}: set up by the owner or a manager. A staff screen (the bar) may only switch a
+      // printer on or off. printstatus/{pid}: the print box reports whether each printer answers.
+      // printed/{batch_pid}: one record per ticket printed, so nothing prints twice. printq/{id}: reprint,
+      // test and catch-up requests the print box carries out. printlog/{id}: what happened, write-once.
+      function validPrinter(d) {
+        return d.keys().hasOnly(['name', 'ip', 'port', 'stations', 'width', 'on', 'offAt', 'offBy', 'offReason', 'since', 'updated'])
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 40
+          && d.ip is string && d.ip.matches('^[0-9]{1,3}([.][0-9]{1,3}){3}$')
+          && d.port is int && d.port > 0 && d.port < 65536
+          && d.stations is list && d.stations.size() <= 6
+          && d.width in [58, 80] && d.on is bool;
+      }
+      function printSwitch(d) {
+        return d.diff(resource.data).affectedKeys().hasOnly(['on', 'offAt', 'offBy', 'offReason', 'since', 'updated'])
+          && d.on is bool && (d.get('offReason', null) == null || (d.offReason is string && d.offReason.size() <= 60))
+          && (d.get('offBy', null) == null || (d.offBy is string && d.offBy.size() <= 40));
+      }
+      match /printers/{pid} {
+        allow read: if isStaff();
+        allow create: if boss(rid) && validPrinter(request.resource.data);
+        allow update: if (boss(rid) && validPrinter(request.resource.data))
+          || (live(rid) && isStaffPhone() && printSwitch(request.resource.data));
+        allow delete: if boss(rid);
+      }
+      match /printstatus/{pid} {
+        allow read: if isStaff();
+        allow write: if live(rid) && isStaffPhone()
+          && request.resource.data.keys().hasOnly(['ok', 'err', 't', 'box', 'waiting'])
+          && request.resource.data.ok is bool && request.resource.data.t is int;
+      }
+      match /printed/{id} {
+        allow read: if isStaff();
+        allow create: if live(rid) && isStaffPhone()
+          && request.resource.data.keys().hasOnly(['batch', 'pid', 't', 'kind'])
+          && request.resource.data.batch is string && request.resource.data.pid is string && request.resource.data.t is int;
+        allow update: if false;
+      }
+      match /printq/{id} {
+        allow read: if isStaff();
+        allow create: if isStaff()
+          && request.resource.data.keys().hasOnly(['batch', 'pid', 'kind', 't', 'by', 'from'])
+          && request.resource.data.kind in ['reprint', 'test', 'catchup']
+          && request.resource.data.pid is string && request.resource.data.t is int;
+        allow delete: if isStaff();
+        allow update: if false;
+      }
+      match /printlog/{id} {
+        allow read: if isStaff();
+        allow create: if isStaff()
+          && request.resource.data.keys().hasOnly(['pid', 'ev', 'by', 'reason', 't', 'n'])
+          && request.resource.data.ev in ['on', 'off', 'offline', 'online', 'reprint', 'test', 'catchup', 'skipped', 'added', 'changed', 'removed']
+          && request.resource.data.t is int;
+        allow update, delete: if false;
+      }
     }
 
     // ---------- diner accounts (shared across restaurants) ----------
