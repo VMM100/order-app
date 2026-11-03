@@ -457,6 +457,42 @@ test("diners read only their own visits and profile", async () => {
   await assertFails(db.doc("diners/g2").get());
   await assertFails(db.doc("visits/c").set({ uid: "g1", rid: "r1", date: 1 }));
 });
+// ---------- kitchen and bar printers ----------
+const PRINTER = { name: "Bar printer", ip: "192.168.1.50", port: 9100, stations: ["bar"], width: 80, on: true, updated: 1 };
+test("owner and manager set up printers; staff screens can only switch them on or off; diners can't see them", async () => {
+  await assertSucceeds(owner().doc(`${R}/printers/p1`).set(PRINTER));
+  await assertSucceeds(manager().doc(`${R}/printers/p2`).set({ ...PRINTER, name: "Kitchen printer", ip: "192.168.1.51", stations: ["kitchen", "grill"] }));
+  await assertFails(owner().doc(`${R}/printers/p3`).set({ ...PRINTER, ip: "printer.example.com" }));        // an IP address only
+  await assertFails(owner().doc(`${R}/printers/p3`).set({ ...PRINTER, width: 72 }));
+  await assertFails(diner("d9").doc(`${R}/printers/p1`).get());
+  const st = await staffPhone("sp1");
+  await assertSucceeds(st.doc(`${R}/printers/p1`).get());
+  await assertSucceeds(st.doc(`${R}/printers/p1`).update({ on: false, offAt: 5, offBy: "Bar screen", offReason: "Out of paper", updated: 5 }));
+  await assertFails(st.doc(`${R}/printers/p1`).update({ ip: "10.0.0.9" }));                                  // can't redirect tickets
+  await assertFails(st.doc(`${R}/printers/p1`).set({ ...PRINTER, ip: "10.0.0.9" }));
+  await assertFails(st.doc(`${R}/printers/p9`).set(PRINTER));                                                // can't add printers
+  await assertFails(st.doc(`${R}/printers/p1`).delete());
+});
+test("the print box reports status and marks tickets printed; the print log is write-once", async () => {
+  await assertSucceeds(owner().doc(`${R}/printers/p1`).set(PRINTER));
+  const st = await staffPhone("box1");
+  await assertSucceeds(st.doc(`${R}/printstatus/p1`).set({ ok: false, err: "not responding", t: 1, box: "pi", waiting: 2 }));
+  await assertFails(st.doc(`${R}/printstatus/p1`).set({ ok: "yes", t: 1 }));
+  await assertSucceeds(st.doc(`${R}/printed/b1_p1`).set({ batch: "b1", pid: "p1", t: 1, kind: "order" }));
+  await assertFails(st.doc(`${R}/printed/b1_p1`).update({ t: 2 }));
+  await assertSucceeds(st.doc(`${R}/printq/q1`).set({ batch: "b1", pid: "p1", kind: "reprint", t: 1, by: "Bar screen" }));
+  await assertFails(st.doc(`${R}/printq/q2`).set({ pid: "p1", kind: "print anything", t: 1 }));
+  await assertSucceeds(st.doc(`${R}/printq/q1`).delete());
+  await assertSucceeds(st.doc(`${R}/printlog/l1`).set({ pid: "p1", ev: "off", by: "Bar screen", reason: "Out of paper", t: 1 }));
+  await assertFails(st.doc(`${R}/printlog/l1`).update({ reason: "changed" }));
+  await assertFails(st.doc(`${R}/printlog/l1`).delete());
+  await assertFails(owner().doc(`${R}/printlog/l1`).delete());
+  const d = diner("d8");
+  await assertFails(d.doc(`${R}/printed/b1_p1`).set({ batch: "b1", pid: "p1", t: 1, kind: "order" }));
+  await assertFails(d.doc(`${R}/printq/q3`).set({ batch: "b1", pid: "p1", kind: "reprint", t: 1 }));
+  await assertFails(d.doc(`${R}/printstatus/p1`).set({ ok: true, t: 1 }));
+  await assertFails(d.doc(`${R}/printlog/l2`).set({ pid: "p1", ev: "on", t: 1 }));
+});
 test("only the company team can read and delete everything under a restaurant", async () => {
   await env.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc("restaurants/r9/lines/l1").set({ n: "Beer", pr: 1000, t: 1 });
