@@ -23,6 +23,19 @@ outside addresses listed under "Loaded from Google".
 ## In the ring service (worker/ring.js)
 No outside code.
 
+## In the print box (bridge/, runs on a small computer at the restaurant; never on phones or the website)
+Pinned in bridge/package.json and bridge/package-lock.json (every file fingerprinted); installed with
+`npm ci --ignore-scripts` (no install scripts run).
+
+| Package | Version | Used for |
+|---|---|---|
+| firebase | 13.0.0 (same version as the website) | Signing in like a staff phone and watching that restaurant's orders |
+
+Known advisories (3 Nov 2026, npm audit): 4 high, all from @grpc/grpc-js inside firebase (server-side issues:
+error messages sent by a gRPC *server*, and a *server's* client-certificate check). The print box is only a
+client, so neither applies; npm's suggested "fix" is a downgrade to firebase 9. Recheck with each update.
+Everything else in bridge/ is our own code using Node's built-in modules (net, fs, os).
+
 ## Only on GitHub's machines (checks and publishing; never sent to phones)
 Pinned in package.json and package-lock.json (every file fingerprinted); GitHub's own steps are pinned to
 commit fingerprints in .github/workflows/publish.yml.

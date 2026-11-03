@@ -57,6 +57,8 @@ restaurant's offers.
 | Data | Kept | Then |
 | --- | --- | --- |
 | Guest diners' first names at tables (on orders, calls, tables, bar tabs, join requests) | **30 days** (since 29 Oct 2026) | Replaced with "Guest 1", "Guest 2"…; join requests deleted. Runs from the owner's or manager's phone when the owner page opens (at most daily, `live/retention` marks progress); moves to the scheduled job when it's built |
+| Paper kitchen and bar tickets (guest's first name, table, items) | **End of the night** | Staff bin them at closing. The print box never stores tickets; it records only which orders were printed (`printed`, ids and times) |
+| Printer log (`printlog`: switched on/off with reason and screen, stopped/started responding, reprints, test prints) | With the restaurant's other records (12 months, or until the restaurant is deleted) | Write-once by rule: nobody can edit or delete entries except the company's *Delete restaurant* |
 | Guest diners' orders and bills (without names after 30 days) | **12 months** | Deleted; restaurants keep totals (sales, counts) |
 | Diner accounts, visits, consents | Until the diner deletes the account | *Delete my account and data* removes profile, visits and consents |
 | Consent records after an account is deleted | Deleted with the account | (we keep no contact details, so no offers can be sent) |

@@ -1,0 +1,23 @@
+# Starts the Wasabi print box when the computer starts, and restarts it if it ever stops.
+# Installed by install.sh as /etc/systemd/system/wasabi-print-box.service
+[Unit]
+Description=Wasabi print box (kitchen and bar tickets)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=wasabi
+WorkingDirectory=/opt/wasabi-print-box
+ExecStart=/usr/bin/node /opt/wasabi-print-box/print-box.js
+Restart=always
+RestartSec=5
+# Keep the program boxed in: it only needs the network and its own folder.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/wasabi-print-box
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

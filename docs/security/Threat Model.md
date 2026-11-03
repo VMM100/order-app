@@ -14,6 +14,7 @@ new feature adds an entry point, and after any incident.
 | Owner/manager/company pages | Restaurant admins, Wasabi |
 | File uploads: menu template (.csv/.xlsx), logo, photos | Owners, managers |
 | Ring service (`wasabi-ring*.workers.dev`) | Any phone (it's public) |
+| Print box at the restaurant (bridge/, signs in with the staff code) and the network printers (port 9100) | The restaurant; anyone on its local network can reach the printers |
 | Push notifications (FCM) | Staff phones |
 | The publishing pipeline (GitHub Actions, secrets) | Vandan, Claude, Dependabot pull requests |
 | Outside code (Firebase SDK, vendor/ libraries, CI tools) | Their authors and hosts |
@@ -46,6 +47,7 @@ Cloudflare token · the live site and its reputation · restaurants' trust durin
 | R16 | **Legal: data stored abroad without permit** | Operating without PDPC registration/permit | — | Register with PDPC and get the transfer permit before launch |
 | R17 | **Phishing diners with a fake "Wasabi" page** | Fake QR stickers on tables | Branded QR codes; scanner only opens Wasabi links | Teach restaurants to check cards; tamper-evident stands |
 | R18 | **Live demo used to reach real data** | Demo room access | Demo data lives under `demo/{room}` only; rules forbid demo users anything else; company-only room start | — |
+| R19 | **Print box misuse** (fake or flooded tickets, leaked staff code) | Stolen `config.json`; someone on the restaurant's Wi-Fi sending to port 9100 | The box holds only the staff code (reads orders, writes print status, printed records and the write-once log; can't change orders, prices or settings; no diner accounts); outgoing connections only; runs as its own locked-down user; printers listed by IP by the owner, staff screens can't change addresses (rules + tests) | Put printers and the box on a staff-only network, not guest Wi-Fi; new staff codes if the box is lost |
 
 ## 4. Review
 

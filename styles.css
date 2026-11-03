@@ -605,3 +605,4 @@ a.btn{color:inherit;text-decoration:none;display:inline-flex;align-items:center;
 .pst{border:0;padding:0;margin:0;display:grid;gap:4px}.pst legend{padding:0;margin-bottom:4px}
 .pcfg{white-space:pre-wrap;word-break:break-all;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px}
 details.pbox summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+details.pbox summary::before{content:"▸";margin-right:8px}details.pbox[open] summary::before{content:"▾"}
