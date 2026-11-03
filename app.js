@@ -16,6 +16,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import morphdom from "./vendor/morphdom-esm.js";
 import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "./menu.js";
+import { watchPrinters, stripHtml, switchOff, switchOn, reprint, canReprint, settingsHtml, recentLog, logCsv, readForm, savePrinter, removePrinter, testPrint } from "./printers.js";
 import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "./account.js";
 import { computeMetrics } from "./metrics.js";
 import { genericPhoto } from "./photos.js";
@@ -1415,6 +1416,10 @@ function stationScreen(st) {
   window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st]; document.title = STATIONS[st] + " · " + rname();
   const S = { lines: [], groups: {}, all: [] }; const notify = watcher();
+  // Kitchen and bar printers: status on every station screen; the bar screen can switch them on and off.
+  let PR = { printers: [], status: {} }, choosing = null;
+  const canSwitch = st === "bar", SCREEN = `${STATIONS[st]} screen`;
+  watchPrinters(RID, (x) => { PR = x; render(); });
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => {
     S.loaded = true; S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
     notify(S.lines.filter((l) => l.s === "new").map((l) => l.batch)); render();
@@ -1435,11 +1440,12 @@ function stationScreen(st) {
         <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}${!oneNote && l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}</span>${l.s === "ready"
           ? `<span class="pill s-ready">Ready</span>` : l.s === "new" ? "" : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">${tab ? "Done" : "Ready"}</button>`}</li>`).join("")}</ul>${oneNote ? `<div class="nt">${esc(oneNote)}</div>` : ""}
         <div class="acts"><span class="pill s-${s}">${s === "ready" ? "Waiting for waiter" : s === "new" ? "New" : "Preparing"}</span>${s === "new" ? `<button class="btn primary" data-adv="${b}" data-to="preparing">Start</button>` : ""}
-          ${bl.filter((l) => l.s !== "ready").length > 1 ? `<button class="btn primary" data-adv="${b}" data-to="ready">All ready</button>` : ""}</div></article>`;
+          ${bl.filter((l) => l.s !== "ready").length > 1 ? `<button class="btn primary" data-adv="${b}" data-to="ready">All ready</button>` : ""}
+          ${canReprint(PR, st) ? `<button class="btn ghost small" data-reprint="${b}">Reprint</button>` : ""}</div></article>`;
     });
     setMenu([{ html: `<b>${esc(STATIONS[st])} screen</b><br>${esc(rname())}. Orders for the ${esc(STATIONS[st].toLowerCase())} appear here.` },
       ...(audio ? [{ label: "Test sound", sub: "Alerts are on", keep: true, run: beep }] : [])]);
-    paint(soundBar() + tabsHtml() + (!S.loaded ? skTickets(4) : tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
+    paint(soundBar() + stripHtml(PR, { station: st, canSwitch, choosing, esc }) + tabsHtml() + (!S.loaded ? skTickets(4) : tix.length ? `<section class="grid">${tix.join("")}</section>` : `<p class="empty">No open orders for the ${STATIONS[st]}.</p>`));
   }
   // ----- bar counter: named tabs for walk-up customers (bar screen only) -----
   const T = { open: false, naming: false, bill: null, confirm: null, lines: [] };
@@ -1490,6 +1496,16 @@ function stationScreen(st) {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
     if (d.act === "sound") { await enableSound(); render(); }
     if (d.act === "testsound") beep();
+    // Printers: switch off (pick a reason) or on (asks about missed tickets), reprint one order.
+    try {
+      if (d.pswitch && canSwitch) { const p = PR.printers.find((x) => x.id === d.pswitch); if (!p) return;
+        if (p.on !== false) { choosing = choosing === p.id ? null : p.id; return render(); }
+        b.disabled = true; if (await switchOn(RID, p, PR.status[p.id], SCREEN)) toast(`${p.name} is on`); b.disabled = false; return; }
+      if (d.poff && canSwitch) { const p = PR.printers.find((x) => x.id === d.poff); choosing = null; if (!p) return render();
+        await switchOff(RID, p, d.reason, SCREEN); toast(`${p.name} is off. Orders still show here.`); return; }
+      if (d.pcancel) { choosing = null; return render(); }
+      if (d.reprint) { b.disabled = true; const n = await reprint(RID, PR, d.reprint, st, SCREEN); toast(n ? "Reprinting…" : "No printer is on for this station"); b.disabled = false; return; }
+    } catch (err) { b.disabled = false; fail(err); return; }
     if (d.adv) { b.disabled = true; const batch = writeBatch(db);
       const now = Date.now();
       const moving = S.lines.filter((l) => l.batch === d.adv && (d.to === "preparing" ? l.s === "new" : l.s !== "ready"));
@@ -1905,6 +1921,12 @@ function setupScreen(role) {
   const link = (h, l) => `<div><div class="note" style="margin:0">${l}</div><a href="${h}">${esc(h)}</a></div>`;
   let rot = false, keys = {}, staffTok = null, rotStaff = false, rekey = null;
   const unlocked = true;   // only owners and managers reach this screen (see adminGate)
+  // Kitchen and bar printers (see printers.js): live status, add / edit / remove, test print, the log.
+  let PR = { printers: [], status: {} }, pEdit = null, pLog = null, pArmed = null, pErr = "";
+  const ME = () => (auth.currentUser && auth.currentUser.email) || (role === "owner" ? "Owner" : "Manager");
+  const loadLog = () => recentLog(RID).then((r) => { pLog = r; render(); }).catch(() => { pLog = []; render(); });
+  // While a printer form is open, don't redraw on status updates (it would wipe what's being typed).
+  watchPrinters(RID, (x) => { PR = x; if (!pEdit) render(); }); loadLog();
   // The staff link's secret token. Phones that opened the link stay signed in until it is replaced.
   const staffRef = rdoc("secrets", "staff");
   async function loadStaff(rotate) {
@@ -1940,6 +1962,7 @@ function setupScreen(role) {
       <p class="note">Each waiter scans the <b>Waiter</b> code once with their own phone. After that they start each shift with their name and PIN (set the PINs under Owner → Staff). The kitchen, bar and grill phones scan their own code once. Keep these codes away from guests.</p>
       <p class="note">If a phone is lost or someone leaves, make new staff codes: every staff phone is signed out and scans again.</p>
       <button class="btn" data-act="rotstaff">${rotStaff ? "Tap again: every staff phone must scan again" : "Make new staff codes"}</button>
+      ${settingsHtml(PR, { stations: STATIONS, edit: pEdit, logRows: pLog, esc, staffTok, rid: RID, armed: pArmed })}${pErr ? `<p class="err" role="alert">${esc(pErr)}</p>` : ""}
       <div class="label">Owner and manager pages</div>
       <div class="links">${IS_CO ? link(BASE + "demo/", "Live demo (company only): one QR code, everyone picks a role, separate from this restaurant") : ""}${link(BASE + "?r=" + RID + "#owner", "Owner (dashboard, menu, look, staff)")}${link(BASE + "?r=" + RID + "#manager", "Manager (menu and staff)")}</div>
       <p class="note">These open with the owner's or a manager's Google sign-in. The owner adds managers under Owner → Staff.</p></section>`);
@@ -1966,6 +1989,22 @@ function setupScreen(role) {
     if (ot && ot.dataset.otab !== "tables") { try { sessionStorage.setItem("dees-otab", ot.dataset.otab); } catch {} location.href = `${BASE}?r=${RID}#${role}`; return; }
     const pr = e.target.closest("button[data-act=print]");
     if (pr) { printCards(); return; }
+    // Printers
+    const pb = e.target.closest("button[data-pswitch],button[data-pedit],button[data-pdel],button[data-ptest],button[data-pcopy],button[data-plogcsv]");
+    if (pb) { const d = pb.dataset; pErr = "";
+      try {
+        if (d.pswitch != null) { const p = PR.printers.find((x) => x.id === d.pswitch); if (!p) return;
+          if (p.on !== false) { await switchOff(RID, p, "Switched off on the owner page", ME()); toast(`${p.name} is off`); }
+          else if (await switchOn(RID, p, PR.status[p.id], ME())) toast(`${p.name} is on`);
+          return loadLog(); }
+        if (d.pedit != null) { pEdit = d.pedit || null; return render(); }
+        if (d.pdel) { if (pArmed !== "pdel" + d.pdel) { pArmed = "pdel" + d.pdel; render(); setTimeout(() => { if (pArmed === "pdel" + d.pdel) { pArmed = null; render(); } }, 4000); return; }
+          pArmed = null; await removePrinter(RID, d.pdel, ME()); toast("Printer removed"); return loadLog(); }
+        if (d.ptest) { await testPrint(RID, d.ptest, ME()); toast("Test ticket sent to the print box"); setTimeout(loadLog, 8000); return; }
+        if (d.pcopy) { const t = document.querySelector(".pcfg"); try { await navigator.clipboard.writeText(t ? t.textContent : ""); toast("Print box settings copied"); } catch { toast("Select the text and copy it"); } return; }
+        if (d.plogcsv) { const url = URL.createObjectURL(new Blob([await logCsv(RID, PR)], { type: "text/csv;charset=utf-8" })), a = document.createElement("a");
+          a.href = url; a.download = `${RID}-printer-log.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); return; }
+      } catch (err) { fail(err); } return; }
     const rk = e.target.closest("button[data-rekey]");
     if (rk) { const n = +rk.dataset.rekey;
       if (rekey !== n) { rekey = n; render(); setTimeout(() => { if (rekey === n) { rekey = null; render(); } }, 4000); return; }
@@ -1983,6 +2022,14 @@ function setupScreen(role) {
     const r = e.target.closest("button[data-act=rotate]");
     if (r && unlocked) { if (!rot) { rot = true; render(); setTimeout(() => { rot = false; render(); }, 4000); return; }
       rot = false; keys = {}; render(); await loadKeys(true); toast("New QR codes made. Reprint them for the tables."); return; }
+  });
+  // Add or edit a printer.
+  document.addEventListener("submit", async (e) => {
+    const f = e.target.closest("form.pform"); if (!f) return; e.preventDefault();
+    const r = readForm(f, STATIONS); if (r.err) { pErr = r.err; return render(); }
+    pErr = "";
+    try { await savePrinter(RID, r.id, r.data, ME()); pEdit = null; toast(r.id ? "Printer saved" : "Printer added. Use Test print once the print box is set up."); loadLog(); }
+    catch (err) { fail(err); }
   });
   render();
   loadKeys(false); loadStaff(false);
