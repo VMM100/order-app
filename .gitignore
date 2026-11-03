@@ -9,3 +9,6 @@ tail.txt
 *.pem
 *service-account*.json
 .dev.vars
+
+# The print box settings hold the restaurant's staff code
+bridge/config.json

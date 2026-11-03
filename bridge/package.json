@@ -1,0 +1,10 @@
+{
+  "name": "wasabi-print-box",
+  "private": true,
+  "description": "Prints Wasabi kitchen and bar tickets on the restaurant's network printers.",
+  "type": "module",
+  "main": "print-box.js",
+  "scripts": { "start": "node print-box.js", "fake-printer": "node fake-printer.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "firebase": "13.0.0" }
+}
