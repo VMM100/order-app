@@ -38,7 +38,12 @@
 <script>
   // One address, two things: a link with a restaurant or screen in it (?r=…, #owner, #company…) opens the
   // app; the bare address (wasabi.co.tz) shows the landing page. Each loads only its own styles and code.
-  window.IS_APP = !!(location.search.length > 1 || location.hash.length > 1);
+  // Only real app links count: a #screen, or one of the app's own link parts with a value (restaurant,
+  // table, key, friend's code, staff token, seat, chooser, name). Anything else, like an empty "?r" or the
+  // tracking tags social apps add to shared links (?fbclid=…, ?utm_source=…), shows the front page.
+  window.wasabiIsApp = () => { const q = new URLSearchParams(location.search);
+    return location.hash.length > 1 || ["r", "t", "k", "c", "s", "as", "choose", "name"].some((k) => q.get(k)); };
+  window.IS_APP = wasabiIsApp();
   window.addEventListener("pagehide", () => { try { sessionStorage.setItem("wasabi-been", "1"); } catch {} });
   // Before launch, the front page on wasabi.co.tz just says "Coming soon"; the staging site keeps the full
   // landing page to work on. Every app link (?r=…, #account, #owner, #company, /demo/) works as usual.
@@ -61,7 +66,7 @@
   // than one file discovering the next (the sign-in page used to wait on that chain).
   // From the landing page, a link to an app screen (#signup, #owner…) loads the app.
   // Going back from an app screen to the bare address shows the landing page again, and the other way round.
-  addEventListener("hashchange", () => { const app = location.search.length > 1 || location.hash.length > 1; if (app !== IS_APP) location.reload(); });
+  addEventListener("hashchange", () => { if (wasabiIsApp() !== IS_APP) location.reload(); });
 </script>
 <style>html.is-home #wrap,html.is-home #cart,html.is-home #toast,html.is-home #recaptcha{display:none!important}html.is-app #home{display:none!important}</style>
 </head>

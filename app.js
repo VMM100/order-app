@@ -336,7 +336,8 @@ function applyBrand() {
   // the demo restaurant's name as a stand-in.
   const h = $("#brandname"); if (h && RID) h.textContent = BRAND.name || (RID === RESTAURANT_ID ? RESTAURANT : h.textContent);
   const lg = $("#brandlogo"); if (lg) { if (BRAND.logo) { lg.dataset.photo = BRAND.logo; lg.hidden = false; delete lg.dataset.phDone; hydratePhotos(); } else { lg.hidden = true; lg.removeAttribute("src"); } }
-  document.title = (document.title.includes("·") ? document.title.split("·")[0] + "· " : "") + (BRAND.name || RESTAURANT);
+  // No restaurant in the link: never show the demo restaurant's name as a stand-in.
+  document.title = (document.title.includes("·") ? document.title.split("·")[0] + "· " : "") + (RID ? BRAND.name || RESTAURANT : "Wasabi");
 }
 const rname = () => BRAND.name || RESTAURANT;
 
