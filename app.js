@@ -2624,7 +2624,7 @@ function companyScreen() {
         <button class="btn ghost" data-own="${a.rid}">Change owner</button>
         <a class="btn ghost" href="${BASE}?r=${esc(a.rid)}#owner">Open</a>
         <a class="btn ghost" href="${BASE}demo/">Live demo</a>
-        <button class="btn ghost danger" data-del="${a.rid}" aria-expanded="${C.del === a.rid}">${C.del === a.rid ? "Cancel delete" : "Delete restaurant"}</button></div>
+        ${DELETE_ON ? `<button class="btn ghost danger" data-del="${a.rid}" aria-expanded="${C.del === a.rid}">${C.del === a.rid ? "Cancel delete" : "Delete restaurant"}</button>` : ""}</div>
       ${C.del === a.rid ? delPanel(a) : ""}
       ${C.ext === a.rid ? extForm(a) : ""}
       ${C.edit === a.rid ? `<form class="vrow ownform" data-rid="${a.rid}" style="margin-top:8px"><input class="field" type="email" id="own-${a.rid}" placeholder="New owner's Google email" aria-label="New owner's Google email" value="${esc(a.ownerEmail)}"><button class="btn primary">Save owner</button></form>
@@ -2632,6 +2632,9 @@ function companyScreen() {
       ${a.status === "suspended" && st.kind !== "suspended" ? "" : a.status === "active" && !st.live ? `<p class="note">Switched on but unpaid: record a payment to start it again.</p>` : ""}</article>`;
   }
   // ----- Delete a restaurant completely (company only) -----
+  // Hidden on the live site (3 Nov decision) until it follows the new Terms §4: deleting early only on the
+  // owner's written request or a legal order, with the reason recorded (to-do after-reg-lifecycle).
+  const DELETE_ON = !/(^|\.)wasabi\.co\.tz$/.test(location.hostname);
   // Everything under restaurants/{rid} goes, plus diners' visits there. The account stays, marked
   // "deleted", with its payment record (Wasabi's own accounts). Offer a full download first.
   const SUBS = ["live", "photos", "admins", "secrets", "staff", "push", "tablekeys", "passes", "joins", "tables", "codes", "groups", "lines", "alerts", "sessions", "rung"];
@@ -2795,6 +2798,7 @@ function companyScreen() {
         if (C.armed !== "sus" + d.sus) return arm("sus" + d.sus); C.armed = null;
         await updateDoc(acc(d.sus), { status: "suspended" }); toast(`${a.name} paused`); return load(); }
       if (d.own) { C.edit = C.edit === d.own ? null : d.own; return render(); }
+      if ((d.del || d.dodel || d.dlall || d.dlcsv) && !DELETE_ON) return;
       if (d.del) { if (C.delStep) return; C.del = C.del === d.del ? null : d.del; return render(); }
       if (d.dlall) return downloadAll(d.dlall, false);
       if (d.dlcsv) return downloadAll(d.dlcsv, true);
