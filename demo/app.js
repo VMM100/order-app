@@ -23,7 +23,9 @@ import {
   disableNetwork, enableNetwork,
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import morphdom from "../vendor/morphdom-esm.js";
-import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT, RESTAURANT_ID } from "../menu.js";
+import { MENU as START_MENU, STATIONS, WAITERS as START_WAITERS, TABLE_COUNT, RESTAURANT_ID } from "../menu.js";
+// The demo is shown to other restaurants, so it goes by "Demo", not the pilot restaurant's name (its menu is still used).
+const RESTAURANT = "Demo";
 import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "../account.js";
 import { computeMetrics, sampleData } from "../metrics.js";
 import { genericPhoto } from "../photos.js";
