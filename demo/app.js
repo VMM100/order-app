@@ -859,7 +859,8 @@ function dinerScreen() {
   welcomeSplash();
   const S = { n: params.get("t"), sid: null, g: null, lines: [], alerts: [], me: null, cart: [], note: "", cat: 0, tab: "menu", name: params.get("name") || "",
     user: null, profile: null, visits: [], step: "", phone: "", offers: false, busy: false, authErr: "", uid: null, proof: null, switching: false,
-    ask: null, pendingName: null, joins: [] };
+    // DEMO: the role picker already asked for a first name (?name=), so sit down with it straight away.
+    ask: null, pendingName: (params.get("name") || "").trim().slice(0, 16) || null, joins: [] };
   // Every diner's phone is signed in, at least quietly (anonymously). Diners who sign in with their
   // phone number or Google get their profile and their visits to this restaurant loaded too.
   onUser(async (u) => {
