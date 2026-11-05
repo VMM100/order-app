@@ -1,0 +1,12 @@
+/* Shared look for print pieces (cards, flyers). Each .face is drawn at bleed size: trim + 3 mm all round.
+   Keep text at least 7 mm from the face's edge (3 mm bleed + 4 mm safe margin). */
+@import url(wasabi.css);
+@page{margin:0}
+body{background:#fff}
+.face{position:relative;width:var(--bw);height:var(--bh);overflow:hidden;margin:0}
+.ink{background:var(--ink);color:#fff}
+.ink h1,.ink h2,.ink h3{color:#fff}
+.paper{background:var(--paper)}
+.green{background:var(--wasabi);color:var(--ink)}
+.safe{position:absolute;inset:7mm}
+.leaf{fill:var(--wasabi)}

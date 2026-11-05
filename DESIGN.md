@@ -84,6 +84,11 @@ Plain English, short sentences, said the way a good waiter would say it.
 - Logo files: `img/brand/`. In code use `wasabiLockup()` and `wasabiLeaf()` from `brand.js`.
 - Line icons on a 24px grid, 2px stroke, rounded ends, `currentColor`. No emoji as icons.
 
+## Paper
+
+Printed paperwork and print media follow the same look: see [paperwork/README.md](paperwork/README.md).
+Printed table and tent cards are in the restaurant's look with the small "Spiced by Wasabi" badge, like its screens.
+
 ## Checks before a screen change ships
 
 1. Looks right at 390px wide, in light and dark, with a long restaurant name and a long item name.

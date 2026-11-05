@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Menu guide · Wasabi</title>
+<link rel="stylesheet" href="../lib/wasabi.css">
+<style>
+  .ex{font-size:8pt;margin-top:3mm}
+  .ex th{font-size:6.6pt;letter-spacing:.05em}
+  .ex td{padding:1.8mm 0} .ex td.r,.ex th.r{padding-right:4mm}
+  .cols-explain{display:grid;grid-template-columns:30mm 1fr;gap:2.2mm 5mm;margin-top:3mm;font-size:9.2pt}
+  .cols-explain b{font-weight:600}
+  .ways{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm;margin-top:3mm}
+  .ways .box{font-size:8.8pt}
+</style>
+</head>
+<body>
+<!-- Blank template; the columns and example rows come from the app's menu template (menuio.js). -->
+<section class="page" data-kind="Menu guide">
+  <div class="kicker">Before the set-up visit</div>
+  <h1>Getting your menu into Wasabi</h1>
+  <p style="margin-top:3mm">Send your menu any way that's easy for you. The quickest is our spreadsheet: it loads in one go.</p>
+  <div class="ways">
+    <div class="box green"><b>1. Wasabi spreadsheet</b><br>Owner page → Menu → <i>Download template</i>. Fill it in with Excel, Google Sheets or Numbers, then upload it on the same page.</div>
+    <div class="box soft"><b>2. Your own file</b><br>An Excel sheet, Google Sheet or PDF of your menu. We'll copy it into the Wasabi spreadsheet for you.</div>
+    <div class="box soft"><b>3. Photos</b><br>Clear photos of each menu page, sent on WhatsApp to <span data-k="phone"></span>. We'll type it in.</div>
+  </div>
+
+  <h2>The spreadsheet, column by column</h2>
+  <div class="cols-explain">
+    <b>Section</b><span>The heading the item sits under on the menu: Drinks, Starters, Mains…</span>
+    <b>Goes to</b><span>Where the order is made: <b>Bar</b> or <b>Kitchen</b> (or another station you've set up, like Grill).</span>
+    <b>Item</b><span>The name diners see.</span>
+    <b>Option</b><span>A size or choice with its own price. <span class="pink">One row per price:</span> a beer in two sizes is two rows with the same Item.</span>
+    <b>Price (TSh)</b><span>Numbers only, no commas or "TSh": 9000, not TSh 9,000.</span>
+    <b>Description</b><span>One short line diners see under the name (optional).</span>
+    <b>Tag</b><span>A small label such as Vegetarian, Spicy or ABV 4.5% (optional).</span>
+    <b>Sold out</b><span><b>yes</b> or <b>no</b>. You can also change this any night from the bar or kitchen screen.</span>
+  </div>
+
+  <h2>Example</h2>
+  <table class="ex"><thead><tr id="exhead"></tr></thead><tbody id="exbody"></tbody></table>
+
+  <h2>Tips</h2>
+  <ul>
+    <li>Allergy information belongs in the Description (for example "Contains nuts"). You are responsible for it being right.</li>
+    <li>Photos of dishes are optional; add them later from the owner page, one item at a time.</li>
+    <li>Prices are what diners see and what the bill adds up, so check them carefully before the first night.</li>
+  </ul>
+</section>
+<script>
+  (function () { const D = window.DATA || {}, h = D.menuHead || [], rows = D.menuExample || [];
+    const head = document.getElementById("exhead"), body = document.getElementById("exbody");
+    h.forEach((t, i) => { const th = document.createElement("th"); th.textContent = t; if (i === 4) th.className = "r"; head.appendChild(th); });
+    rows.forEach((r) => { const tr = document.createElement("tr"); r.forEach((v, i) => { const td = document.createElement("td"); td.textContent = v; if (i === 4) td.className = "r num"; tr.appendChild(td); }); body.appendChild(tr); }); })();
+</script>
+<script src="../lib/frame.js"></script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>

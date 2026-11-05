@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pilot agreement · Wasabi</title>
+<link rel="stylesheet" href="../lib/wasabi.css">
+<style>
+  .terms h3{display:flex;align-items:baseline;margin-top:7pt}
+  .terms p,.terms li{font-size:9.2pt}
+  .parties{display:grid;grid-template-columns:1fr 1fr;gap:5mm;margin:5mm 0 2mm}
+  .parties .box p{margin:0}
+</style>
+</head>
+<body>
+<!-- Blank template: the public repo holds this file only. A filled copy is made with build.mjs --data
+     (a file kept in Drive) and saved in the restaurant's Drive folder, 02 Agreement & DPA. -->
+<section class="page" data-kind="Pilot agreement">
+  <div class="kicker">Free pilot</div>
+  <h1>Wasabi at <span data-k="restaurant" data-w="70"></span></h1>
+  <p class="muted" style="margin-top:3mm">Dated <span data-date="issued" data-w="40"></span></p>
+
+  <div class="parties">
+    <div class="box soft"><div class="lbl">Between</div><p><b data-k="legalName"></b><br><span data-k="address"></span><br><span data-k="email"></span> · <span data-k="phone"></span></p></div>
+    <div class="box soft"><div class="lbl">And the restaurant</div>
+      <p><b data-k="restaurantLegal" data-w="70"></b><br>trading as <span data-k="restaurant" data-w="55"></span><br><span data-k="restaurantAddress" data-w="75"></span></p></div>
+  </div>
+
+  <div class="terms">
+    <h3><span class="section-no">1</span>The pilot</h3>
+    <p>The restaurant uses Wasabi free of charge from <span data-date="pilotStart" data-w="32"></span> until <span class="pink" data-date="pilotEnd" data-w="32"></span> (the pilot). Diners order at the table by scanning a QR code, waiters, kitchen and bar see orders on their screens, and the table's bill can be split. Diners keep paying the restaurant as usual; Wasabi does not handle payments.</p>
+
+    <h3><span class="section-no">2</span>What Wasabi does</h3>
+    <ul>
+      <li>Sets up the menu, <span data-k="tables" data-w="10"></span> tables, QR table cards, staff codes and waiters' PINs, and trains the staff.</li>
+      <li>Sets up a print box so order tickets also print on the restaurant's own bar and kitchen printers, alongside the Wasabi screens.</li>
+      <li>Is on call during opening hours on <span data-k="phone"></span>, and fixes problems as quickly as it can.</li>
+      <li>Looks after the data as set out in section 4.</li>
+    </ul>
+
+    <h3><span class="section-no">3</span>What the restaurant does</h3>
+    <ul>
+      <li>Keeps a simple way to take orders without Wasabi (for example, a paper pad) in case of a power, network or service problem.</li>
+      <li>Is responsible for its menu, prices and allergy information, and keeps issuing fiscal (EFD) receipts as the law requires. Wasabi's bills are not fiscal receipts.</li>
+      <li>Keeps table cards on the tables, and staff codes and PINs private; tells Wasabi when someone leaves or a card goes missing.</li>
+      <li>Tells Wasabi what works and what doesn't, so it can be improved.</li>
+    </ul>
+
+    <h3><span class="section-no">4</span>Diners' and staff data</h3>
+    <p>The restaurant is the controller of its diners' and staff data used in Wasabi (first names, orders, table activity, calls, bills, waiters' names); Wasabi processes it only to run Wasabi for the restaurant, under section 11 of Wasabi's Terms (version <span data-k="termsVersion"></span>), which is the data processing agreement for this pilot. In short: Wasabi never sells it or uses it for its own marketing; guests' first names are replaced with "Guest" after 30 days; data is stored with Google Firebase in Johannesburg, South Africa; and Wasabi tells the restaurant within 48 hours of any breach affecting its data.</p>
+  </div>
+</section>
+
+<section class="page" data-kind="Pilot agreement">
+  <div class="terms">
+    <h3><span class="section-no">5</span>Equipment</h3>
+    <p>The bar and kitchen printers stay the restaurant's. The print box is supplied by:</p>
+    <p><span class="tick">Wasabi, and stays Wasabi's</span><span class="tick">the restaurant</span></p>
+
+    <h3><span class="section-no">6</span>When the pilot ends</h3>
+    <p>Either side can end the pilot at any time by telling the other by WhatsApp or email. When it ends, the restaurant chooses to subscribe, extend the pilot (agreed in writing), or stop. <span class="pink">There is no automatic charge:</span> nothing is paid unless the restaurant signs up in writing. The price after the pilot is <span class="num" data-money="monthly"></span> a month or <span class="num" data-money="yearly"></span> a year.</p>
+    <p>If the restaurant stops, its data is kept for 90 days so it can come back, a copy is given on request, and then it is deleted, as set out in section 4 of Wasabi's Terms.</p>
+
+    <h3><span class="section-no">7</span>Using the restaurant's name</h3>
+    <p>Wasabi may name the restaurant and show its logo as a Wasabi venue (for example, on Instagram):</p>
+    <p><span class="tick">Yes</span><span class="tick">No</span></p>
+
+    <h3><span class="section-no">8</span>The fine print</h3>
+    <p>During the free pilot Wasabi is provided as it is. Wasabi isn't liable for lost sales, profits or other indirect losses, for example during an outage. Nothing here limits liability the law doesn't allow to be limited. Wasabi's Terms apply to anything this letter doesn't cover; where they differ, this letter wins. Tanzanian law applies.</p>
+    <p>Wasabi's business name registration is in progress. Once it is registered, Wasabi will give the restaurant the full service agreement to sign, which then replaces this letter.</p>
+  </div>
+
+  <h2 style="margin-top:10mm">Signed</h2>
+  <div class="signs">
+    <div class="sign"><div class="lbl">For Wasabi</div><div class="line"></div>
+      <div class="cap"><span>Signature</span><span>Date</span></div>
+      <div class="who"><span data-k="signatory"></span>, <span data-k="signatoryRole"></span></div></div>
+    <div class="sign"><div class="lbl">For the restaurant</div><div class="line"></div>
+      <div class="cap"><span>Signature</span><span>Date</span></div>
+      <div class="who"><span data-k="signerName" data-w="45"></span>, <span data-k="signerRole" data-w="25"></span></div></div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;margin-top:6mm"><div class="stamp">Restaurant<br>stamp</div></div>
+  <p class="small muted" style="margin-top:6mm">Two copies: one for each side. Wasabi keeps a scan of the signed copy.</p>
+</section>
+<script src="../lib/frame.js"></script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>

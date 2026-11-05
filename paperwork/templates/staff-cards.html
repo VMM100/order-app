@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Staff quick-start cards · Wasabi</title>
+<link rel="stylesheet" href="../lib/wasabi.css">
+<style>
+  /* Three cards on one A4 sheet (210 × 99 mm each): print, cut on the dashed lines, leave at each station. */
+  .sheet3{width:210mm;height:297mm;display:grid;grid-template-rows:repeat(3,99mm)}
+  .card{position:relative;padding:8mm 11mm 7mm;display:grid;grid-template-columns:52mm 1fr;gap:8mm;overflow:hidden}
+  .card+.card{border-top:.7pt dashed #9aa08e}
+  .side{background:var(--ink);color:#fff;border-radius:4mm;padding:6mm 5mm;display:flex;flex-direction:column;justify-content:space-between}
+  .side h1{color:#fff;font-size:22pt}
+  .side .role{font:600 7pt var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--wasabi)}
+  .side img{height:5.5mm;filter:brightness(0) invert(1)}
+  .side .help{font-size:7.6pt;color:#c9d0bd;line-height:1.4}
+  ol.do{margin:0;padding:0;list-style:none;counter-reset:s;display:grid;gap:2.2mm}
+  ol.do li{counter-increment:s;display:grid;grid-template-columns:6.5mm 1fr;font-size:9pt;line-height:1.38;margin:0}
+  ol.do li::before{content:counter(s);display:grid;place-items:center;width:5mm;height:5mm;border-radius:50%;background:var(--wasabi);color:var(--ink);font:700 7.4pt var(--body)}
+  .btnw{display:inline-block;border:.8pt solid var(--ink);border-radius:1.4mm;padding:0 1.4mm;font-weight:600;font-size:8.4pt;line-height:1.35;white-space:nowrap}
+  .tip{font-size:8pt;color:var(--muted);margin-top:2.6mm}
+</style>
+</head>
+<body>
+<div class="sheet3">
+  <div class="card">
+    <div class="side"><div><div class="role">Quick start</div><h1>Waiters</h1></div>
+      <div class="help">Stuck? Call or WhatsApp Wasabi<br><b style="color:#fff" data-k="phone"></b></div><img src="../../img/brand/wasabi-lockup.svg" alt="Wasabi"></div>
+    <div>
+      <ol class="do">
+        <li><span>Open the waiter link from your manager, tap <b>your name</b> and enter your <b>PIN</b>. Tap <span class="btnw">Turn on</span> so your phone rings even when the screen is off.</span></li>
+        <li><span>A new table appears: tap <span class="btnw">Accept</span>. The table now sees your name.</span></li>
+        <li><span>Your phone rings for <b>Call waiter</b> or <b>Bill please</b>: tap <span class="btnw">On my way</span> so the table knows.</span></li>
+        <li><span>Food or drinks show <b>Ready</b>: take them out, then tap <span class="btnw">Served</span>.</span></li>
+        <li><span>Tap <span class="btnw">Open bill</span> to see each person's share, take payment as usual, then <span class="btnw">Bill delivered</span>.</span></li>
+        <li><span>Going on break? <span class="btnw">Hand over</span> your tables. Finished? <span class="btnw">End shift</span>.</span></li>
+      </ol>
+      <p class="tip">Never share your PIN. <span class="pink">Bills in Wasabi are not EFD receipts:</span> issue the fiscal receipt as usual.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="side"><div><div class="role">Quick start</div><h1>Bar</h1></div>
+      <div class="help">Stuck? Call or WhatsApp Wasabi<br><b style="color:#fff" data-k="phone"></b></div><img src="../../img/brand/wasabi-lockup.svg" alt="Wasabi"></div>
+    <div>
+      <ol class="do">
+        <li><span>The bar screen stays open on the bar tablet, with the sound on. New drink orders appear on it and print on the bar printer.</span></li>
+        <li><span>Tap <span class="btnw">Start</span> when you begin an order and <span class="btnw">Ready</span> when it's done (or <span class="btnw">All ready</span>). The waiter is told.</span></li>
+        <li><span>Run out of something? Mark it <span class="btnw">Sold out</span>: diners can't order it until you switch it back.</span></li>
+        <li><span>Ticket didn't print? Tap <span class="btnw">Reprint</span>. A printer shown in red is down: tickets print once it's back.</span></li>
+        <li><span>Walk-up customers: <span class="btnw">Start tab</span>, <span class="btnw">Add round</span>, then <span class="btnw">Close tab</span>.</span></li>
+      </ol>
+      <p class="tip">Printer needs a break (paper, cleaning)? Switch it off on this screen with a reason. <span class="pink">Switching it back on asks</span> whether to print what came in meanwhile.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="side"><div><div class="role">Quick start</div><h1>Kitchen</h1></div>
+      <div class="help">Stuck? Call or WhatsApp Wasabi<br><b style="color:#fff" data-k="phone"></b></div><img src="../../img/brand/wasabi-lockup.svg" alt="Wasabi"></div>
+    <div>
+      <ol class="do">
+        <li><span>The kitchen screen stays open on the kitchen tablet, with the sound on. New food orders appear on it and print on the kitchen printer.</span></li>
+        <li><span>Tap <span class="btnw">Start</span> when you begin cooking and <span class="btnw">Ready</span> when the plate is up. The waiter is told.</span></li>
+        <li><span>Run out of something? Mark it <span class="btnw">Sold out</span> so nobody can order it.</span></li>
+        <li><span>Ticket didn't print? Tap <span class="btnw">Reprint</span>. If the printer shows red, carry on from the screen: missed tickets print when it's back.</span></li>
+        <li><span>Read the <b>note</b> on each order: allergies and "no onions" are written there.</span></li>
+      </ol>
+      <p class="tip">Screen or internet down? <span class="pink">Use the paper order pad</span> and tell the manager.</p>
+    </div>
+  </div>
+</div>
+<script src="../lib/fill.js"></script>
+</body>
+</html>

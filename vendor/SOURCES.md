@@ -52,6 +52,16 @@ firebase-tools and wrangler releases (grpc-js, undici, uuid, opentelemetry, gaxi
 yet. They affect servers handling untrusted network traffic; here the tools only run briefly on GitHub to
 test and publish our own code. GitHub's Dependabot alerts flag fixes when they ship.
 
+## Paperwork (paperwork/; never on the website, only used to make PDFs)
+
+| File | What it is | Source and version | Licence | Fingerprint | Checked |
+| --- | --- | --- | --- | --- | --- |
+| paperwork/fonts/WorkSans.ttf | Work Sans (body type), variable weight | github.com/google/fonts, ofl/worksans/WorkSans[wght].ttf, main branch on 5 Nov 2026 | SIL OFL 1.1 (WorkSans-OFL.txt) | f50f61f2ba738e23 | 5 Nov 2026: font file only, no code. Same family the website loads from Google Fonts |
+| paperwork/fonts/BricolageGrotesque.ttf | Bricolage Grotesque (Wasabi's display type), variable | github.com/google/fonts, ofl/bricolagegrotesque/BricolageGrotesque[opsz,wdth,wght].ttf, main branch on 5 Nov 2026 | SIL OFL 1.1 (BricolageGrotesque-OFL.txt) | 413e7357809ddd12 | 5 Nov 2026: font file only, no code |
+
+The PDF maker (paperwork/build.mjs) uses Playwright from package.json, already listed below, and the QR
+library above (vendor/qrcode.min.js). It blocks every request that isn't a local file.
+
 ## Reference material (text only; never on the website, never run)
 
 Kept in `docs/`, which publishing leaves out, so none of it is served on wasabi.co.tz.

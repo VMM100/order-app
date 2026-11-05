@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice · Wasabi</title>
+<meta name="variants" content="Pro-forma invoice|Invoice|Receipt">
+<link rel="stylesheet" href="../lib/wasabi.css">
+<style>
+  .top{display:grid;grid-template-columns:1.2fr 1fr;gap:8mm;margin-top:4mm}
+  .meta td{border:0;padding:.8mm 0} .meta td:first-child{color:var(--muted);width:30mm}
+  .lines{margin-top:8mm}
+  .lines td{padding:3mm 0}
+  .total{display:flex;justify-content:flex-end;margin-top:4mm}
+  .total .box{min-width:80mm;display:flex;justify-content:space-between;align-items:baseline;gap:6mm}
+  .paid{display:inline-block;border:1.4pt solid var(--wasabi-deep);color:var(--wasabi-deep);font:800 14pt var(--display);padding:1.5mm 5mm;border-radius:2mm;transform:rotate(-4deg);letter-spacing:.06em}
+</style>
+</head>
+<body>
+<!-- Blank template; one file makes the pro-forma, the invoice and the receipt. Numbers run WSB-2026-001,
+     -002… across all customers; the number log is a sheet in Drive (04 Money), never in this repository.
+     Filled copies go to the restaurant's Drive folder, 03 Invoices & receipts. -->
+<section class="page">
+  <div class="top">
+    <div>
+      <h1 data-k="docType"></h1>
+      <div style="margin-top:6mm" class="lbl">To</div>
+      <p style="margin:0"><b data-k="restaurantLegal" data-w="70"></b><br><span data-if="restaurant">trading as <span data-k="restaurant"></span><br></span><span data-k="restaurantAddress" data-w="70"></span><br><span data-if="restaurantTin">TIN <span data-k="restaurantTin"></span></span></p>
+    </div>
+    <table class="meta">
+      <tr><td>Number</td><td class="num"><b data-k="number" data-w="40"></b></td></tr>
+      <tr><td>Date</td><td><span data-date="issued" data-w="40"></span></td></tr>
+      <tr class="not-receipt"><td>Due</td><td><span data-date="due" data-w="40"></span></td></tr>
+      <tr class="only-receipt"><td>For invoice</td><td class="num"><span data-k="forInvoice" data-w="40"></span></td></tr>
+      <tr><td>From</td><td><span data-k="legalName"></span></td></tr>
+      <tr><td>Tax</td><td><span data-k="vat"></span><span data-if="tin"> · TIN <span data-k="tin"></span></span></td></tr>
+    </table>
+  </div>
+
+  <table class="lines">
+    <thead><tr><th>Description</th><th>Period</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Amount</th></tr></thead>
+    <tbody data-list="lines"><template>
+      <tr><td data-k="item"></td><td data-k="period"></td><td class="r num" data-k="qty"></td><td class="r num" data-money="price"></td><td class="r num" data-money="amount"></td></tr>
+    </template></tbody>
+    <tbody class="only-blank">
+      <tr><td><span class="blank" style="width:70mm"></span></td><td><span class="blank" style="min-width:30mm"></span></td><td></td><td></td><td></td></tr>
+      <tr><td><span class="blank" style="width:70mm"></span></td><td><span class="blank" style="min-width:30mm"></span></td><td></td><td></td><td></td></tr>
+      <tr><td><span class="blank" style="width:70mm"></span></td><td><span class="blank" style="min-width:30mm"></span></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  <div class="total"><div class="box green"><span class="lbl" style="margin:0">Total</span><b class="big-num num pink" data-sum="lines"></b></div></div>
+  <p class="small muted" style="text-align:right;margin-top:2mm">Amounts in Tanzanian shillings. <span data-k="vat"></span>: no VAT charged.</p>
+
+  <div class="not-receipt" style="margin-top:10mm">
+    <h3>How to pay</h3>
+    <p><span data-k="payTo" data-w="120"></span></p>
+    <p class="muted">Please use the number <b data-k="number"></b> as the payment reference.</p>
+    <p class="small muted only-proforma">This is a pro-forma invoice: a quote to pay against. Wasabi sends the invoice and receipt once paid.</p>
+  </div>
+  <div class="only-receipt" style="margin-top:10mm;display:flex;gap:8mm;align-items:center">
+    <span class="paid">PAID</span>
+    <p style="margin:0">Received with thanks on <span data-date="paidOn" data-w="35"></span> by <span data-k="paidBy" data-w="40"></span>.<br><span class="muted">Reference <span data-k="paymentRef" data-w="40"></span></span></p>
+  </div>
+
+  <p class="small muted" style="margin-top:12mm">This is not a fiscal (EFD) receipt. Wasabi's Terms, version <span data-k="termsVersion"></span>, apply.</p>
+</section>
+<script>
+  // Show only the parts for this kind of document (pro-forma, invoice or receipt).
+  (function () { const t = (window.DATA && window.DATA.docType) || "Invoice", r = t === "Receipt", pf = t === "Pro-forma invoice";
+    document.title = t + " · Wasabi";
+    document.querySelectorAll(r ? ".not-receipt" : ".only-receipt").forEach((e) => e.remove());
+    if (!pf) document.querySelectorAll(".only-proforma").forEach((e) => e.remove()); })();
+</script>
+<script src="../lib/frame.js"></script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>

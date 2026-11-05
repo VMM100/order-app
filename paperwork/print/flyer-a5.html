@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flyer A5 · Wasabi</title>
+<link rel="stylesheet" href="../lib/print.css">
+<style>
+  .top{position:absolute;left:0;right:0;top:0;height:112mm;overflow:hidden;background:var(--ink);color:#fff}
+  .top .lockup{position:absolute;left:12mm;top:13mm;height:8mm}
+  .top .kick{position:absolute;left:12mm;top:33mm;font:600 7.6pt var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--wasabi)}
+  .top h1{position:absolute;left:12mm;right:12mm;top:40mm;color:#fff;font-size:29pt;line-height:1.02;letter-spacing:-.025em}
+  .top p{position:absolute;left:12mm;right:40mm;bottom:11mm;color:#dfe5d3;font-size:10pt;line-height:1.45}
+  .top .big-leaf{position:absolute;right:-16mm;bottom:-22mm;width:58mm;height:58mm;opacity:.9}
+  .list{position:absolute;left:12mm;right:12mm;top:121mm;display:grid;gap:3.4mm}
+  .list div{display:grid;grid-template-columns:7mm 1fr;font-size:9.6pt;line-height:1.38}
+  .list svg{width:4.6mm;height:4.6mm;stroke:var(--wasabi-deep);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;margin-top:.3mm}
+  .list b{font-weight:600;color:var(--ink)}
+  .cta{position:absolute;left:12mm;right:12mm;bottom:12mm;display:flex;gap:6mm;align-items:center;border-top:.7pt solid var(--line);padding-top:5mm}
+  .cta .qr{width:24mm;height:24mm;flex:none}
+  .cta .price{font:800 13pt/1.1 var(--display);color:var(--ink)}
+  .cta .small{margin-top:1.5mm}
+</style>
+</head>
+<body data-trim="148x210">
+<!-- A5 flyer for bar, café and restaurant owners. Office: 2 on an A4 sheet; print shop: 3 mm bleed. -->
+<section class="face paper">
+  <div class="top">
+    <img class="lockup" src="../../img/brand/wasabi-lockup-reverse.svg" alt="Wasabi">
+    <div class="kick">For bars, cafés and restaurants</div>
+    <h1>Your menu on every table. The bill splits itself.</h1>
+    <p>Guests scan, order and call the waiter from their own phones. No app to download.</p>
+    <svg class="big-leaf" viewBox="0 0 64 64" aria-hidden="true"><path class="leaf" fill-rule="evenodd" d="M31.0 33.0L21.4 52.7A26 26 0 1 0 11.3 42.6ZM31.3 28.7L25.2 13.9L28.4 29.6ZM34.9 31.2L45.1 18.9L32.8 29.1ZM34.4 35.6L50.1 38.8L35.3 32.7Z"/><path class="leaf" d="M29.7 31.7L32.3 34.3L9.3 60.1a2.1 2.1 0 0 1-3-3Z"/></svg>
+  </div>
+  <div class="list">
+    <div><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span><b>Straight to kitchen and bar.</b> Each station sees its own orders, and they print on your own printers too.</span></div>
+    <div><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"/></svg><span><b>Waiters on their own phones.</b> "Call waiter" and "Bill please" ring the right person.</span></div>
+    <div><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg><span><b>A live dashboard.</b> Sales by hour and by item, and how long orders take.</span></div>
+    <div><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span><b>Change the menu in seconds.</b> Prices, specials, sold out: every table sees it straight away.</span></div>
+  </div>
+  <div class="cta">
+    <div class="qr" data-qr="whatsapp"></div>
+    <div>
+      <div class="price"><span class="pink">Free for 30 days.</span><br>Then <span data-money="monthly"></span> a month.</div>
+      <p class="small muted">Scan to WhatsApp us for a live demo on your own tables · <span data-k="phone"></span> · <span data-k="web"></span></p>
+    </div>
+  </div>
+</section>
+<script src="../../vendor/qrcode.min.js"></script>
+<script src="../lib/qr.js"></script>
+<script src="../lib/fill.js"></script>
+<script src="../lib/print.js"></script>
+</body>
+</html>

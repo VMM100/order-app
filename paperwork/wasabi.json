@@ -1,0 +1,23 @@
+{
+  "_about": "Public company facts for Wasabi's paperwork. Prices, grace days and phone come from platform.js (COMPANY), the Terms version from terms.html, so the app and the paper never disagree. Only public facts here: never a restaurant's or person's details (those stay in Drive).",
+  "legalName": "Vandan Mamlani, trading as Wasabi",
+  "brandName": "Wasabi",
+  "signatory": "Vandan Mamlani",
+  "signatoryRole": "Owner",
+  "registration": "",
+  "registrationNote": "Business name registration pending (BRELA)",
+  "tin": "",
+  "vat": "Not VAT registered",
+  "address": "Dar es Salaam, Tanzania",
+  "email": "hello@wasabi.co.tz",
+  "personalEmail": "vandan@wasabi.co.tz",
+  "web": "wasabi.co.tz",
+  "instagram": "@wasabi.tz",
+  "payTo": "",
+  "invoicePrefix": "WSB",
+  "yearlyList": 1560000,
+  "termsUrl": "wasabi.co.tz/terms.html",
+  "privacyUrl": "wasabi.co.tz/privacy.html",
+  "emailProvider": "",
+  "cardTitle": "Founder"
+}

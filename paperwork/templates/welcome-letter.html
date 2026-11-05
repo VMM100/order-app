@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Welcome letter · Wasabi</title>
+<link rel="stylesheet" href="../lib/wasabi.css">
+<style>
+  .letter p{font-size:10pt;line-height:1.6}
+  .steps{counter-reset:s;list-style:none;padding:0;margin:4mm 0}
+  .steps li{counter-increment:s;display:grid;grid-template-columns:8mm 1fr;margin-bottom:3mm;font-size:10pt}
+  .steps li::before{content:counter(s);display:grid;place-items:center;width:5.6mm;height:5.6mm;border-radius:50%;background:var(--wasabi);color:var(--ink);font:700 8pt var(--body)}
+  .links td:first-child{width:38mm;color:var(--muted)}
+  .links td{font-size:9.6pt}
+</style>
+</head>
+<body>
+<!-- Blank template. Filled copy goes to the restaurant's Drive folder, 05 Letters & notices. -->
+<section class="page" data-kind="Welcome">
+  <div class="letter">
+    <p class="muted"><span data-date="issued" data-w="40"></span></p>
+    <p style="margin-top:6mm"><b data-k="ownerName" data-w="60"></b><br><span data-k="restaurant" data-w="60"></span><br><span data-k="restaurantAddress" data-w="70"></span></p>
+    <h1 style="margin:9mm 0 5mm">Welcome to Wasabi</h1>
+    <p>Dear <span data-k="ownerFirstName" data-w="35"></span>,</p>
+    <p>Thank you for choosing Wasabi for <span data-k="restaurant" data-w="45"></span>. From now on your guests can order from their own phones at the table, call a waiter and split the bill, while your kitchen and bar see every order the moment it's placed.</p>
+    <p>Here is what happens next:</p>
+    <ol class="steps">
+      <li><span><b>Set-up visit</b> on <span data-date="setupDate" data-w="35"></span>. We load your menu, set your look and tables, and add your waiters.</span></li>
+      <li><span><b>Table cards.</b> We print a QR card for each table. Each card has its own secret code, so keep them on the tables and tell us if one goes missing.</span></li>
+      <li><span><b>Staff training</b>, about 20 minutes for waiters, bar and kitchen, with a quick-start card for each.</span></li>
+      <li><span><b>Your first night.</b> We're there or on the phone. Keep a paper pad handy as a backup, just in case.</span></li>
+    </ol>
+    <table class="links">
+      <tr><td>Owner page</td><td><b>wasabi.co.tz</b> → Sign in with <span data-k="ownerEmail" data-w="55"></span></td></tr>
+      <tr><td>Your Wasabi link name</td><td class="num"><span data-k="rid" data-w="40"></span></td></tr>
+      <tr><td>Free trial until</td><td><span class="pink" data-date="trialEnd" data-w="35"></span></td></tr>
+      <tr><td>Help, any time you're open</td><td><span data-k="phone"></span> (call or WhatsApp) · <span data-k="email"></span></td></tr>
+    </table>
+    <p style="margin-top:6mm">We built Wasabi in Dar es Salaam for places like yours, and we want to hear what works and what doesn't. Call me directly whenever something could be better.</p>
+    <p style="margin-top:8mm">With best wishes,</p>
+    <div style="height:14mm"></div>
+    <p><b data-k="signatory"></b><br><span class="muted"><span data-k="signatoryRole"></span>, Wasabi · <span data-k="personalEmail"></span></span></p>
+  </div>
+</section>
+<script src="../lib/frame.js"></script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>

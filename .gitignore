@@ -12,3 +12,5 @@ tail.txt
 
 # The print box settings hold the restaurant's staff code
 bridge/config.json
+paperwork/out/
+paperwork/**/*.pdf

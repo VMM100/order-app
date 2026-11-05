@@ -1,0 +1,81 @@
+/* Wasabi paperwork: A4 documents in Wasabi's look (DESIGN.md: rice paper, ink, wasabi green as a fill,
+   one ginger-pink accent per page). Fonts are local copies (fonts/, OFL), so PDFs look the same anywhere. */
+@font-face{font-family:"Work Sans";src:url(../fonts/WorkSans.ttf) format("truetype");font-weight:100 900}
+@font-face{font-family:"Bricolage Grotesque";src:url(../fonts/BricolageGrotesque.ttf) format("truetype");font-weight:200 800;font-stretch:75% 100%}
+:root{
+  --ink:#1a2117; --ink-2:#2e3a28; --paper:#f6f4ee; --card:#ffffff; --line:#d6dac9; --text:#1f251b; --muted:#5a6151;
+  --wasabi:#9cc43c; --wasabi-deep:#4a6716; --wasabi-soft:#e8f0d2; --pink:#f2a493; --pink-soft:#fbe3dc;
+  --display:"Bricolage Grotesque","Work Sans",sans-serif; --body:"Work Sans",sans-serif;
+}
+*{box-sizing:border-box}
+@page{size:A4;margin:0}
+html,body{margin:0;padding:0}
+body{font:9.6pt/1.5 var(--body);color:var(--text);background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+h1,h2,h3{font-family:var(--display);font-weight:800;letter-spacing:-.015em;line-height:1.1;margin:0;color:var(--ink)}
+h1{font-size:25pt} h2{font-size:13pt;margin:14pt 0 5pt} h3{font-size:10.5pt;margin:9pt 0 3pt}
+p{margin:0 0 6pt} ul,ol{margin:0 0 6pt;padding-left:14pt} li{margin:0 0 2.5pt}
+b,strong{font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .small{font-size:8pt}
+
+/* One A4 sheet. Content flows inside .body; the head and foot repeat on every sheet. */
+.sheet{width:210mm;height:297mm;position:relative;overflow:hidden;page-break-after:always;break-after:page;display:flex;flex-direction:column}
+.sheet:last-child{page-break-after:auto;break-after:auto}
+.head{display:flex;align-items:center;justify-content:space-between;padding:13mm 16mm 0}
+.head .lockup{height:8.5mm}
+.head .doc-kind{font:600 8pt var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:right}
+.body{flex:1;padding:9mm 16mm 0}
+.foot{display:flex;justify-content:space-between;gap:6mm;align-items:flex-end;padding:0 16mm 10mm;font-size:7.4pt;color:var(--muted)}
+.foot .who{line-height:1.45}
+.foot .pg{font-variant-numeric:tabular-nums;white-space:nowrap}
+.band{height:3.2mm;background:var(--wasabi)}            /* green strip along the top edge */
+.foot-rule{margin:0 16mm 3mm;border-top:.6pt solid var(--line)}
+
+/* The page's single pink accent (brand rule: one per page). A fill with ink text, never pink text. */
+.pink{background:var(--pink);color:var(--ink);padding:0 1.6mm;border-radius:1.2mm;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.pink.blank{background:var(--pink-soft)}
+.mark{background:var(--wasabi-soft);padding:0 1.2mm;border-radius:1mm}
+
+/* Blank write-on lines (filled by fill.js when a value is missing) */
+.blank{display:inline-block;min-width:38mm;border-bottom:.7pt solid #8d9481;height:1.15em;vertical-align:-.25em}
+.field .blank,.blankrow .blank{display:block;width:100%!important;min-width:0}
+
+/* Forms */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:3.2mm 7mm}
+.grid.three{grid-template-columns:1fr 1fr 1fr}
+.full{grid-column:1/-1}
+.field{display:block}
+.field label,.lbl{display:block;font:600 7.2pt var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:1.3mm}
+.field .v{display:block;min-height:6.6mm;border-bottom:.7pt solid #8d9481;padding:0 0 .8mm;font-size:10pt}
+.field .v .blank{border:0;height:5.6mm}
+.box{border:.7pt solid var(--line);border-radius:3mm;padding:4mm 5mm;background:#fff}
+.box.soft{background:var(--paper);border-color:transparent}
+.box.green{background:var(--wasabi-soft);border-color:transparent}
+.tick{display:inline-flex;align-items:center;gap:2mm;margin-right:6mm;white-space:nowrap}
+.tick::before{content:"";width:3.4mm;height:3.4mm;border:.8pt solid var(--ink);border-radius:.6mm;flex:none}
+.tick.on::before{background:var(--ink);box-shadow:inset 0 0 0 .7mm #fff}
+.section-no{display:inline-grid;place-items:center;width:5.4mm;height:5.4mm;border-radius:50%;background:var(--ink);color:#fff;font:700 7.6pt var(--body);margin-right:2mm;vertical-align:1pt}
+
+/* Tables (invoices, schedules) */
+table{width:100%;border-collapse:collapse}
+th{font:600 7.2pt var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 0 2mm;border-bottom:.8pt solid var(--ink)}
+td{padding:2.4mm 0;border-bottom:.6pt solid var(--line);vertical-align:top}
+th.r,td.r{text-align:right}
+td+td,th+th{padding-left:4mm}
+
+/* Signatures */
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:10mm}
+.sign .line{height:15mm;border-bottom:.8pt solid var(--ink)}
+.sign .cap{display:flex;justify-content:space-between;font-size:7.6pt;color:var(--muted);margin-top:1.2mm}
+.sign .who{font-weight:600;color:var(--text);margin-top:3mm}
+.stamp{width:30mm;height:30mm;border:.8pt dashed #a6ac99;border-radius:50%;display:grid;place-items:center;color:var(--muted);font-size:7pt;text-align:center}
+
+/* Notes for whoever fills it in; never printed on a filled copy */
+.draft-note{background:#fff4d6;border:.6pt solid #e8c766;color:#3d3312;border-radius:2mm;padding:2mm 3mm;font-size:7.6pt}
+html[data-filled=filled] .only-blank{display:none!important}
+html[data-filled=blank] .only-filled{display:none!important}
+
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:7mm}
+.kicker{font:600 7.6pt var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--wasabi-deep);margin-bottom:2mm}
+.big-num{font:800 22pt/1 var(--display);color:var(--ink)}
+.cut{border-top:.7pt dashed #9aa08e}

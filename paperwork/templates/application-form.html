@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Application form · Wasabi</title>
+<link rel="stylesheet" href="../lib/wasabi.css">
+<style>
+  h2{display:flex;align-items:center}
+  .grid{margin-top:2mm}
+  .opts{display:flex;flex-wrap:wrap;gap:2.5mm 0;margin-top:1mm}
+  .station td{padding:2mm 0}
+  .office{border:.8pt solid var(--ink);border-radius:3mm;padding:3.5mm 5mm;margin-top:6mm}
+</style>
+</head>
+<body>
+<!-- Blank template. Filled from the restaurant's online sign-up (build.mjs --data, a file in Drive),
+     checked and signed on the visit, scanned into the restaurant's Drive folder, 01 Application. -->
+<section class="page" data-kind="Application form">
+  <div class="kicker">Join Wasabi</div>
+  <h1>Restaurant application</h1>
+  <p class="muted" style="margin-top:2mm">Please check every detail, correct anything that's wrong, and sign on page 2.</p>
+
+  <h2><span class="section-no">1</span>The restaurant</h2>
+  <div class="grid">
+    <div class="field"><label>Name diners know</label><span class="v" data-k="restaurant"></span></div>
+    <div class="field"><label>Registered business name</label><span class="v" data-k="restaurantLegal"></span></div>
+    <div class="field"><label>BRELA registration no.</label><span class="v" data-k="restaurantReg"></span></div>
+    <div class="field"><label>TIN</label><span class="v" data-k="restaurantTin"></span></div>
+    <div class="field full"><label>Address</label><span class="v" data-k="restaurantAddress"></span></div>
+    <div class="field"><label>Area</label><span class="v" data-k="area"></span></div>
+    <div class="field"><label>Opening hours</label><span class="v" data-k="hours"></span></div>
+    <div class="field"><label>Number of tables</label><span class="v num" data-k="tables"></span></div>
+    <div class="field"><label>Kind of place</label><div class="opts"><span class="tick">Bar / brewpub / lounge</span><span class="tick">Restaurant</span><span class="tick">Café</span><span class="tick">Hotel</span></div></div>
+  </div>
+
+  <h2><span class="section-no">2</span>The owner</h2>
+  <p class="small muted" style="margin:0">The owner signs in to the owner page with this Google account, and receives invoices and notices at this email.</p>
+  <div class="grid">
+    <div class="field"><label>Full name</label><span class="v" data-k="ownerName"></span></div>
+    <div class="field"><label>Phone</label><span class="v" data-k="ownerPhone"></span></div>
+    <div class="field"><label>Google account for signing in</label><span class="v" data-k="ownerEmail"></span></div>
+    <div class="field"><label>Email for invoices and notices (if different)</label><span class="v" data-k="noticeEmail"></span></div>
+  </div>
+
+  <h2><span class="section-no">3</span>Day-to-day contact</h2>
+  <div class="grid">
+    <div class="field"><label>Name and role (e.g. manager)</label><span class="v" data-k="managerName"></span></div>
+    <div class="field"><label>Phone</label><span class="v" data-k="managerPhone"></span></div>
+  </div>
+
+  <h2><span class="section-no">4</span>Kitchen and bar</h2>
+  <table class="station">
+    <thead><tr><th>Station</th><th>Screen</th><th>Printer</th><th>Printer make and model</th></tr></thead>
+    <tbody>
+      <tr><td>Kitchen</td><td><span class="tick"></span></td><td><span class="tick"></span></td><td><span class="blank" style="width:60mm"></span></td></tr>
+      <tr><td>Bar</td><td><span class="tick"></span></td><td><span class="tick"></span></td><td><span class="blank" style="width:60mm"></span></td></tr>
+      <tr><td><span class="blank" style="min-width:28mm"></span></td><td><span class="tick"></span></td><td><span class="tick"></span></td><td><span class="blank" style="width:60mm"></span></td></tr>
+    </tbody>
+  </table>
+  <p class="small muted" style="margin-top:2mm">Printers: network (Ethernet) receipt printers work through a small Wasabi print box plugged into your router. Never write Wi-Fi passwords on this form.</p>
+</section>
+
+<section class="page" data-kind="Application form">
+  <h2 style="margin-top:0"><span class="section-no">5</span>Menu and look</h2>
+  <div class="grid">
+    <div class="field full"><label>Menu comes as</label><div class="opts"><span class="tick">Wasabi menu template (spreadsheet)</span><span class="tick">Excel or Google Sheet</span><span class="tick">PDF or photos of the menu</span><span class="tick">Typed in on the visit</span></div></div>
+    <div class="field"><label>Logo file sent</label><div class="opts"><span class="tick">Yes</span><span class="tick">Not yet</span></div></div>
+    <div class="field"><label>Colours (if any)</label><span class="v" data-k="colours"></span></div>
+  </div>
+
+  <h2><span class="section-no">6</span>Plan</h2>
+  <div class="box soft" style="margin-top:2mm">
+    <div class="opts" style="gap:3mm 0"><span class="tick">Monthly · <span class="num" data-money="monthly"></span> a month</span><span class="tick">Yearly · <span class="pink num"><span data-money="yearly"></span> a year</span> (2 months free)</span></div>
+    <p class="small" style="margin:3mm 0 0">Paid in advance, plus any taxes that apply. Free trial until <span data-date="trialEnd" data-w="35"></span>. First paid period starts <span data-date="startDate" data-w="35"></span>.</p>
+  </div>
+
+  <h2><span class="section-no">7</span>Your name and logo</h2>
+  <p style="margin-bottom:1mm">Wasabi may list the restaurant and show its logo as a Wasabi venue:</p>
+  <p><span class="tick">Yes</span><span class="tick">No</span></p>
+
+  <h2><span class="section-no">8</span>Agreement</h2>
+  <p>I confirm these details are correct, that I may sign for the restaurant, and that the restaurant agrees to Wasabi's Terms (version <span data-k="termsVersion"></span>, at <span data-k="termsUrl"></span>), including section 11, the data processing agreement. Wasabi's Privacy policy (version <span data-k="privacyVersion"></span>) explains how Wasabi handles personal information.</p>
+  <div class="signs" style="margin-top:4mm">
+    <div class="sign"><div class="line"></div><div class="cap"><span>Signature</span><span>Date</span></div>
+      <div class="who"><span data-k="signerName" data-w="50"></span>, <span data-k="signerRole" data-w="25"></span></div></div>
+    <div style="display:flex;justify-content:flex-end;align-items:flex-end"><div class="stamp">Restaurant<br>stamp</div></div>
+  </div>
+
+  <div class="office">
+    <div class="lbl">For Wasabi</div>
+    <div class="grid three">
+      <div class="field"><label>Received by</label><span class="v" data-k="receivedBy"></span></div>
+      <div class="field"><label>Approved on</label><span class="v" data-date="approved"></span></div>
+      <div class="field"><label>Wasabi link name</label><span class="v" data-k="rid"></span></div>
+    </div>
+  </div>
+</section>
+<script src="../lib/frame.js"></script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>

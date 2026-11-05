@@ -24,3 +24,6 @@ Ground rules in short:
   (`alerts`, `lines`, `groups`, `staff`, `push`, `rung`), notification links, `sw.js`, `version.txt`,
   `robots.txt`, `sitemap.xml`, `privacy.html`, `CNAME`, and database collections or fields the live site uses.
   Before removing code: list it with proof that nothing uses it, commit, then delete in a separate commit.
+- Paperwork (`paperwork/`, see its README): blank templates only, never a customer's details (the repo is public;
+  `paperwork/check.mjs` enforces it). When a fee, term, address, sub-processor or feature changes, update the
+  paperwork that mentions it in the same change and rebuild; new blanks go to Drive only after Vandan's OK.

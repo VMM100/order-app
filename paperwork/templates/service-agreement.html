@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Service agreement · Wasabi</title>
+<link rel="stylesheet" href="../lib/wasabi.css">
+<style>
+  .parties{display:grid;grid-template-columns:1fr 1fr;gap:5mm;margin:5mm 0 1mm}
+  .parties p{margin:0}
+  .keys li{margin-bottom:1.6mm}
+  table.plan td:first-child{width:52mm;color:var(--muted)}
+</style>
+</head>
+<body>
+<!-- Blank template. The signed copy is scanned into the restaurant's Drive folder, 02 Agreement & DPA,
+     with the Terms and Privacy policy PDFs of the same version (build.mjs makes them from the website). -->
+<section class="page" data-kind="Service agreement">
+  <div class="kicker">Subscription</div>
+  <h1>Service agreement</h1>
+  <p class="muted" style="margin-top:2mm">Dated <span data-date="issued" data-w="40"></span></p>
+  <div class="draft-note" data-if="termsDraft" style="margin-top:3mm"><b>Draft for legal review.</b> Wasabi's Terms are being reviewed by a Tanzanian advocate. Don't sign this until the Terms are final.</div>
+
+  <div class="parties">
+    <div class="box soft"><div class="lbl">Wasabi</div><p><b data-k="legalName"></b><br><span data-if="registration">Reg. no. <span data-k="registration"></span><br></span><span data-k="address"></span><br><span data-k="email"></span></p></div>
+    <div class="box soft"><div class="lbl">The restaurant</div><p><b data-k="restaurantLegal" data-w="70"></b><br>trading as <span data-k="restaurant" data-w="55"></span><br><span data-k="restaurantAddress" data-w="75"></span><br>TIN <span data-k="restaurantTin" data-w="40"></span></p></div>
+  </div>
+
+  <h2>1. What's agreed</h2>
+  <p>Wasabi provides its table-ordering service to the restaurant on <b>Wasabi's Terms, version <span data-k="termsVersion"></span></b>, and the restaurant pays the fees below. The Terms (attached) are part of this agreement, and section 11 of the Terms is the data processing agreement between the restaurant (controller) and Wasabi (processor) under the Personal Data Protection Act, 2022. Wasabi's Privacy policy (version <span data-k="privacyVersion"></span>) is attached for information. If this page and the Terms differ, this page wins.</p>
+
+  <h2>2. Plan and fees</h2>
+  <table class="plan">
+    <tr><td>Plan</td><td><span class="tick">Monthly · <span data-money="monthly"></span> a month</span><br><span class="tick" style="margin-top:2mm">Yearly · <span data-money="yearly"></span> a year</span></td></tr>
+    <tr><td>Agreed price, if different</td><td><span data-money="agreedPrice" data-w="45"></span></td></tr>
+    <tr><td>Free trial ends</td><td><span data-date="trialEnd" data-w="45"></span></td></tr>
+    <tr><td>First paid period starts</td><td><span class="pink" data-date="startDate" data-w="45"></span></td></tr>
+    <tr><td>Number of tables</td><td><span class="num" data-k="tables" data-w="20"></span></td></tr>
+    <tr><td>Invoices and notices go to</td><td><span data-k="noticeEmail" data-w="70"></span></td></tr>
+  </table>
+
+  <h2>3. The main points of the Terms</h2>
+  <ul class="keys">
+    <li><b>Paid in advance</b> each month or year, plus any taxes that apply. The owner page shows the date you're paid until.</li>
+    <li><b>Late payment:</b> ordering keeps working for <span data-k="graceDays"></span> days after the paid-until date, then pauses until you pay. Nothing is deleted.</li>
+    <li><b>Price changes</b> are announced at least 30 days ahead and apply from your next renewal.</li>
+    <li><b>Cancel any time</b> by telling Wasabi; service runs to the end of the paid period, with no refund for part-used periods (Terms §4).</li>
+    <li><b>After service ends</b> your data is kept 90 days so you can come back, a copy is given on request, then it's deleted, except your setup file (2 years) and Wasabi's accounting records (Terms §4).</li>
+    <li><b>You remain responsible</b> for your menu, prices, allergy information, licences, taxes and fiscal (EFD) receipts. Wasabi's bills are not fiscal receipts.</li>
+    <li><b>Liability</b> is limited to the fees paid in the 12 months before a claim (Terms §9).</li>
+  </ul>
+</section>
+
+<section class="page" data-kind="Service agreement">
+  <h2 style="margin-top:0">4. Data processing (Terms §11)</h2>
+  <p>Wasabi processes the restaurant's diners' and staff data only to run Wasabi for the restaurant, keeps it confidential and secure, never sells it, and tells the restaurant within 48 hours of a breach affecting it. Guests' first names become "Guest" after 30 days; order records are kept 12 months.</p>
+  <h3>Sub-processors</h3>
+  <table>
+    <thead><tr><th>Provider</th><th>What for</th></tr></thead>
+    <tbody>
+      <tr><td>Google LLC (Firebase)</td><td>Database, sign-in and notifications; data stored in Johannesburg, South Africa</td></tr>
+      <tr><td>Cloudflare, Inc.</td><td>The service that rings waiters' phones</td></tr>
+      <tr><td>GitHub, Inc.</td><td>Hosting the website's code</td></tr>
+      <tr><td><span data-k="emailProvider" data-w="40"></span></td><td>Sending account notices to restaurant owners</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted" style="margin-top:2mm">Wasabi tells the restaurant before adding or replacing a sub-processor, and the restaurant can object.</p>
+
+  <h2>5. Attached</h2>
+  <p><span class="tick">Wasabi Terms, version <span data-k="termsVersion"></span></span><br><span class="tick" style="margin-top:2mm">Wasabi Privacy policy, version <span data-k="privacyVersion"></span></span><br><span class="tick" style="margin-top:2mm">Restaurant application form</span></p>
+
+  <h2 style="margin-top:8mm">Signed</h2>
+  <div class="signs">
+    <div class="sign"><div class="lbl">For Wasabi</div><div class="line"></div>
+      <div class="cap"><span>Signature</span><span>Date</span></div>
+      <div class="who"><span data-k="signatory"></span>, <span data-k="signatoryRole"></span></div></div>
+    <div class="sign"><div class="lbl">For the restaurant</div><div class="line"></div>
+      <div class="cap"><span>Signature</span><span>Date</span></div>
+      <div class="who"><span data-k="signerName" data-w="45"></span>, <span data-k="signerRole" data-w="25"></span></div></div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;margin-top:6mm"><div class="stamp">Restaurant<br>stamp</div></div>
+  <p class="small muted" style="margin-top:5mm">Two copies: one for each side. Initial each page of the attached Terms.</p>
+</section>
+<script src="../lib/frame.js"></script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>
