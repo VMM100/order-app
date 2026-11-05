@@ -20,6 +20,7 @@ import { watchPrinters, stripHtml, switchOff, switchOn, reprint, canReprint, set
 import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStart, phoneConfirm, signOutUser, deleteMe, normalisePhone, authMessage } from "./account.js";
 import { computeMetrics } from "./metrics.js";
 import { genericPhoto } from "./photos.js";
+import { shares, tableTotal } from "./bill.js";
 import { COMPANY } from "./platform.js";
 import { menuToCsv, readFile, rowsToMenu, mergeMenu } from "./menuio.js";
 import { wasabiLockup, wasabiLeaf } from "./brand.js";
@@ -542,13 +543,6 @@ function startGroup(n, proof) {
 }
 async function groupsAt(n) { const s = await getDocs(query(rcol("groups"), where("table", "==", Number(n)))); return s.docs.map((d) => d.data()).filter((g) => g.open); }
 
-const tableTotal = (lines) => lines.reduce((a, l) => a + l.pr, 0);
-function shares(t, lines) {
-  const ids = Object.keys(t.people || {}); const total = tableTotal(lines);
-  return ids.map((pid) => ({ pid, name: t.people[pid].name, paid: !!(t.paid || {})[pid],
-    items: lines.filter((l) => l.pid === pid),
-    amt: t.split === "equal" ? Math.ceil(total / Math.max(ids.length, 1) / 100) * 100 : lines.filter((l) => l.pid === pid).reduce((a, l) => a + l.pr, 0) }));
-}
 function billHtml(t, lines, staff, me) {
   const total = tableTotal(lines);
   const all = shares(t, lines), mine = me && all.find((s) => s.pid === me);
@@ -558,11 +552,13 @@ function billHtml(t, lines, staff, me) {
     <button aria-pressed="${t.split === "equal"}" data-split="equal" data-g="${t.session}">Equally</button></div>
    ${mine ? `<div class="myshare"><span>Your share${mine.paid ? " · paid" : ""}</span><b class="num ${mine.paid ? "paid" : ""}">TSh ${fmt(mine.amt)}</b></div>` : ""}
    ${rows.map((s) => `<div class="billrow${s === mine ? " me" : ""}"><div style="min-width:0"><div class="${s.paid ? "paid" : ""}" style="font-weight:600">${esc(s.name)}${s === mine ? " (you)" : ""}</div>
+     ${s.covers.length ? `<div class="note" style="margin:0">Paying for ${esc(s.covers.join(", "))}</div>` : ""}
      ${t.split !== "equal" ? `<div class="note" style="margin:0">${s.items.map((l) => esc(l.n)).join(", ") || "Nothing ordered"}</div>` : ""}</div>
      <div class="row" style="flex-wrap:nowrap"><span class="amt num ${s.paid ? "paid" : ""}">TSh ${fmt(s.amt)}</span>
      ${staff ? `<button class="btn ${s.paid ? "" : "primary"}" data-paid="${s.pid}" data-g="${t.session}">${s.paid ? "Undo" : "Mark paid"}</button>` : s.paid ? `<span class="pill s-ready">Paid</span>` : ""}</div></div>`).join("")}
    <div class="total"><span>${isShared(t.table) ? "Group total" : "Table total"}</span><span class="num">TSh ${fmt(total)}</span></div>
-   ${t.split === "equal" ? `<p class="note">Equal shares round up to the nearest 100 shillings.</p>` : ""}`;
+   ${t.split === "equal" && all.length > 1 ? `<p class="note">Everyone who ordered pays the same, rounded to the nearest 100 shillings; ${esc((all.find((s) => s.head) || all[0]).name)} pays the difference so it adds up to the bill.</p>` : ""}
+   ${!all.length ? `<p class="note">Nothing ordered yet.</p>` : ""}`;
 }
 async function setSplit(sid, mode) { try { await updateDoc(groupRef(sid), { split: mode }); } catch (e) { fail(e); } }
 async function togglePaid(sid, pid, now) { try { await updateDoc(groupRef(sid), { [`paid.${pid}`]: now ? deleteField() : true }); } catch (e) { fail(e); } }
@@ -1178,6 +1174,21 @@ function dinerScreen() {
     store.set(meKey(), { pid, name, session: S.sid }); S.me = { pid, name, session: S.sid };
     store.set("dees-lasttable", { url: location.href, rid: RID, sid: S.sid }); render();
   }
+  // People without a phone, added by this diner ("<my id>_g1" to "_g10"): ordered for from this phone.
+  const myGuests = () => Object.entries((S.g && S.g.people) || {}).filter(([, p]) => p.guest && S.me && p.host === S.me.pid && !p.gone).map(([pid, p]) => ({ pid, ...p }));
+  const whoNow = () => (S.me && S.who && myGuests().some((x) => x.pid === S.who) ? S.who : S.me && S.me.pid);
+  const nameOfPid = (pid) => (S.me && pid === S.me.pid ? S.me.name : (((S.g && S.g.people) || {})[pid] || {}).name || "Guest");
+  const ckey = (l) => (l.who || (S.me && S.me.pid)) + "|" + l.n + "|" + (l.v || "");
+  const freeSlot = () => { const ppl = (S.g && S.g.people) || {}; for (let i = 1; i <= 10; i++) if (!ppl[`${S.me.pid}_g${i}`]) return `${S.me.pid}_g${i}`; return null; };
+  function forBar() {
+    const gs = myGuests(), now = whoNow(), sel = gs.find((x) => x.pid === now), slot = freeSlot();
+    const chips = [[S.me.pid, "You"], ...gs.map((x) => [x.pid, x.name])].map(([pid, l]) => `<button class="chip" aria-pressed="${now === pid}" data-who="${esc(pid)}">${esc(l)}</button>`).join("");
+    const form = S.gadd ? `<form id="gaddform" class="vrow gaddf"><input class="field" id="gaddin" maxlength="16" placeholder="${S.gadd === "rename" ? "New name" : "Their first name (optional)"}" aria-label="Their first name" autocomplete="off" value="${S.gadd === "rename" && sel ? esc(sel.name) : ""}">
+      <button class="btn primary">${S.gadd === "rename" ? "Save" : "Add"}</button><button type="button" class="btn ghost" data-act="gaddx">Cancel</button></form>` : "";
+    const ctl = sel && !S.gadd ? `<div class="forsel"><label class="optin"><input type="checkbox" data-pay="${esc(sel.pid)}" ${sel.payer ? "checked" : ""}> <span>I'll pay for ${esc(sel.name)}</span></label>
+      <span class="row"><button class="linkbtn" data-act="grename">Rename</button>${S.lines.some((l) => l.pid === sel.pid) ? "" : `<button class="linkbtn" data-act="ghide">Remove</button>`}</span></div>` : "";
+    return `<div class="forbar"><div class="forchips"><span class="forl">Ordering for</span>${chips}${slot && !S.gadd ? `<button class="chip add" data-act="gadd">+ Someone without a phone</button>` : ""}</div>${form}${ctl}</div>`;
+  }
   function render() {
     if (S.ask && !S.access) return renderAsk();
     if (!S.n || !S.access) return;
@@ -1204,7 +1215,7 @@ function dinerScreen() {
       if (S.cat >= MENU.length) S.cat = 0;
       // One continuous list: every section in order, with its heading. The category bar sticks under
       // the header and highlights whichever section is on screen (see spy() below).
-      body = `<div class="cats" id="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${esc(m.c)}</button>`).join("")}</div>
+      body = `${forBar()}<div class="cats" id="cats">${MENU.map((m, i) => `<button class="chip" aria-pressed="${i === S.cat}" data-cat="${i}">${esc(m.c)}</button>`).join("")}</div>
        ${MENU.map((cat, ci) => `<div class="msec" id="sec-${ci}" data-sec="${ci}"><h2 class="sech">${esc(cat.c)}</h2>
        ${cat.items.map((it, ii) => { const gp = !it.img && genericPhoto(it.n), inCart = (l) => S.cart.filter((c) => c.n === it.n && (c.v || "") === (l || "")).length;
          return `<div class="item${it.out ? " out" : ""}${it.img || gp ? " withph" : ""}">
@@ -1215,7 +1226,7 @@ function dinerScreen() {
            return `<button class="var${q ? " on" : ""}" data-add="${key}" aria-label="Add ${esc(it.n)}${l ? " " + esc(l) : ""}, TSh ${fmt(p)}${q ? `, ${q} in basket` : ""}"><span class="vl">${l ? esc(l) : "Add"}</span><span class="num"><span class="cur">TSh</span> ${fmt(p)}</span>${q ? `<span class="vq num${S.bump === key ? " bump" : ""}" aria-hidden="true">${q}</span>` : ""}</button>`; }).join("")}</div>`}</div>`; }).join("")}</div>`).join("")}`;
     } else if (S.tab === "orders") {
       body = Object.entries(g.people || {}).sort(([a], [b]) => (a === S.me.pid ? -1 : b === S.me.pid ? 1 : 0)).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
-        return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}${l.byName ? ` <span class="note">added by ${esc(l.byName)}</span>` : ""}${l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}<span class="note" style="display:block;margin:0">TSh ${fmt(l.pr)}</span></span><span class="pill s-${l.s}">${DINER_S[l.s] || l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing ordered yet</p>`); }).join("");
+        return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : p.host === S.me.pid ? ` <span class="note">added by you${p.payer ? ", you're paying" : ""}</span>` : p.host && (g.people || {})[p.host] ? ` <span class="note">with ${esc(g.people[p.host].name)}</span>` : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}${l.byName ? ` <span class="note">added by ${esc(l.byName)}</span>` : ""}${l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}<span class="note" style="display:block;margin:0">TSh ${fmt(l.pr)}</span></span><span class="pill s-${l.s}">${DINER_S[l.s] || l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing ordered yet</p>`); }).join("");
     } else body = billHtml(g, S.lines, false, S.me.pid) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
     if (S.tab !== "orders") body += poweredBy();
     // ☰: inviting friends, the account and help. Waiter, Call waiter and Bill please stay on the page.
@@ -1230,6 +1241,7 @@ function dinerScreen() {
         <li>Everyone at the table orders on their own phone. See it all under <b>Table order</b>.</li>
         <li><b>Call waiter</b> or <b>Bill please</b> alerts your waiter, and you'll see when they're on the way.</li>
         <li><b>Bill</b> shows what each person owes. Pay your waiter as usual.</li>
+        <li>Someone without a phone? Tap <b>+ Someone without a phone</b> above the menu and order for them from yours.</li>
         <li>Friends can join with the code under ☰ → Share invite. You'll get a message to let them in.</li></ol></div>` : "";
     // Change my name: a small card at the top, like How it works.
     const rename = S.renaming ? `<div class="helpcard"><div class="trow"><b>Change my name</b><button class="btn small ghost" data-act="renameclose">Cancel</button></div>
@@ -1291,9 +1303,9 @@ function dinerScreen() {
     const tot = S.cart.reduce((a, l) => a + l.pr, 0), n = S.cart.length; c.hidden = false;
     const a = document.activeElement, focused = a && a.id === "note"; S.notes = S.notes || {};
     // The same item and size twice shows once, with a count and − / +.
-    const groups = []; S.cart.forEach((l) => { const k = l.n + "|" + (l.v || ""); const g = groups.find((x) => x.k === k); if (g) g.q++; else groups.push({ k, l, q: 1 }); });
+    const groups = []; S.cart.forEach((l) => { const k = ckey(l); const g = groups.find((x) => x.k === k); if (g) g.q++; else groups.push({ k, l, q: 1 }); });
     c.innerHTML = `<div class="in">
-      ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}${S.notes[g.k] && S.noteKey !== g.k ? `<span class="nt" style="display:block">${esc(S.notes[g.k])}</span>` : ""}
+      ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}${g.l.who ? ` <span class="cfor">for ${esc(nameOfPid(g.l.who))}</span>` : ""}${S.notes[g.k] && S.noteKey !== g.k ? `<span class="nt" style="display:block">${esc(S.notes[g.k])}</span>` : ""}
             <button class="linkbtn cnote" data-cnote="${esc(g.k)}">${S.notes[g.k] ? "Edit note" : "+ Note"}</button></span>
           <span class="qty"><button class="qb" data-dec="${esc(g.k)}" aria-label="One fewer ${esc(g.l.n)}">−</button><b class="num">${g.q}</b><button class="qb" data-inc="${esc(g.k)}" aria-label="One more ${esc(g.l.n)}">+</button></span>
           <span class="num cp">TSh ${fmt(g.l.pr * g.q)}</span></div>
@@ -1312,6 +1324,17 @@ function dinerScreen() {
       const c = $("#codein").value.trim(); if (c.length !== 4) return;
       if (S.choosing) return findByCode(c, S.n);
       findByCode(c);
+    }
+    if (e.target.id === "gaddform") {
+      const typed = $("#gaddin").value.trim().slice(0, 16), ppl = (S.g && S.g.people) || {};
+      if (S.gadd === "rename") { const pid = whoNow(), p = ppl[pid]; if (!p || pid === S.me.pid || !typed) { S.gadd = false; return render(); }
+        try { await updateDoc(groupRef(S.sid), { [`people.${pid}`]: { ...p, name: typed } }); S.gadd = false; toast(`Renamed to ${typed}`); render(); } catch (err) { fail(err); }
+        return; }
+      const pid = freeSlot(); if (!pid) { S.gadd = false; return toast("You can add up to 10 people"); }
+      const name = typed || `Guest ${Object.keys(ppl).length + 1}`;
+      try { await updateDoc(groupRef(S.sid), { [`people.${pid}`]: { name, t: Date.now(), guest: true, host: S.me.pid } });
+        S.who = pid; S.gadd = false; toast(`Added ${name}. What you add now is for ${name}.`); render(); } catch (err) { fail(err); }
+      return;
     }
     if (e.target.id === "joinform") {
       const name = $("#namein").value.trim(); if (!name) return;
@@ -1351,6 +1374,12 @@ function dinerScreen() {
         await b.commit(); S.profile = prof; S.step = ""; await joinAs(name, S.user); } catch (err) { fail(err); }
     }
   });
+  document.addEventListener("change", async (e) => {
+    const pid = e.target.dataset && e.target.dataset.pay; if (!pid || !S.me) return;
+    const p = ((S.g && S.g.people) || {})[pid]; if (!p || p.host !== S.me.pid) return;
+    const { payer, ...rest } = p, next = e.target.checked ? { ...rest, payer: S.me.pid } : rest;
+    try { await updateDoc(groupRef(S.sid), { [`people.${pid}`]: next }); toast(e.target.checked ? `You're paying for ${p.name}` : `${p.name} pays for themselves`); } catch (err) { fail(err); render(); }
+  });
   document.addEventListener("input", (e) => { if (e.target.id === "note" && S.noteKey) { S.notes = S.notes || {}; S.notes[S.noteKey] = e.target.value; } if (e.target.id === "namein") S.name = e.target.value; });
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
@@ -1361,11 +1390,11 @@ function dinerScreen() {
     else if (d.act === "askcancel") { const a = S.ask; S.ask = null; subMine && subMine(); subMine = null; deleteDoc(joinRef(S.uid)).catch(() => {}); S.err = ""; codeEntry(a ? String(a.table) : S.n); }
     else if (d.cat) { S.cat = +d.cat; markCat(); jumpTo(S.cat); }
     else if (d.add) { const [c, i, v] = d.add.split(".").map(Number), it = MENU[c]?.items[i]; if (!it || it.out || !it.v[v]) return render(); const [l, p] = it.v[v];
-      S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st }); toast(`Added ${it.n}${l ? " · " + l : ""}`); S.bump = d.add; render(); S.bump = null; }
+      const who = whoNow(); S.cart.push({ n: it.n, v: l, pr: p, st: MENU[c].st, ...(who !== S.me.pid ? { who } : {}) }); toast(`Added ${it.n}${l ? " · " + l : ""}${who !== S.me.pid ? ` for ${nameOfPid(who)}` : ""}`); S.bump = d.add; render(); S.bump = null; }
     else if (d.rm) { S.cart.splice(+d.rm, 1); render(); }
-    else if (d.inc) { const x = S.cart.find((l) => l.n + "|" + (l.v || "") === d.inc); if (x) S.cart.push({ ...x }); render(); }
+    else if (d.inc) { const x = S.cart.find((l) => ckey(l) === d.inc); if (x) S.cart.push({ ...x }); render(); }
     else if (d.cnote) { S.noteKey = S.noteKey === d.cnote ? null : d.cnote; render(); const i = $("#note"); if (i) i.focus(); }
-    else if (d.dec) { const i = S.cart.map((l) => l.n + "|" + (l.v || "")).lastIndexOf(d.dec); if (i >= 0) S.cart.splice(i, 1); if (!S.cart.length) S.cartOpen = false; render(); }
+    else if (d.dec) { const i = S.cart.map(ckey).lastIndexOf(d.dec); if (i >= 0) S.cart.splice(i, 1); if (!S.cart.length) S.cartOpen = false; render(); }
     else if (d.act === "cart") { S.cartOpen = !S.cartOpen; renderCart(); }
     else if (d.split) setSplit(S.sid, d.split);
     else if (d.alert) {
@@ -1375,12 +1404,21 @@ function dinerScreen() {
     else if (d.act === "place" && S.cart.length && !S.placing) {
       S.placing = true; renderCart();
       const batch = writeBatch(db), bid = uid("b"), now = Date.now();
-      S.cart.forEach((l) => batch.set(doc(rcol("lines")), { table: Number(S.n), session: S.sid, batch: bid, pid: S.me.pid, pname: S.me.name,
-        n: l.n, v: l.v, pr: l.pr, st: l.st, s: "new", t: now, note: ((S.notes || {})[l.n + "|" + (l.v || "")] || S.note || "").trim().slice(0, 200) || null }));
+      const ok = new Set([S.me.pid, ...myGuests().map((x) => x.pid)]);
+      S.cart.forEach((l) => { const pid = l.who && ok.has(l.who) ? l.who : S.me.pid;
+        batch.set(doc(rcol("lines")), { table: Number(S.n), session: S.sid, batch: bid, pid, pname: nameOfPid(pid).slice(0, 20),
+        n: l.n, v: l.v, pr: l.pr, st: l.st, s: "new", t: now, note: ((S.notes || {})[ckey(l)] || S.note || "").trim().slice(0, 200) || null }); });
       try { await batch.commit(); const sts = [...new Set(S.cart.map((l) => STATIONS[l.st]))]; S.cart = []; S.note = ""; S.notes = {}; S.noteKey = null; S.cartOpen = false; toast("Sent to " + sts.join(" and ")); }
       catch (err) { fail(err); }
       S.placing = false; render();
     }
+    else if (d.who) { S.who = d.who; S.gadd = false; render(); }
+    else if (d.act === "gadd") { S.gadd = "add"; render(); const i = $("#gaddin"); if (i) i.focus(); }
+    else if (d.act === "grename") { S.gadd = "rename"; render(); const i = $("#gaddin"); if (i) { i.focus(); i.select(); } }
+    else if (d.act === "gaddx") { S.gadd = false; render(); }
+    else if (d.act === "ghide") { const pid = whoNow(), p = ((S.g && S.g.people) || {})[pid];
+      if (!p || pid === S.me.pid || S.lines.some((l) => l.pid === pid)) return;
+      try { await updateDoc(groupRef(S.sid), { [`people.${pid}`]: { ...p, gone: true } }); S.cart = S.cart.filter((l) => l.who !== pid); S.who = null; toast(`${p.name} removed`); render(); } catch (err) { fail(err); } }
     else if (d.act === "helpclose") { S.help = false; render(); }
     else if (d.act === "renameclose") { S.renaming = false; render(); }
     else if (d.act === "share") {
@@ -1534,7 +1572,7 @@ function orderTaker({ g, create, by, byName, title, onSent }) {
   const base = g || create.group;
   const T = { who: null, guests: [], cart: [], q: "", cat: 0, noteFor: null, sending: false, nameFor: null, renamed: {} };
   // Guests without a phone (just added, or added earlier by staff) can be renamed here at any time.
-  const people = () => [...Object.entries(base.people || {}).map(([pid, p]) => ({ pid, name: T.renamed[pid] || p.name, guest: !!p.guest })), ...T.guests.map((p) => ({ ...p, guest: true }))];
+  const people = () => [...Object.entries(base.people || {}).filter(([, p]) => !p.gone).map(([pid, p]) => ({ pid, name: T.renamed[pid] || p.name, guest: !!p.guest })), ...T.guests.map((p) => ({ ...p, guest: true }))];
   const nameOf = (pid) => (people().find((p) => p.pid === pid) || {}).name || "Guest";
   const addGuest = (name) => { const pid = `guest-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
     T.guests.push({ pid, name: name || `Guest ${people().length + 1}`, fresh: true }); T.who = pid; T.nameFor = name ? null : pid; };
@@ -2198,7 +2236,7 @@ function ownerScreen(role) {
     const item = (l) => `<div class="rl"><span>${label(l)}${l.note ? ` <span class="nt">${esc(l.note)}</span>` : ""}<span class="note" style="margin:0"> · ${hm(l.t)}${l.byName ? ` · added by ${esc(l.byName)}` : ""}</span>${l.closedUnserved ? ` <span class="pill s-new">Not served</span>` : ""}</span><span class="num">${fmt(l.pr)}</span></div>`;
     const person = (name, items, amt, paid) => `<div class="rp"><div class="rph"><b>${esc(name)}</b><span class="num">TSh ${fmt(amt)}${paid ? " · paid" : ""}</span></div>${items.map(item).join("") || `<p class="note" style="margin:0">Nothing ordered</p>`}</div>`;
     return `<div class="rcpt">${g.tab ? `<p class="note" style="margin:0 0 6px">Bar tab: ${esc(g.tab)}</p>` : ""}
-      ${ppl.map((p) => person(p.name, p.items, p.amt, p.paid)).join("")}${others.length ? person("Others", others, tableTotal(others), false) : ""}
+      ${ppl.map((p) => person(p.covers.length ? `${p.name} (paying for ${p.covers.join(", ")})` : p.name, p.items, p.amt, p.paid)).join("")}${others.length ? person("Others", others, tableTotal(others), false) : ""}
       <div class="rph rtot"><b>Total</b><span class="num">TSh ${fmt(tableTotal(ls))}</span></div>
       ${g.split === "equal" ? `<p class="note" style="margin:4px 0 0">Split equally.</p>` : ""}</div>`;
   }

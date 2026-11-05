@@ -43,7 +43,93 @@ export default {
     ctx.waitUntil(handle(env, m, count).catch((e) => console.error("ring failed", m[0], e && e.stack || e)));
     return new Response(null, { status: 202, headers: cors });
   },
+  // Every night (wrangler.toml [triggers]): guests' first names older than 30 days become "Guest", for every
+  // restaurant, whether or not anyone opens the owner page. The owner page still does the same as a backup.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(forgetNames(env).catch((e) => console.error("forget names failed", e && e.message)));
+  },
 };
+
+// ---------- forgetting guests' names after 30 days ----------
+// Same as forgetOldNames() in app.js (and Data Security.md): lines and calls keep "Guest" instead of the
+// first name, join requests are deleted, closed tables' people become "Guest 1", "Guest 2"… Items, prices
+// and totals stay. restaurants/{rid}/live/retention.upto remembers how far each restaurant has been done.
+// Work is capped per run; anything left over is picked up by the next run (several runs each night).
+const DAY = 864e5, KEEP_MS = 30 * DAY, PAGE = 300, MAX_WRITES = 1500;
+function fixFor(col, d) {
+  if (col === "lines" || col === "alerts") return d.pname && d.pname !== "Guest" ? { update: { pname: "Guest" } } : null;
+  if (col === "joins") return { delete: true };
+  if (col === "groups") {
+    if (d.open !== false || d.forgot) return null;
+    const people = {}; Object.entries(d.people || {}).forEach(([pid, p], i) => { people[pid] = { name: `Guest ${i + 1}`, t: num(p && p.t) }; });
+    const u = { people, forgot: true }; if (d.tab) u.tab = "Tab";
+    return { update: u, remove: d.label != null ? ["label"] : [] };
+  }
+  return null;
+}
+async function forgetNames(env, now = Date.now()) {
+  const cutoff = now - KEEP_MS; let writes = 0;
+  for (const rid of await listIds(env, "restaurants")) {
+    if (writes >= MAX_WRITES) return;
+    const ref = `restaurants/${rid}/live/retention`, cur = await getDoc(env, ref), from = num(cur && cur.upto);
+    if (cutoff - from < DAY) continue;
+    let done = true;
+    for (const [col, field] of [["lines", "t"], ["alerts", "t"], ["joins", "t"], ["groups", "opened"]]) {
+      let start = from, seen = new Set();
+      for (;;) {
+        const docs = await rangeQuery(env, `restaurants/${rid}`, col, field, start, cutoff);
+        const fresh = docs.filter((x) => !seen.has(x.name)); fresh.forEach((x) => seen.add(x.name));
+        const ws = fresh.map((x) => ({ name: x.name, fix: fixFor(col, x.data) })).filter((x) => x.fix);
+        for (let i = 0; i < ws.length; i += 400) { await commit(env, ws.slice(i, i + 400)); }
+        writes += ws.length;
+        if (docs.length < PAGE || !fresh.length) break;
+        if (writes >= MAX_WRITES) { done = false; break; }
+        start = num(docs[docs.length - 1].data[field]);
+      }
+      if (!done) break;
+    }
+    if (!done) return;   // the next run carries on from the same place
+    await patchDoc(env, ref, { upto: cutoff, t: now });
+  }
+}
+async function listIds(env, col) {
+  const ids = []; let page = "";
+  for (;;) {
+    const r = await fetch(`${DOCS}/${col}?pageSize=300&mask.fieldPaths=__none__${page ? `&pageToken=${encodeURIComponent(page)}` : ""}`, { headers: { authorization: `Bearer ${await token(env)}` } });
+    if (!r.ok) throw new Error(`list ${col}: ${r.status}`);
+    const j = await r.json(); (j.documents || []).forEach((d) => ids.push(d.name.split("/").pop()));
+    if (!j.nextPageToken) return ids; page = j.nextPageToken;
+  }
+}
+async function rangeQuery(env, parent, col, field, from, to) {
+  const j = await google(env, `${DOCS}/${parent}:runQuery`, { structuredQuery: {
+    from: [{ collectionId: col }],
+    where: { compositeFilter: { op: "AND", filters: [
+      { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN_OR_EQUAL", value: { integerValue: String(Math.floor(from)) } } },
+      { fieldFilter: { field: { fieldPath: field }, op: "LESS_THAN", value: { integerValue: String(Math.floor(to)) } } }] } },
+    orderBy: [{ field: { fieldPath: field }, direction: "ASCENDING" }], limit: PAGE } });
+  return (Array.isArray(j) ? j : []).filter((x) => x.document).map((x) => ({ name: x.document.name, data: decode(x.document.fields) }));
+}
+async function commit(env, ws) {
+  if (!ws.length) return;
+  await google(env, `${DOCS.replace(/\/documents$/, "/documents:commit")}`, { writes: ws.map(({ name, fix }) => fix.delete ? { delete: name }
+    : { update: { name, fields: encode(fix.update) }, updateMask: { fieldPaths: [...Object.keys(fix.update), ...(fix.remove || [])] }, currentDocument: { exists: true } }) });
+}
+async function patchDoc(env, path, obj) {
+  const mask = Object.keys(obj).map((k) => `updateMask.fieldPaths=${k}`).join("&");
+  const r = await fetch(`${DOCS}/${path}?${mask}`, { method: "PATCH", headers: { authorization: `Bearer ${await token(env)}`, "content-type": "application/json" }, body: JSON.stringify({ fields: encode(obj) }) });
+  if (!r.ok) throw new Error(`save ${path}: ${r.status}`);
+}
+// Plain values → Firestore REST values (only what forgetNames writes).
+function enc(v) {
+  if (v === null || v === undefined) return { nullValue: null };
+  if (typeof v === "number") return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (typeof v === "boolean") return { booleanValue: v };
+  if (typeof v === "string") return { stringValue: v };
+  if (typeof v === "object") return { mapValue: { fields: encode(v) } };
+  return { nullValue: null };
+}
+function encode(o) { const f = {}; for (const [k, v] of Object.entries(o)) f[k] = enc(v); return f; }
 
 async function handle(env, [path, root, rid, kind, id], count) {
   const base = `${root}/${rid}`, now = Date.now();
@@ -166,4 +252,4 @@ const num = (x) => (typeof x === "number" ? x : Number(x) || 0);
 const OUR_HOSTS = new Set(["wasabi.co.tz", "www.wasabi.co.tz", "wasabi-tz-staging.web.app"]);
 function safeUrl(u) { try { const x = new URL(u); return x.protocol === "https:" && OUR_HOSTS.has(x.hostname) ? x.href : SITE; } catch { return SITE; } }
 
-export const _test = { decode, PATH, safeUrl };
+export const _test = { decode, PATH, safeUrl, fixFor, forgetNames, encode };

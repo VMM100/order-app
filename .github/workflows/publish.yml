@@ -46,6 +46,10 @@ jobs:
         run: node tests/ring-limit.mjs
       - name: Print box tickets and queue
         run: node tests/print.mjs
+      - name: Bill splitting
+        run: node tests/bill.mjs
+      - name: Nightly name clean-up (ring service)
+        run: node tests/ring-cleanup.mjs
       - name: Install a headless browser
         run: npx --no-install playwright install --with-deps chromium
       - name: Open the main pages

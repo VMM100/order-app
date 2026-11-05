@@ -174,6 +174,10 @@ service cloud.firestore {
         return exists(j) && get(j).data.session == sid && get(j).data.ok == true;
       }
       function inSession(sid) { return live(rid) && hasPass() && pass().session == sid && (pass().via == 'key' || approvedFor(sid)); }
+      function myGuests() {
+        return [me() + '_g1', me() + '_g2', me() + '_g3', me() + '_g4', me() + '_g5',
+                me() + '_g6', me() + '_g7', me() + '_g8', me() + '_g9', me() + '_g10'];
+      }
       function memberOf(sid) { return inSession(sid) && me() in groupNow(sid).people; }
       function groupAfter(sid) { return getAfter(/databases/$(database)/documents/restaurants/$(rid)/groups/$(sid)).data; }
       function groupNow(sid) { return get(/databases/$(database)/documents/restaurants/$(rid)/groups/$(sid)).data; }
@@ -313,13 +317,31 @@ service cloud.firestore {
           let d = request.resource.data;
           let changed = d.diff(resource.data).affectedKeys();
           let ppl = d.people.diff(resource.data.people);
+          let touched = ppl.addedKeys().union(ppl.changedKeys());
           return changed.hasOnly(['people', 'label', 'split'])
             && d.split in ['order', 'equal']
             && ppl.removedKeys().size() == 0
-            && ppl.addedKeys().union(ppl.changedKeys()).hasOnly([me()])
+            && touched.hasOnly(myGuests().concat([me()]))
             && (!(me() in d.people) || validPerson(d.people[me()]))
+            && guestOk(d, touched, '1') && guestOk(d, touched, '2') && guestOk(d, touched, '3')
+            && guestOk(d, touched, '4') && guestOk(d, touched, '5') && guestOk(d, touched, '6')
+            && guestOk(d, touched, '7') && guestOk(d, touched, '8') && guestOk(d, touched, '9')
+            && guestOk(d, touched, '10')
             && (!changed.hasAny(['label'])
                 || (resource.data.label == null && d.label is string && d.label.size() > 0 && d.label.size() <= 20));
+        }
+        // People without a phone, added by a diner at the table (up to 10 each): keyed "<their id>_g1" to
+        // "_g10", so the rules know whose they are. The diner who added them can rename them, say they'll pay
+        // for them, or hide them; never remove them, so what they ordered always stays on the bill.
+        function guestOk(d, touched, n) {
+          let k = me() + '_g' + n;
+          return !(k in touched) || (me() in d.people && validGuest(d.people[k]));
+        }
+        function validGuest(p) {
+          return p.keys().hasOnly(['name', 't', 'guest', 'host', 'payer', 'gone'])
+            && p.name is string && p.name.size() > 0 && p.name.size() <= 20 && p.t is int
+            && p.guest == true && p.host == me()
+            && p.get('payer', null) in [null, me()] && p.get('gone', false) is bool;
         }
         function validPerson(p) {
           return p.keys().hasOnly(['name', 't', 'uid', 'acct'])
@@ -356,7 +378,8 @@ service cloud.firestore {
           let price = get(/databases/$(database)/documents/restaurants/$(rid)).data.prices.get(l.n + '|' + l.v, null);
           return inSession(l.session) && g.open == true && me() in g.people
             && l.keys().hasOnly(['table', 'session', 'batch', 'pid', 'pname', 'n', 'v', 'pr', 'st', 's', 't', 'note'])
-            && l.pid == me() && l.table == g.table && l.s == 'new'
+            && (l.pid == me() || (l.pid in myGuests() && l.pid in g.people && g.people[l.pid].get('gone', false) == false))
+            && l.table == g.table && l.s == 'new'
             && l.n is string && l.v is string && l.t is int
             && l.pname is string && l.pname.size() <= 20 && l.batch is string && l.batch.size() <= 40
             && price != null && l.pr == price.p && l.st == price.st && !(l.n in stockOut())

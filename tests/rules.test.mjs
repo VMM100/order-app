@@ -272,6 +272,48 @@ test("diners can't remove someone else or fake a waiter's reply", async () => {
   await db.doc(`${R}/lines/l1`).set(line("d1", "4-a"));
   await assertFails(db.doc(`${R}/lines/l1`).update({ s: "served" }));
 });
+// A diner adds people without a phone ("<uid>_g1" to "_g10") and orders for them.
+const guestOf = (uid, extra = {}) => ({ name: "Baraka", t: 2, guest: true, host: uid, ...extra });
+test("a diner adds someone without a phone, orders for them, renames them and pays for them", async () => {
+  const db = await seatAt("d1");
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ "people.d1_g1": guestOf("d1") }));
+  await assertSucceeds(db.doc(`${R}/lines/g1`).set(line("d1", "4-a", { pid: "d1_g1", pname: "Baraka" })));
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ "people.d1_g1": guestOf("d1", { name: "Neema", payer: "d1" }) }));
+  // Two at once (a whole group on one phone), up to the tenth.
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ "people.d1_g2": guestOf("d1", { name: "Guest 3" }), "people.d1_g10": guestOf("d1", { name: "Guest 4" }) }));
+  // Hidden (added by mistake): no more orders for them.
+  await assertSucceeds(db.doc(`${R}/groups/4-a`).update({ "people.d1_g2": guestOf("d1", { name: "Guest 3", gone: true }) }));
+  await assertFails(db.doc(`${R}/lines/g2`).set(line("d1", "4-a", { pid: "d1_g2", pname: "Guest 3" })));
+});
+test("people without a phone: only your own slots, never removed, no fake hosts or payers", async () => {
+  const db = await seatAt("d1");
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d1_g11": guestOf("d1") }));      // beyond the tenth
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d2_g1": guestOf("d2") }));      // someone else's slot
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d1_g1": guestOf("d2") }));      // host must be you
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d1_g1": guestOf("d1", { payer: "d9" }) }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d1_g1": guestOf("d1", { name: "" }) }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d1_g1": guestOf("d1", { uid: "d1" }) }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d1_g1": guestOf("d1", { guest: false }) }));
+  // Someone else's person without a phone: can't edit, remove or order for them.
+  const other = diner("d2");
+  await other.doc(`${R}/passes/d2`).set({ table: 4, via: "key", k: "KEY4", t: 1 });
+  await other.doc(`${R}/passes/d2`).set({ table: 4, via: "key", k: "KEY4", session: "4-a", t: 1 });
+  await other.doc(`${R}/groups/4-a`).update({ "people.d2": { name: "Neha", t: 2, uid: "d2", acct: false } });
+  await assertSucceeds(other.doc(`${R}/groups/4-a`).update({ "people.d2_g1": guestOf("d2") }));
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d2_g1": guestOf("d2", { name: "X" }) }));
+  await assertFails(db.doc(`${R}/lines/x1`).set(line("d1", "4-a", { pid: "d2_g1" })));
+  // Your own: can't be removed (their orders stay on the bill).
+  await db.doc(`${R}/groups/4-a`).update({ "people.d1_g1": guestOf("d1") });
+  const people = (await db.doc(`${R}/groups/4-a`).get()).data().people; delete people.d1_g1;
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ people }));
+});
+test("you must be at the table yourself to add someone without a phone", async () => {
+  const db = diner("d3");
+  await db.doc(`${R}/passes/d3`).set({ table: 4, via: "key", k: "KEY4", t: 1 });
+  await seatAt("d1");
+  await db.doc(`${R}/passes/d3`).set({ table: 4, via: "key", k: "KEY4", session: "4-a", t: 1 });
+  await assertFails(db.doc(`${R}/groups/4-a`).update({ "people.d3_g1": guestOf("d3") }));
+});
 test("shared table: QR holder may see the groups there", async () => {
   await seatAt("d1", 6, "6-a", "6666");
   const db = diner("d2");
