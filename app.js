@@ -1952,7 +1952,8 @@ function setupScreen(role) {
     bossMenu(role);
     paint(subBanner() + tabBar(ownerTabs(role), "tables") + `<section><h2 class="ptitle">Tables and QR codes</h2><p class="note" style="margin-top:0">Diners scan these.</p>
       <div class="row"><button class="btn" data-tables="-1" aria-label="One table fewer">−</button><b class="num">${TABLES} tables</b><button class="btn" data-tables="1" aria-label="One more table">+</button>
-        <button class="btn primary" data-act="print" ${Object.keys(keys).length < TABLES ? "disabled" : ""}>Print table cards</button></div>
+        <button class="btn primary" data-act="print" ${Object.keys(keys).length < TABLES ? "disabled" : ""}>Print table cards</button>
+        <button class="btn" data-act="print" data-kind="tent" ${Object.keys(keys).length < TABLES ? "disabled" : ""}>Print tent cards</button></div>
       <div class="qrs tqrs">${Array.from({ length: TABLES }, (_, i) => tableCard(i + 1)).join("")}</div>
       <p class="note">Each code carries a secret key, so nobody can order from outside by guessing a table number. If one table's card is damaged or photographed, tap <b>New code</b> under it and reprint just that one.</p>
       <p class="note">Mark big communal tables as <b>Shared</b>: several groups can then order there, each with its own code and bill. On normal tables everyone who scans joins the same bill.</p>
@@ -1970,25 +1971,33 @@ function setupScreen(role) {
       screens.forEach(([k]) => { const el = document.getElementById("sqr-" + k); if (el && !el.childNodes.length && staffTok) brandQr(el, staffLink(k), 132); }); };
     if (window.QRCode) draw(); else window.addEventListener("load", draw, { once: true });
   }
-  // A sheet of table cards to print and cut out: name, table number, QR, one line of instructions.
-  function printCards() {
+  // Table cards to print: A6 cards (four to an A4 sheet, cut on the dashed lines) or tent cards (one per
+  // A4 sheet, folded in half to stand on the table, the same face on both sides). Each card is in the
+  // restaurant's look (logo, name and colours) with the small "Spiced by Wasabi" badge (DESIGN.md).
+  async function printCards(kind) {
     let sheet = document.getElementById("printsheet"); if (sheet) sheet.remove();
-    sheet = document.createElement("div"); sheet.id = "printsheet";
-    sheet.innerHTML = Array.from({ length: TABLES }, (_, i) => `<div class="pcard"><div class="pname">${esc(rname())}</div><div class="ptable">Table ${i + 1}</div>
-      <div class="pqr" id="pqr${i + 1}"></div><div class="phow">Scan to see the menu, order,<br>call your waiter and split the bill</div></div>`).join("");
+    sheet = document.createElement("div"); sheet.id = "printsheet"; sheet.className = kind === "tent" ? "tents" : "cards";
+    let logo = null;
+    if (BRAND.logo) logo = isFileLogo(BRAND.logo) ? BRAND.logo : await Promise.race([photoFor(BRAND.logo), new Promise((r) => setTimeout(r, 4000))]);
+    const face = (n) => `<div class="pface"><div class="phead">${logo ? `<img class="plogo" src="${esc(logo)}" alt="">` : ""}<div class="pname">${esc(rname())}</div></div>
+      <div class="ptable">Table <span class="num">${n}</span></div><div class="pqr" data-n="${n}"></div>
+      <div class="phow">Scan to see the menu, order,<br>call your waiter and split the bill</div>
+      <img class="pspice" src="img/brand/powered-by-wasabi.png" alt="Spiced by Wasabi"></div>`;
+    sheet.innerHTML = Array.from({ length: TABLES }, (_, i) => kind === "tent" ? `<div class="ptent">${face(i + 1)}${face(i + 1)}</div>` : `<div class="pcard">${face(i + 1)}</div>`).join("");
     document.body.appendChild(sheet);
-    // Wait until every code (and its logo) is drawn before opening the print dialog.
-    const drawn = Array.from({ length: TABLES }, (_, i) => brandQr(document.getElementById("pqr" + (i + 1)), tableLink(i + 1, keys[i + 1]), 220).catch(() => {}));
+    // Wait until every code (and its logo) and every picture is ready before opening the print dialog.
+    const drawn = [...sheet.querySelectorAll(".pqr")].map((el) => brandQr(el, tableLink(+el.dataset.n, keys[el.dataset.n]), 220).catch(() => {}));
+    const imgs = [...sheet.querySelectorAll("img")].map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; }));
     document.body.classList.add("printing");
     const done = () => { document.body.classList.remove("printing"); sheet.remove(); };
     window.addEventListener("afterprint", done, { once: true });
-    Promise.all(drawn).then(() => setTimeout(() => { try { window.print(); } catch { done(); } }, 150));
+    Promise.all([...drawn, ...imgs]).then(() => setTimeout(() => { try { window.print(); } catch { done(); } }, 150));
   }
   document.addEventListener("click", async (e) => {
     const ot = e.target.closest("button[data-otab]");
     if (ot && ot.dataset.otab !== "tables") { try { sessionStorage.setItem("dees-otab", ot.dataset.otab); } catch {} location.href = `${BASE}?r=${RID}#${role}`; return; }
     const pr = e.target.closest("button[data-act=print]");
-    if (pr) { printCards(); return; }
+    if (pr) { printCards(pr.dataset.kind); return; }
     // Printers
     const pb = e.target.closest("button[data-pswitch],button[data-pedit],button[data-pdel],button[data-ptest],button[data-pcopy],button[data-plogcsv]");
     if (pb) { const d = pb.dataset; pErr = "";

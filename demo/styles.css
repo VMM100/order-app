@@ -219,18 +219,34 @@ header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
 /* reCAPTCHA's floating badge: hidden, as Google allows when the notice is shown in the sign-in step instead */
 .grecaptcha-badge{visibility:hidden!important}
 
-/* Printable table cards (Setup → Print table cards): only the sheet prints. */
+/* Printable table cards (Tables & QR → Print table cards / Print tent cards): only the sheet prints.
+   Cards are A6, four to an A4 sheet; tent cards fill an A4 sheet, folded across the middle, the top face
+   upside down so both sides read the right way up on the table. In the restaurant's colours. */
 #printsheet{display:none}
 @media print{
+  @page{size:A4;margin:0}
   body.printing>*:not(#printsheet){display:none!important}
-  body.printing{background:#fff}
-  body.printing #printsheet{display:grid;grid-template-columns:repeat(2,1fr);gap:0}
-  .pcard{break-inside:avoid;border:1px dashed #999;padding:18px 12px;text-align:center;color:#000;font-family:var(--body)}
-  .pname{font-family:var(--display);text-transform:var(--dcase);font-size:20px;font-weight:700}
-  .ptable{font-size:30px;font-weight:700;margin:4px 0 10px}
-  .pqr{display:inline-block;line-height:0}
-  .pqr img,.pqr canvas{width:220px!important;height:220px!important}
-  .phow{font-size:13px;margin-top:10px}
+  html{padding:0!important}
+  body.printing{background:#fff;padding:0!important;margin:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.printing #printsheet.cards{display:grid;grid-template-columns:105mm 105mm;grid-auto-rows:148.5mm;gap:0}
+  body.printing #printsheet.tents{display:block}
+  .pcard{break-inside:avoid;outline:.2mm dashed #bbb;outline-offset:-.1mm}
+  .ptent{width:210mm;height:296.8mm;display:grid;grid-template-rows:148.4mm 148.4mm;break-after:page;overflow:hidden}
+  .ptent:last-child{break-after:auto}
+  .ptent .pface:first-child{transform:rotate(180deg);box-shadow:0 -.2mm 0 #bbb}
+  .pface{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;background:#fff;color:#111;font-family:var(--body);overflow:hidden;padding:0 0 6mm}
+  .phead{align-self:stretch;background:var(--accent);color:var(--accent-ink);padding:5mm 6mm 4mm;display:flex;flex-direction:column;align-items:center;gap:2mm}
+  .plogo{width:15mm;height:15mm;object-fit:contain;border-radius:50%;background:#fff;padding:1mm}
+  .pname{font-family:var(--display);text-transform:var(--dcase);font-size:17pt;font-weight:700;line-height:1.05;overflow-wrap:anywhere}
+  .ptable{font-family:var(--display);text-transform:var(--dcase);font-size:24pt;font-weight:700;color:var(--hop)}
+  .pqr{line-height:0}
+  .pqr img,.pqr canvas{width:58mm!important;height:58mm!important}
+  .phow{font-size:9.5pt;line-height:1.35;color:#333}
+  .pspice{height:6.5mm;width:auto}
+  .ptent .pface{padding-bottom:7mm}
+  .ptent .pqr img,.ptent .pqr canvas{width:62mm!important;height:62mm!important}
+  .ptent .ptable{font-size:22pt}
+}
 }
 .btn.small{padding:7px 12px;font-size:13px;min-height:34px}
 .wrow{display:grid;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}
