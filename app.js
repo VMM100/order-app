@@ -150,9 +150,15 @@ const soundBar = () => audio
 
 // Tell staff screens when something new arrives. Tables, orders and alerts load separately when a
 // screen opens, so everything that arrives in its first few seconds counts as already there.
-function watcher() {
-  const seen = new Set(), born = Date.now();
-  return (ids) => { let fresh = false; const settled = Date.now() - born > 4000;
+// Phones that already rang with the screen off (push.js) don't ring again when the waiter opens the screen:
+// whatever arrives in the first few seconds after coming back counts as already heard.
+function watcher(rangWhileAway = () => false) {
+  const seen = new Set(), born = Date.now(); let back = 0, hidden = document.visibilityState === "hidden";
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") hidden = true;
+    else if (hidden) { hidden = false; if (rangWhileAway()) back = Date.now(); }
+  });
+  return (ids) => { let fresh = false; const now = Date.now(), settled = now - born > 4000 && now - back > 4000;
     ids.forEach((id) => { if (!seen.has(id)) { seen.add(id); if (settled) fresh = true; } }); if (fresh) beep(); };
 }
 
@@ -1741,7 +1747,7 @@ function waiterScreen(boss) {
   }
   // A shift that has run 16 hours ends by itself.
   setInterval(() => { if (!boss && S.since && Date.now() - S.since >= SHIFT_MS) endShift("Your shift has ended. Start a new one to keep working."); }, 60000);
-  const notify = watcher();
+  const notify = watcher(() => !boss && ring === "on");
   onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.gotGroups = true; S.groups = s.docs.map((d) => d.data()).filter((g) => !g.tab).sort((a, b) => a.table - b.table || a.opened - b.opened); update(); }, (e) => paint(errorBox(e)));
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => { S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })); update(); });
   onSnapshot(query(rcol("alerts"), where("done", "==", false)), (s) => { S.alerts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.t - b.t); update(); });
