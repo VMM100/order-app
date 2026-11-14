@@ -1,6 +1,7 @@
 // Service worker: makes staff phones ring when the screen is off or Chrome is closed.
 // The server (functions/index.js) sends a push through Firebase Cloud Messaging; Android wakes this
-// worker, which shows a notification with sound and a long buzz. Tapping it opens the waiter screen.
+// worker, which shows a notification with sound and a long buzz (unless the waiter screen is open in front).
+// Tapping it opens the waiter screen.
 // It does nothing else: no caching, so pages always load fresh.
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
@@ -20,7 +21,16 @@ self.addEventListener("push", (event) => {
     timestamp: Number(msg.t) || Date.now(),
     data: { url: msg.url || "/" },
   };
-  event.waitUntil(self.registration.showNotification(title, opts));
+  event.waitUntil((async () => {
+    // The waiter screen is open and in front: it already rings and shows the call, so no banner.
+    // iPhones cancel ringing for sites that receive a push without showing anything, so there the
+    // notification is shown and closed straight away (it may flick for a moment).
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const open = all.some((c) => c.visibilityState === "visible" && /#waiter\b/.test(c.url));
+    if (open && !/iPhone|iPad|Macintosh/.test(self.navigator.userAgent)) return;
+    await self.registration.showNotification(title, opts);
+    if (open) (await self.registration.getNotifications({ tag: opts.tag })).forEach((n) => n.close());
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {
