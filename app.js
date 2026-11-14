@@ -132,8 +132,15 @@ function chimeUrl() {
   return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
 }
 async function keepAwake() { try { if (!wakeLock || wakeLock.released) wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
+// After each chime, tell the phone nothing is playing, so the 1-second chime doesn't sit in the
+// music controls (lock screen, Control Centre) with the Wasabi logo like a song.
+function clearNowPlaying() {
+  try { if (!("mediaSession" in navigator)) return; navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = "none";
+    ["play", "pause", "seekbackward", "seekforward", "previoustrack", "nexttrack"].forEach((k) => { try { navigator.mediaSession.setActionHandler(k, null); } catch {} }); } catch {}
+}
 async function enableSound() {
   const a = new Audio(chimeUrl()); a.preload = "auto"; a.volume = 1;
+  a.addEventListener("ended", () => { try { a.pause(); a.currentTime = 0; } catch {} clearNowPlaying(); });
   try { await a.play(); audio = a; } catch { toast("The browser blocked sound. Tap the button again."); return; }
   keepAwake(); toast("Alerts on. Keep this screen open with the volume up.");
 }
