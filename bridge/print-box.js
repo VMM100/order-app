@@ -44,8 +44,8 @@ async function main() {
   watch(query(C("lines"), where("t", ">=", since)), (s) => (S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() }))));
   watch(query(C("printed"), where("t", ">=", since)), (s) => (S.printed = s.docs.map((d) => d.id)));
   watch(C("printq"), (s) => (S.queue = s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-  watch(query(C("groups"), where("open", "==", true)), (s) => s.docs.forEach((d) => (S.groups[d.id] = d.data())));
-  watch(R(), (d) => { const x = d.data() || {}; S.waiters = x.waiters || []; S.shared = x.shared || []; });
+  watch(query(C("groups"), where("open", "==", true)), (s) => { s.docs.forEach((d) => (S.groups[d.id] = d.data())); S.gotGroups = true; });
+  watch(R(), (d) => { const x = d.data() || {}; S.waiters = x.waiters || []; S.shared = x.shared || []; S.gotRest = true; });
   setInterval(heartbeat, cfg.heartbeatMs || 30e3); heartbeat();
   setInterval(kick, Math.min(15e3, cfg.heartbeatMs || 15e3));   // retry anything that failed
 }
@@ -70,6 +70,8 @@ async function print(p, job, kind) {
 }
 
 async function run() {
+  // Wait for the waiters' names and open tables, so the first tickets after starting aren't missing them.
+  if (!S.gotRest || !S.gotGroups) return;
   const now = Date.now();
   const on = S.printers.filter((p) => p.on !== false && p.ip);
   // 1. New orders.
