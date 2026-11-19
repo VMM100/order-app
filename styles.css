@@ -82,6 +82,17 @@ section{padding-top:16px}
 .cart{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);
   padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-shadow:0 -6px 20px rgb(0 0 0 / .08)}
 .cart .in{max-width:560px;margin:0 auto;display:grid;gap:8px}
+.sentp{gap:6px}.sentt{display:flex;align-items:center;gap:10px;font-size:17px}
+.tick{width:28px;height:28px;flex:none}.tick circle{fill:var(--good)}.tick path{fill:none;stroke:var(--bg);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.steps{display:flex;gap:6px;list-style:none;margin:2px 0 0;padding:0;font-size:13px;color:var(--muted)}
+.steps li{flex:1;padding-top:6px;border-top:3px solid var(--line)}.steps li.on{border-color:var(--good);color:var(--fg);font-weight:600}
+@media (prefers-reduced-motion:no-preference){.sentp.rise .tick path{stroke-dasharray:16;stroke-dashoffset:16;animation:draw .25s .1s cubic-bezier(.2,.8,.2,1) forwards}@keyframes draw{to{stroke-dashoffset:0}}}
+.cartback{position:fixed;inset:0;z-index:5;background:rgb(0 0 0 / .35)}.cartback[hidden]{display:none}
+@media (prefers-reduced-motion:no-preference){
+  .cart .in.rise{animation:rise .25s cubic-bezier(.2,.8,.2,1)}@keyframes rise{from{transform:translateY(calc(100% + 24px))}}
+  .clist.grow{transform-origin:50% 100%;animation:grow .25s cubic-bezier(.2,.8,.2,1)}@keyframes grow{from{opacity:0;transform:translateY(12px) scaleY(.9)}}
+  .clist.leave{animation:shrink .15s cubic-bezier(.4,0,1,1) forwards}@keyframes shrink{to{opacity:0;transform:translateY(12px) scaleY(.9)}}
+  .cartback.show{animation:dim .25s ease-out}.cartback.leave{animation:dim .15s ease-in reverse forwards}@keyframes dim{from{opacity:0}}}
 .cline{display:flex;justify-content:space-between;gap:8px;font-size:13px}
 .cline button{border:none;background:none;color:var(--crit);font-size:12px;padding:0 4px}
 .cart input{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:8px 10px;font:inherit;font-size:16px}
@@ -101,7 +112,7 @@ section{padding-top:16px}
 .grid{display:grid;gap:10px}
 @media (min-width:760px){.wide .grid{grid-template-columns:1fr 1fr}}
 .ticket{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.ticket.new{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.ticket.new,.ticket.needs{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .ticket.ready{opacity:.85}
 .ticket.alert{background:var(--crit-soft);border-color:var(--crit)}
 .ticket header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
@@ -167,7 +178,7 @@ tbody tr:last-child td{border-bottom:none}
 body.flash::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:20;border:8px solid var(--accent);animation:flash 1.6s ease-out forwards}
 @keyframes flash{0%,40%{opacity:1}100%{opacity:0}}
 .err{background:var(--crit);color:#fff;border-radius:10px;padding:12px 14px;margin-top:12px}
-@media (prefers-reduced-motion:no-preference){.ticket{animation:in .25s ease-out}@keyframes in{from{transform:translateY(-4px)}}
+@media (prefers-reduced-motion:no-preference){.ticket.isnew{animation:glow .9s ease-out 2}@keyframes glow{0%{box-shadow:0 0 0 0 var(--accent);background:var(--accent-soft)}100%{box-shadow:0 0 0 14px transparent}}
   .ontheway{animation:pop .4s ease-out}@keyframes pop{0%{transform:scale(.97)}60%{transform:scale(1.01)}}}
 /* branding and photos */
 header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
@@ -273,7 +284,10 @@ header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .cp{min-width:64px;text-align:right}
 /* Bill: your share first. */
 .myshare{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--hop-soft)}
-.myshare b{font-family:var(--display);font-size:28px}
+.myshare{margin-top:4px;padding:16px}.myshare span{font-weight:600}.myshare b{font-family:var(--display);font-size:40px;line-height:1;white-space:nowrap}
+.billrow.quiet{padding:8px 0;color:var(--muted)}.billrow.quiet .amt{font-size:17px}.billrow.quiet > div > div:first-child{font-weight:500 !important}
+.billask{margin-top:16px}
+.thanks{text-align:center;padding:48px 8px 16px}.thanks h2{font-family:var(--display);font-size:34px;text-transform:uppercase;margin:0 0 8px}.thanks p{color:var(--muted);margin:0 0 20px}
 .billrow.me{font-weight:600}
 /* Staff: how long a kitchen ticket has waited; alerts inside a waiter's table card. */
 .age{font-family:var(--display);font-weight:700;font-size:28px;line-height:1;color:var(--fg)}

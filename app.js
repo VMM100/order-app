@@ -559,12 +559,17 @@ async function groupsAt(n) { const s = await getDocs(query(rcol("groups"), where
 function billHtml(t, lines, staff, me) {
   const total = tableTotal(lines);
   const all = shares(t, lines), mine = me && all.find((s) => s.pid === me);
-  const rows = mine ? [mine, ...all.filter((s) => s !== mine)] : all;
-  return `<div class="seg" role="group" aria-label="Split method">
+  // A diner sees what they pay first and big; everyone else is listed quieter below. Staff see all rows alike.
+  const rows = mine ? all.filter((s) => s !== mine) : all;
+  const myCard = mine ? `<div class="myshare"><div style="min-width:0"><span>${mine.paid ? "You've paid" : "You pay"}</span>
+      ${mine.covers.length ? `<div class="note" style="margin:0">Includes ${esc(mine.covers.join(", "))}</div>` : ""}
+      ${t.split !== "equal" && mine.items.length ? `<div class="note" style="margin:0">${mine.items.map((l) => esc(l.n)).join(", ")}</div>` : ""}</div>
+    <b class="num ${mine.paid ? "paid" : ""}">TSh ${fmt(mine.amt)}</b></div>` : "";
+  return `${myCard}<div class="seg" role="group" aria-label="Split method"${mine ? ` style="margin-top:12px"` : ""}>
     <button aria-pressed="${t.split !== "equal"}" data-split="order" data-g="${t.session}">By what they ordered</button>
     <button aria-pressed="${t.split === "equal"}" data-split="equal" data-g="${t.session}">Equally</button></div>
-   ${mine ? `<div class="myshare"><span>Your share${mine.paid ? " · paid" : ""}</span><b class="num ${mine.paid ? "paid" : ""}">TSh ${fmt(mine.amt)}</b></div>` : ""}
-   ${rows.map((s) => `<div class="billrow${s === mine ? " me" : ""}"><div style="min-width:0"><div class="${s.paid ? "paid" : ""}" style="font-weight:600">${esc(s.name)}${s === mine ? " (you)" : ""}</div>
+   ${mine && rows.length ? `<div class="label" style="margin:14px 0 0">Everyone else</div>` : ""}
+   ${rows.map((s) => `<div class="billrow${mine ? " quiet" : ""}"><div style="min-width:0"><div class="${s.paid ? "paid" : ""}" style="font-weight:600">${esc(s.name)}</div>
      ${s.covers.length ? `<div class="note" style="margin:0">Paying for ${esc(s.covers.join(", "))}</div>` : ""}
      ${t.split !== "equal" ? `<div class="note" style="margin:0">${s.items.map((l) => esc(l.n)).join(", ") || "Nothing ordered"}</div>` : ""}</div>
      <div class="row" style="flex-wrap:nowrap"><span class="amt num ${s.paid ? "paid" : ""}">TSh ${fmt(s.amt)}</span>
@@ -1208,8 +1213,8 @@ function dinerScreen() {
     const shared = isShared(S.n), g = S.g;
     if (!S.gLoaded) { $("#cart").hidden = true; return paint(skMenu()); }
     if (!g || !g.open) {
-      $("#cart").hidden = true;
-      return paint(`<section><p class="empty">${shared ? "Your group's bill has been closed" : "This table has been closed"}. Thanks for visiting.</p>${S.viaKey
+      $("#cart").hidden = true; if ($("#cartback")) $("#cartback").hidden = true;
+      return paint(`<section class="thanks"><h2>Thanks for coming</h2><p>${shared ? "Your group's bill is closed" : "Your table is closed"}. We hope to see you again at ${esc(rname())}.</p>${S.viaKey
         ? `<button class="btn primary big" data-act="newsession">Start a new order at table ${esc(S.n)}</button>`
         : `<p class="note" style="text-align:center">To order again, scan the QR code on your table.</p>`}</section>`);
     }
@@ -1240,7 +1245,9 @@ function dinerScreen() {
     } else if (S.tab === "orders") {
       body = Object.entries(g.people || {}).sort(([a], [b]) => (a === S.me.pid ? -1 : b === S.me.pid ? 1 : 0)).map(([pid, p]) => { const ls = S.lines.filter((l) => l.pid === pid);
         return `<div class="who">${esc(p.name)}${pid === S.me.pid ? " (you)" : p.host === S.me.pid ? ` <span class="note">added by you${p.payer ? ", you're paying" : ""}</span>` : p.host && (g.people || {})[p.host] ? ` <span class="note">with ${esc(g.people[p.host].name)}</span>` : ""}</div>` + (ls.length ? ls.map((l) => `<div class="oline"><span class="l">${label(l)}${l.byName ? ` <span class="note">added by ${esc(l.byName)}</span>` : ""}${l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}<span class="note" style="display:block;margin:0">TSh ${fmt(l.pr)}</span></span><span class="pill s-${l.s}">${DINER_S[l.s] || l.s}</span></div>`).join("") : `<p class="note" style="margin:2px 0">Nothing ordered yet</p>`); }).join("");
-    } else body = billHtml(g, S.lines, false, S.me.pid) + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`;
+    } else { const b = open.find((x) => x.type === "bill");
+      body = billHtml(g, S.lines, false, S.me.pid) + (S.lines.length ? `<button class="btn primary big billask" data-alert="bill" ${b ? "disabled" : ""}>${b ? (b.ack ? "Your waiter is on the way" : "Bill requested") : "Bill please"}</button>` : "")
+        + `<p class="note">Pay your waiter as usual. In-app mobile money comes later.</p>`; }
     if (S.tab !== "orders") body += poweredBy();
     // ☰: inviting friends, the account and help. Waiter, Call waiter and Bill please stay on the page.
     setMenu([
@@ -1266,7 +1273,7 @@ function dinerScreen() {
         <div class="trow"><div class="who2"><span>Waiter</span> <b>${g.waiter ? esc(wname(g.waiter)) : "Being assigned"}</b></div>
           <div class="row">${Object.entries(ALERT).map(([k, l]) => { const a = open.find((x) => x.type === k);
             const off = a || (k === "bill" && !S.lines.length);
-            return `<button class="btn small${!a && k === "bill" && S.lines.length ? " primary" : ""}" data-alert="${k}" ${off ? "disabled" : ""}${!a && off ? ` title="Order something first"` : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
+            return `<button class="btn small${!a && k === "bill" && S.lines.length && S.tab !== "bill" ? " primary" : ""}" data-alert="${k}" ${off ? "disabled" : ""}${!a && off ? ` title="Order something first"` : ""}>${a ? (a.ack ? "On the way" : k === "call" ? "Waiter called" : "Bill requested") : l}</button>`; }).join("")}</div></div>
       </div>
       ${asks}${banners}${welcomeCard()}
       <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button aria-pressed="${S.tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
@@ -1306,19 +1313,43 @@ function dinerScreen() {
     const bar = $("#cats"), on = document.querySelector(`#cats .chip[data-cat="${S.cat}"]`);
     if (bar && on) bar.scrollLeft = on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2;
   }
+  // Closing: the list leaves quickly (150 ms), then the bar redraws. Opening again mid-way wins.
+  function closeCart() {
+    const l = $("#cart .clist"), back = $("#cartback"), t = S.cartTok = (S.cartTok || 0) + 1;
+    const done = () => { if (S.cartTok !== t) return; S.cartOpen = false; renderCart(); };
+    if (!l || matchMedia("(prefers-reduced-motion:reduce)").matches) return done();
+    l.classList.add("leave"); if (back) back.classList.add("leave"); setTimeout(done, 150);
+  }
   function renderCart() {
     setBarTop(); keepBar();
     // The basket survives a refresh or a trip back to the front page (until it's sent).
     const ck = `wasabi-cart-${RID}-${S.n || params.get("c") || "x"}`;
     if (!S.cartRestored) { S.cartRestored = true; try { const saved = JSON.parse(sessionStorage.getItem(ck) || "[]"); if (!S.cart.length && Array.isArray(saved)) S.cart = saved.filter((x) => x && x.n && !soldOut(x.n)); } catch {} }
     try { S.cart.length ? sessionStorage.setItem(ck, JSON.stringify(S.cart)) : sessionStorage.removeItem(ck); } catch {}
-    const c = $("#cart"); if (!S.me || !S.cart.length) { c.hidden = true; c.innerHTML = ""; document.body.classList.remove("hascart"); return; }
-    const tot = S.cart.reduce((a, l) => a + l.pr, 0), n = S.cart.length; c.hidden = false;
+    // A dim layer behind the open basket: tapping it closes the basket and nothing else.
+    let back = $("#cartback"); if (!back) { back = document.createElement("div"); back.id = "cartback"; back.className = "cartback"; back.hidden = true; back.addEventListener("click", closeCart); document.body.append(back); }
+    const c = $("#cart"); if (S.cart.length) S.sent = null;
+    // Just placed an order: the bar turns into a short confirmation (tick, who's bringing it, how far along).
+    if (S.me && !S.cart.length && S.sent) { const x = S.sent, rise = x.anim; x.anim = false; back.hidden = true;
+      const bl = S.lines.filter((l) => l.batch === x.bid), step = bl.length && bl.every((l) => l.s === "ready" || l.s === "served") ? 2 : bl.some((l) => l.s !== "new") ? 1 : 0;
+      const w = S.g && S.g.waiter;
+      c.hidden = false; document.body.classList.add("hascart");
+      c.innerHTML = `<div class="in sentp${rise ? " rise" : ""}" role="status">
+        <div class="trow"><div class="sentt"><svg class="tick" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11"/><path d="M7 12.5l3.2 3.2L17 9"/></svg><b>Sent to the ${esc(x.sts.join(" and ").toLowerCase())}</b></div>
+          <button class="btn small ghost" data-act="sentok">OK</button></div>
+        <p class="note" style="margin:0">${w ? `${esc(wname(w))} will bring it to you.` : "Your waiter will bring it to you."} You can follow it under Orders.</p>
+        <ol class="steps" aria-label="Order progress">${["Sent", "Preparing", "Ready"].map((l, i) => `<li class="${i <= step ? "on" : ""}"${i === step ? ` aria-current="step"` : ""}>${l}</li>`).join("")}</ol></div>`;
+      return; }
+    if (!S.me || !S.cart.length) { c.hidden = true; c.innerHTML = ""; back.hidden = true; document.body.classList.remove("hascart"); return; }
+    // One-shot motion: the bar rises the first time it appears and the list grows out of it when opened.
+    // Later redraws (counts, notes) don't replay it.
+    const rise = c.hidden, grow = S.cartAnim === "open"; S.cartAnim = null;
+    const tot = S.cart.reduce((a, l) => a + l.pr, 0), n = S.cart.length; c.hidden = false; back.hidden = !S.cartOpen; back.classList.toggle("show", grow);
     const a = document.activeElement, focused = a && a.id === "note"; S.notes = S.notes || {};
     // The same item and size twice shows once, with a count and − / +.
     const groups = []; S.cart.forEach((l) => { const k = ckey(l); const g = groups.find((x) => x.k === k); if (g) g.q++; else groups.push({ k, l, q: 1 }); });
-    c.innerHTML = `<div class="in">
-      ${S.cartOpen ? `<div class="clist">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}${g.l.who ? ` <span class="cfor">for ${esc(nameOfPid(g.l.who))}</span>` : ""}${S.notes[g.k] && S.noteKey !== g.k ? `<span class="nt" style="display:block">${esc(S.notes[g.k])}</span>` : ""}
+    c.innerHTML = `<div class="in${rise ? " rise" : ""}">
+      ${S.cartOpen ? `<div class="clist${grow ? " grow" : ""}">${groups.map((g) => `<div class="cline"><span class="cn">${label(g.l)}${g.l.who ? ` <span class="cfor">for ${esc(nameOfPid(g.l.who))}</span>` : ""}${S.notes[g.k] && S.noteKey !== g.k ? `<span class="nt" style="display:block">${esc(S.notes[g.k])}</span>` : ""}
             <button class="linkbtn cnote" data-cnote="${esc(g.k)}">${S.notes[g.k] ? "Edit note" : "+ Note"}</button></span>
           <span class="qty"><button class="qb" data-dec="${esc(g.k)}" aria-label="One fewer ${esc(g.l.n)}">−</button><b class="num">${g.q}</b><button class="qb" data-inc="${esc(g.k)}" aria-label="One more ${esc(g.l.n)}">+</button></span>
           <span class="num cp">TSh ${fmt(g.l.pr * g.q)}</span></div>
@@ -1408,7 +1439,9 @@ function dinerScreen() {
     else if (d.inc) { const x = S.cart.find((l) => ckey(l) === d.inc); if (x) S.cart.push({ ...x }); render(); }
     else if (d.cnote) { S.noteKey = S.noteKey === d.cnote ? null : d.cnote; render(); const i = $("#note"); if (i) i.focus(); }
     else if (d.dec) { const i = S.cart.map(ckey).lastIndexOf(d.dec); if (i >= 0) S.cart.splice(i, 1); if (!S.cart.length) S.cartOpen = false; render(); }
-    else if (d.act === "cart") { S.cartOpen = !S.cartOpen; renderCart(); }
+    else if (d.act === "sentok") { S.sent = null; clearTimeout(S.sentTimer); renderCart(); }
+    else if (d.act === "cart" && !S.cartOpen) { S.cartOpen = true; S.cartAnim = "open"; renderCart(); }
+    else if (d.act === "cart") closeCart();
     else if (d.split) setSplit(S.sid, d.split);
     else if (d.alert) {
       try { const ar = await addDoc(rcol("alerts"), { table: Number(S.n), session: S.sid, type: d.alert, pid: S.me.pid, pname: S.me.name, t: Date.now(), ack: null, ackBy: null, done: false }); ringFor(ar.path);
@@ -1421,7 +1454,9 @@ function dinerScreen() {
       S.cart.forEach((l) => { const pid = l.who && ok.has(l.who) ? l.who : S.me.pid;
         batch.set(doc(rcol("lines")), { table: Number(S.n), session: S.sid, batch: bid, pid, pname: nameOfPid(pid).slice(0, 20),
         n: l.n, v: l.v, pr: l.pr, st: l.st, s: "new", t: now, note: ((S.notes || {})[ckey(l)] || S.note || "").trim().slice(0, 200) || null }); });
-      try { await batch.commit(); const sts = [...new Set(S.cart.map((l) => STATIONS[l.st]))]; S.cart = []; S.note = ""; S.notes = {}; S.noteKey = null; S.cartOpen = false; toast("Sent to " + sts.join(" and ")); }
+      try { await batch.commit(); const sts = [...new Set(S.cart.map((l) => STATIONS[l.st]))]; S.cart = []; S.note = ""; S.notes = {}; S.noteKey = null; S.cartOpen = false;
+        // The confirmation stays for 8 seconds, or until OK or the next item added.
+        S.sent = { bid, sts, anim: true }; clearTimeout(S.sentTimer); S.sentTimer = setTimeout(() => { if (S.sent && S.sent.bid === bid) { S.sent = null; renderCart(); } }, 8000); }
       catch (err) { fail(err); }
       S.placing = false; render();
     }
@@ -1467,12 +1502,18 @@ function stationScreen(st) {
   window.wasabiRefresh = softRefresh;   // pull down: fetch only what changed
   $("#wrap").classList.add("wide"); $("#sub").textContent = STATIONS[st]; document.title = STATIONS[st] + " · " + rname();
   const S = { lines: [], groups: {}, all: [] }; const notify = watcher();
+  // A new order glows twice so a cook looking up sees it; nothing else on this screen moves.
+  // Orders already open when the screen loads don't glow. Re-renders keep the glow's place in time.
+  const seen = new Map(); let primed = false;
+  const glow = (b) => { const now = Date.now(); if (!seen.has(b)) seen.set(b, primed ? now : 0); const age = now - seen.get(b);
+    return age < 1800 ? ` isnew" style="animation-delay:-${age}ms` : ""; };
   // Kitchen and bar printers: status on every station screen; the bar screen can switch them on and off.
   let PR = { printers: [], status: {} }, choosing = null;
   const canSwitch = st === "bar", SCREEN = `${STATIONS[st]} screen`;
   watchPrinters(RID, (x) => { PR = x; render(); });
   onSnapshot(query(rcol("lines"), where("s", "in", ["new", "preparing", "ready"])), (s) => {
     S.loaded = true; S.lines = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((l) => l.st === st);
+    if (!primed) { S.lines.forEach((l) => seen.set(l.batch, 0)); primed = true; }
     notify(S.lines.filter((l) => l.s === "new").map((l) => l.batch)); render();
   }, (e) => paint(errorBox(e)));
   onSnapshot(query(rcol("groups"), where("open", "==", true)), (s) => { S.all = s.docs.map((d) => d.data()); S.groups = {}; S.all.forEach((g) => (S.groups[g.session] = g)); render(); });
@@ -1486,7 +1527,7 @@ function stationScreen(st) {
       // How long this order has waited, large enough to read across the kitchen; amber, then red when late.
       const mins = Math.max(0, Math.floor((Date.now() - bl[0].t) / 60000)), lim = st === "bar" ? [5, 10] : [15, 25];
       const late = s === "ready" ? "" : mins >= lim[1] ? " late" : mins >= lim[0] ? " warn" : "";
-      return `<article class="ticket ${s}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="age num${late}" title="Waiting ${mins} min">${mins}<small> min</small></span></header>
+      return `<article class="ticket ${s}${glow(b)}"><header><b>${esc(g ? where_(g, S.all) : `Table ${bl[0].table}`)}</b><span class="age num${late}" title="Waiting ${mins} min">${mins}<small> min</small></span></header>
         <div class="note" style="margin:2px 0 0">${esc(nowName(g, bl[0].pid, bl[0].pname))}${tab ? " · bar tab" : ` · waiter ${w ? esc(wname(w)) : "not assigned yet"}`}${via ? ` · taken by ${esc(via.byName)}` : ""}</div>
         <ul class="slines">${bl.map((l) => `<li class="sline${l.s === "ready" ? " done" : ""}"><span><span class="q">1×</span>${label(l)}${!oneNote && l.note ? `<span class="nt" style="display:block">${esc(l.note)}</span>` : ""}</span>${l.s === "ready"
           ? `<span class="pill s-ready">Ready</span>` : l.s === "new" ? "" : `<button class="btn" data-ready="${l.id}" aria-label="${esc(l.n)} ready">${tab ? "Done" : "Ready"}</button>`}</li>`).join("")}</ul>${oneNote ? `<div class="nt">${esc(oneNote)}</div>` : ""}
@@ -1817,26 +1858,31 @@ function waiterScreen(boss) {
        <div class="acts"><button class="btn primary" data-accept="${g.session}">Accept</button></div></article>`; }).join("");
     const mineCards = mine.map((g) => {
       const al = S.alerts.filter(live(g)), ready = S.lines.filter((l) => live(g)(l) && l.s === "ready"), open = S.open === g.session, unit = isShared(g.table) ? "group" : "table";
-      return `<article class="ticket${al.some((a) => !a.ack) ? " alert" : ""}"><header><b>${esc(name(g))}</b><span class="note" style="margin:0">code ${esc(g.code)}</span></header>
+      // One next step stands out per card: a call first, then food that's ready; Add order only when nothing is waiting.
+      const calls = al.some((a) => !a.ack), waiting = calls || ready.length, more = S.more === g.session;
+      return `<article class="ticket${calls ? " alert" : ready.length ? " needs" : ""}"><header><b>${esc(name(g))}</b><span class="note" style="margin:0">code ${esc(g.code)}</span></header>
         ${al.map((a) => alertRow(a, g)).join("")}
         <p class="note" style="margin:4px 0 0">${Object.values(g.people || {}).map((p) => esc(p.name)).join(", ") || "No guests yet"}</p>
         ${ready.map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · ${STATIONS[l.st]}</span></span><button class="btn primary" data-serve="${l.id}">Served</button></div>`).join("")}
         ${S.lines.filter((l) => live(g)(l) && (l.s === "preparing" || l.s === "new" && !(l.by && l.by === S.me))).map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · ${STATIONS[l.st]}</span></span><span class="pill s-${l.s}">${l.s === "new" ? "Sent" : "Preparing"}</span></div>`).join("")}
         ${S.lines.filter((l) => live(g)(l) && l.s === "new" && l.by && l.by === S.me).map((l) => `<div class="oline"><span class="l">${label(l)} <span class="note">for ${esc(nowName(g, l.pid, l.pname))} · not started yet</span></span><button class="btn ghost small" data-unline="${l.id}" aria-label="Remove ${esc(l.n)}">Remove</button></div>`).join("")}
-        <div class="acts"><button class="btn primary" data-addorder="${g.session}">Add order</button><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button><button class="btn ghost" data-release="${g.session}">Hand over</button>
-          ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>
+        <div class="acts"><button class="btn${waiting ? "" : " primary"}" data-addorder="${g.session}">Add order</button><button class="btn" data-open="${g.session}">${open ? "Hide bill" : "Bill"}</button>
+          <button class="btn ghost" data-more="${g.session}" aria-expanded="${more}">${more ? "Less" : "More"}</button></div>
+        ${more ? `<div class="acts"><button class="btn ghost" data-release="${g.session}">Hand over</button>
+          ${S.confirm === g.session ? `<button class="btn danger" data-close="${g.session}">Tap again to close</button>` : `<button class="btn ghost" data-confirm="${g.session}">Close ${unit}</button>`}</div>` : ""}
         ${open ? billHtml(g, billLines, true) : ""}</article>`;
     }).join("");
     paint(`<section>${pick}${ringBar()}${soundBar()}
       ${free.length ? `<div class="label">Waiting for a waiter · alerts go to everyone</div><div class="grid">${freeCards}</div>` : ""}
-      <div class="trow" style="margin-top:22px"><div class="label" style="margin:0">My tables</div><button class="btn small" data-act="opentable" aria-expanded="${!!S.opening}">${S.opening ? "Cancel" : "+ Open a table"}</button></div>
+      <div class="label" style="margin:22px 0 0">My tables</div>
+      ${!S.gotGroups ? skTickets(2) : mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down, or open one for guests ordering through you.</p>`}
+      <button class="btn big" style="margin-top:14px" data-act="opentable" aria-expanded="${!!S.opening}">${S.opening ? "Cancel" : "+ Open a table"}</button>
       ${S.opening ? `<div class="ticket" style="margin-top:10px"><b>Which table?</b><p class="note" style="margin:2px 0 8px">For guests ordering without their phones. Diners can still scan the table's QR and join.</p>
         <div class="row">${Array.from({ length: TABLES }, (_, i) => i + 1).map((n) => {
           // Taken: guests already sat down there, or another waiter has it. Shared tables take more than one group.
           const g = !isShared(n) && S.groups.find((x) => x.table === n), why = g ? (g.waiter ? (g.waiter === S.me ? "yours already" : `${wname(g.waiter)}'s`) : "guests waiting") : "";
           return `<button class="chip lg" data-opennum="${n}" ${g ? `disabled aria-disabled="true" aria-label="Table ${n}, ${esc(why)}" title="${esc(why)}"` : `aria-label="Table ${n}"`}>${n}</button>`; }).join("")}</div>
         ${S.groups.some((x) => !isShared(x.table)) ? `<p class="note" style="margin:8px 0 0">Greyed out: already has guests or a waiter.</p>` : ""}</div>` : ""}
-      ${!S.gotGroups ? skTickets(2) : mine.length ? `<div class="grid">${mineCards}</div>` : `<p class="note">No tables yet. Accept one when guests sit down, or open one for guests ordering through you.</p>`}
     </section>`);
   }
   // The sign-in card: a standard two-step sign-in (who are you, then PIN) in the restaurant's look.
@@ -1897,6 +1943,7 @@ function waiterScreen(boss) {
         const mine = S.groups.filter((g) => g.waiter === S.me).length;
         await endShift(mine ? `Shift ended. Your ${mine} table${mine > 1 ? "s are" : " is"} still yours until handed over.` : "Shift ended. See you next time."); }
       else if (d.accept) { await runTransaction(db, async (tx) => { const s = await tx.get(groupRef(d.accept)); if (!s.exists() || s.data().waiter) throw new Error("taken"); tx.update(groupRef(d.accept), { waiter: S.me, accepted: Date.now() }); }); toast(`${name(find(d.accept) || { table: "" })} is yours`); }
+      else if (d.more) { S.more = S.more === d.more ? null : d.more; render(); }
       else if (d.release) { await updateDoc(groupRef(d.release), { waiter: null }); toast("Open for another waiter"); }
       else if (d.ack) { await updateDoc(rdoc("alerts", d.ack), { ack: Date.now(), ackBy: S.me }); toast("Diner told you're on the way"); }
       else if (d.done) await updateDoc(rdoc("alerts", d.done), { done: true, doneAt: Date.now() });
