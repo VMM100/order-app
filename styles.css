@@ -480,6 +480,8 @@ body.otk-open{overflow:hidden}
 .otk-chip.editing .otk-pen{color:var(--fg)}
 .otk-chipin{background:none;border:0;outline:0;font:inherit;color:inherit;padding:6px 2px 6px 12px;min-width:0;max-width:20ch;flex:none}
 .otk-chipin::placeholder{color:var(--muted);font-weight:500}
+/* Typing a guest's name: the chip's own glow shows where you are, so no square outline on the name box. */
+.otk-chip .otk-chipin:focus,.otk-chip .otk-chipin:focus-visible{outline:none}
 @keyframes otkpen{from{opacity:0;max-width:0}to{opacity:1;max-width:32px}}
 @media (prefers-reduced-motion:reduce){.otk-pen{animation:none}}
 .otk-search{margin-top:12px}
