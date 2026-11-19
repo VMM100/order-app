@@ -217,7 +217,7 @@ switch between them. Write screens with the variables, never with fixed colours.
 | Screens | Look | How |
 | --- | --- | --- |
 | Diner menu, basket, bill, waiter, kitchen, bar, owner and manager pages | **The restaurant's** (owner page → Look: logo, two colours, display font) | Default `:root` variables (`primary`, `secondary`, `headline-display` above); the restaurant's choices override `--accent`, `--hop` and `--display` at run time |
-| Sign in, My account, sign-up, company page, live demo stage, Coming soon, For owners | **Wasabi's** | `body.wasabi` (the `wasabi-*` tokens) |
+| Sign in, My account, sign-up, company page, live demo stage, Coming soon, For owners; also Wasabi HQ (`paperwork/dashboard/`), the admin dashboard on claude.ai | **Wasabi's** | `body.wasabi` (the `wasabi-*` tokens); HQ copies them into its own `:root` |
 | Restaurant screens | A small Wasabi signature only | "Ordered with Wasabi" line (`poweredBy()`) and the "Spiced by Wasabi" badge on the welcome sticker |
 
 New restaurants start in Wasabi's own look until the owner picks theirs; Crafty Dee's uses Brewhouse.

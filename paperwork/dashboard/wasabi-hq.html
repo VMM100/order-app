@@ -8,119 +8,140 @@
      settings); files live in Google Drive and are reached through the viewer's Google Drive connector.
      Folder ids and all records are data, never in this source. -->
 <style>
-/* Layout: a side rail of sections on wide screens (laptop, iPad landscape), a scrolling tab strip on narrow
-   ones; each section is one column of panels. Wasabi look: rice paper and ink, wasabi green for done and
-   for actions, ginger pink for the one thing that needs attention. */
+/* Wasabi HQ follows DESIGN.md (Wasabi's own look, the body.wasabi tokens). Layout: a side rail of sections on
+   wide screens (laptop, iPad landscape), a scrolling tab strip on narrow ones; one column of cards per
+   section. Wasabi green is a fill with dark ink (main actions, done); green as text is the darker green;
+   status colours always come with a word; ginger is used once per page at most (Today: the late count). */
 :root{
-  --bg:#f6f4ee; --surface:#ffffff; --sunk:#eceee4; --line:#d6dac9; --ink:#1a2117; --text:#1f251b; --muted:#5f6656;
-  --green:#9cc43c; --green-deep:#4a6716; --green-soft:#e6efcf; --pink:#f2a493; --pink-ink:#1a2117; --late:#b3401f; --late-soft:#f7ddd3;
-  --violet-soft:#e9e1f7; --violet:#4b2f7a;
-  --display:"Bricolage Grotesque","Work Sans",system-ui,sans-serif; --body:"Work Sans",system-ui,sans-serif;
+  --bg:#f6f4ee; --surface:#ffffff; --sunk:#eeece4; --fg:#22261f; --muted:#5d6255; --line:#dfdcd1;
+  --green:#9cc43c; --green-ink:#1a2117; --green-soft:#e8f0d2; --green-text:#4a6716;
+  --ginger:#f2a493; --ginger-ink:#1a2117;
+  --good:#2f7a45; --warn:#8a520c; --crit:#b23a2e; --crit-soft:#fbe9e6; --warn-soft:#f6e7cf;
+  --display:"Bricolage Grotesque","Work Sans",system-ui,sans-serif; --body:"Work Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --e-out:cubic-bezier(.2,.8,.2,1); --e-in:cubic-bezier(.4,0,1,1);
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#141a12; --surface:#1d2519; --sunk:#252e20; --line:#36412f; --ink:#eef2e4; --text:#e2e7d8; --muted:#a3ab96;
-  --green:#a9d14a; --green-deep:#c4e27a; --green-soft:#2c3a1c; --late:#ff8a66; --late-soft:#45241a; --violet-soft:#33284a; --violet:#d6c6f2; color-scheme:dark}}
+  --bg:#161812; --surface:#20231b; --sunk:#2a2e24; --fg:#ecebe3; --muted:#a2a596; --line:#34382c;
+  --green:#a9d14a; --green-ink:#121610; --green-soft:#2a3a1c; --green-text:#b8db6c;
+  --good:#6cc487; --warn:#e5a24d; --crit:#ec7a6c; --crit-soft:#3d1f1a; --warn-soft:#3a2c16; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#141a12; --surface:#1d2519; --sunk:#252e20; --line:#36412f; --ink:#eef2e4; --text:#e2e7d8; --muted:#a3ab96;
-  --green:#a9d14a; --green-deep:#c4e27a; --green-soft:#2c3a1c; --late:#ff8a66; --late-soft:#45241a; --violet-soft:#33284a; --violet:#d6c6f2; color-scheme:dark}
+  --bg:#161812; --surface:#20231b; --sunk:#2a2e24; --fg:#ecebe3; --muted:#a2a596; --line:#34382c;
+  --green:#a9d14a; --green-ink:#121610; --green-soft:#2a3a1c; --green-text:#b8db6c;
+  --good:#6cc487; --warn:#e5a24d; --crit:#ec7a6c; --crit-soft:#3d1f1a; --warn-soft:#3a2c16; color-scheme:dark}
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font:15px/1.5 var(--body);margin:0}
-h1,h2,h3{font-family:var(--display);font-weight:800;color:var(--ink);letter-spacing:-.015em;line-height:1.1;margin:0;text-wrap:balance}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--body);margin:0}
+h1,h2,h3{font-family:var(--display);font-weight:800;color:var(--fg);letter-spacing:-.01em;line-height:1.1;margin:0;text-wrap:balance}
 button,input,select,textarea{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--green-deep);outline-offset:2px}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 .num{font-variant-numeric:tabular-nums}
 .shell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}
-.rail{position:sticky;top:0;align-self:start;height:100vh;padding:22px 14px;padding-left:max(14px,env(safe-area-inset-left,0px));border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
-.brand{display:flex;align-items:center;gap:9px;padding:0 8px 18px}
+.rail{position:sticky;top:0;align-self:start;height:100vh;padding:24px 12px;padding-left:max(12px,env(safe-area-inset-left,0px));border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;align-items:center;gap:8px;padding:0 8px 16px}
 .brand svg{width:28px;height:28px;flex:none}
-.brand b{font:800 21px/1 var(--display);color:var(--ink)}
-.brand span{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:3px}
-.nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600}
+.brand b{font:800 20px/1 var(--display);color:var(--fg)}
+.brand span{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:4px}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:8px 12px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600}
 .nav a:hover{background:var(--sunk)}
-.nav a[aria-current="page"]{background:var(--ink);color:var(--bg)}
-.nav .badge{font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--pink);color:var(--pink-ink)}
-.nav a[aria-current="page"] .badge{background:var(--green);color:#1a2117}
+.nav a[aria-current="page"]{background:var(--green);color:var(--green-ink)}
+.nav .badge{font-size:12px;font-weight:600;min-width:24px;text-align:center;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--fg)}
+.nav a[aria-current="page"] .badge{background:var(--green-ink);color:var(--green)}
 .rail .foot{margin-top:auto;font-size:12px;color:var(--muted);padding:0 8px}
-main{padding-block:26px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));min-width:0}
+main{padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));min-width:0}
 .page{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 .ptitle{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .ptitle h1{font-size:30px}
 .ptitle p{margin:4px 0 0;color:var(--muted)}
 @media (max-width:860px){
   .shell{grid-template-columns:minmax(0,1fr)}
-  .rail{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;height:auto;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);background:var(--bg);padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+  .rail{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;height:auto;flex-direction:row;align-items:center;gap:8px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);background:var(--bg);padding:8px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px))}
   body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
-  .brand{padding:0 6px 0 0}.brand div,.rail .foot{display:none}
-  .nav{display:flex;gap:4px}.nav a{white-space:nowrap;padding:7px 11px}
+  .brand{padding:0 4px 0 0}.brand div,.rail .foot{display:none}
+  .nav{flex-direction:row;gap:4px}.nav a{white-space:nowrap}
+  .ptitle h1{font-size:26px}
 }
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px}
-.ph{display:flex;align-items:baseline;gap:10px;padding:14px 18px 10px;flex-wrap:wrap}
-.ph h2{font-size:18px}.ph .sub{color:var(--muted);font-size:13.5px}.ph .right{margin-left:auto}
-.btn{border:0;border-radius:10px;padding:8px 14px;font-weight:600;cursor:pointer;background:var(--ink);color:var(--bg);min-height:38px}
-.btn.green{background:var(--green);color:#1a2117}
-.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
-.btn.small{padding:4px 10px;min-height:30px;font-size:13px}
+/* Cards: flat, a border, 12px corners. Shadows only for things that float (none here). */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.ph{display:flex;align-items:baseline;gap:8px 12px;padding:16px 16px 8px;flex-wrap:wrap}
+.ph h2{font-size:18px}.ph .sub{color:var(--muted);font-size:13px}.ph .right{margin-left:auto}
+/* Buttons: 44px tall. The one main action is wasabi green with dark ink; the rest are neutral. */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-height:44px;font-weight:600;font-size:13px;cursor:pointer;background:var(--surface);color:var(--fg);text-decoration:none}
+.btn:hover{background:var(--sunk)}
+.btn.green{background:var(--green);color:var(--green-ink);border-color:var(--green);border-radius:10px;font-size:15px;padding:10px 16px}
+.btn.green:hover{filter:brightness(1.05)}
+.btn.ghost{background:transparent}
+.btn.small{min-height:32px;padding:4px 10px;position:relative}
 .btn:disabled{opacity:.5;cursor:default}
+@media (pointer:coarse){.btn.small::after{content:"";position:absolute;inset:-6px -2px}}
 .chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap;background:var(--sunk);color:var(--muted)}
-.chip.late{background:var(--late-soft);color:var(--late)} .chip.soon{background:var(--pink);color:var(--pink-ink)} .chip.ok{background:var(--green-soft);color:var(--green-deep)}
-.chip.collect{background:var(--violet-soft);color:var(--violet)} .chip.deliver{background:var(--green-soft);color:var(--green-deep)}
+.chip.late{background:var(--crit-soft);color:var(--crit)} .chip.soon{background:var(--warn-soft);color:var(--warn)} .chip.ok{background:var(--green-soft);color:var(--green-text)}
+.chip.ginger{background:var(--ginger);color:var(--ginger-ink)}
+.chip.collect{background:var(--sunk);color:var(--fg)} .chip.deliver{background:var(--green-soft);color:var(--green-text)}
 .rows>*{border-top:1px solid var(--line)}
-.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;padding:11px 18px;align-items:start}
-.row .t{font-weight:600;color:var(--text);overflow-wrap:anywhere}
-.row .d{color:var(--muted);font-size:13.5px;overflow-wrap:anywhere}
-.row .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
-.row .end{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.ico{width:22px;height:22px;flex:none;color:var(--muted);margin-top:1px}
-.tick{width:22px;height:22px;margin:1px 0 0;accent-color:var(--green-deep);cursor:pointer}
-.empty{padding:26px 18px;text-align:center;color:var(--muted)}
-.empty b{display:block;color:var(--ink);font:700 16px var(--display);margin-bottom:4px}
-.msg{padding:10px 18px;font-size:13.5px;color:var(--muted)}
-.msg.err{color:var(--late)}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;padding:4px 18px 18px}
-.stat{background:var(--sunk);border-radius:12px;padding:12px 14px}
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;padding:12px 16px;align-items:start}
+a.row:hover{background:var(--sunk)}
+.row .t{font-weight:600;font-size:16px;line-height:1.3;color:var(--fg);overflow-wrap:anywhere}
+.row .d{color:var(--muted);font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.row .meta{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:4px}
+.row .end{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.ico{width:24px;height:24px;flex:none;color:var(--muted)}
+.tick{width:22px;height:22px;margin:1px 0 0;accent-color:var(--green-text);cursor:pointer}
+.empty{padding:24px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font:800 16px var(--display);margin-bottom:4px}
+.msg{padding:8px 16px 12px;font-size:13px;color:var(--muted)}
+.msg.err{color:var(--crit)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;padding:4px 16px 16px}
+.stat{background:var(--sunk);border-radius:10px;padding:12px}
 .stat .l{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.stat .v{font:800 24px/1.15 var(--display);color:var(--ink);margin-top:4px}
-.stat.hot{background:var(--pink)} .stat.hot .l,.stat.hot .v{color:var(--pink-ink)}
-.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 12px;padding:6px 18px 16px}
-.f label{display:block;font-size:11.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-.f input,.f select,.f textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);min-height:40px}
+.stat .v{font:800 24px/1.15 var(--display);color:var(--fg);margin-top:4px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;padding:8px 16px 16px}
+.f label{display:block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+/* Inputs: 16px text and 48px tall, so iPhones don't zoom in. */
+.f input,.f select,.f textarea,.search input,.inline-in{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:16px;line-height:1.3;min-height:48px}
 .f.wide{grid-column:1/-1}
-.f input[type="checkbox"]{width:18px;height:18px;min-height:0;padding:0;flex:none;accent-color:var(--green-deep)}
-.f .calc{min-height:40px;display:flex;align-items:center;font-weight:600}
-.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 18px 16px}
-.confirm{margin:0 18px 16px;padding:12px 14px;border-radius:12px;background:var(--green-soft);display:grid;gap:8px}
-.confirm .ft{font-size:13.5px;overflow-wrap:anywhere}.confirm .ft b{font-weight:600}
-.crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:0 18px 10px;font-size:14px}
-.crumbs button{background:none;border:0;padding:2px 4px;color:var(--green-deep);font-weight:600;cursor:pointer}
+.f input[type="checkbox"]{width:20px;height:20px;min-height:0;padding:0;flex:none;accent-color:var(--green-text)}
+.f .check{text-transform:none;letter-spacing:0;font-size:15px;font-weight:500;color:var(--fg);display:flex;gap:8px;align-items:center;min-height:44px;margin:0}
+.f .calc{min-height:48px;display:flex;align-items:center;font-weight:600}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 16px 16px}
+.confirm{margin:0 16px 16px;padding:12px;border-radius:10px;background:var(--green-soft);display:grid;gap:8px}
+.confirm .ft{font-size:13px;overflow-wrap:anywhere}.confirm .ft b{font-weight:600}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:0 16px 8px;font-size:13px}
+.crumbs button{background:none;border:0;padding:0 4px;min-height:32px;color:var(--green-text);font-weight:600;cursor:pointer}
 .crumbs span{color:var(--muted)}
-.search{display:flex;gap:8px;padding:0 18px 12px}
-.search input{flex:1;min-width:0;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);min-height:40px}
-a.out{color:var(--green-deep);font-weight:600;text-decoration:none}
+.search{display:flex;gap:8px;padding:0 16px 12px}
+.search input{flex:1;min-width:0}
+a.out{color:var(--green-text);font-weight:600;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;min-height:32px}
 a.out:hover{text-decoration:underline}
-.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.filters button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
-.filters button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.more{padding:0 18px 14px 52px;color:var(--muted);font-size:14px}
-.more ol{margin:6px 0 0;padding-left:18px;display:grid;gap:4px;color:var(--text)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;min-height:44px;font-size:13px;font-weight:600;color:var(--fg);cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--green-text);color:var(--surface);border-color:var(--green-text)}
+.more{padding:0 16px 16px 52px;color:var(--muted);font-size:13px}
+.more ol{margin:8px 0 0;padding-left:18px;display:grid;gap:4px;color:var(--fg);font-size:15px}
 .more code{font:500 13px ui-monospace,Menlo,monospace;background:var(--sunk);padding:1px 4px;border-radius:4px;overflow-wrap:anywhere}
 .done .t{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
 .na{opacity:.55}
-.note{grid-column:2/4;width:100%;border:1px dashed var(--line);background:transparent;border-radius:8px;padding:6px 9px;font-size:13.5px;min-height:34px;resize:vertical}
+.note{grid-column:2/4;width:100%;border:1px dashed var(--line);background:transparent;border-radius:8px;padding:8px 10px;font-size:16px;min-height:44px;resize:vertical}
 .rgrid{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
 @media (max-width:980px){.rgrid{grid-template-columns:minmax(0,1fr)}}
 .rcard{display:block;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;margin-bottom:8px}
-.rcard[aria-current="true"]{border-color:var(--green-deep);box-shadow:0 0 0 1px var(--green-deep)}
-.rcard .n{font:700 16px/1.2 var(--display);color:var(--ink)}
-.bar{height:6px;background:var(--sunk);border-radius:999px;overflow:hidden;margin:8px 0 6px}
-.bar i{display:block;height:100%;background:var(--green);border-radius:999px}
+.rcard[aria-current="true"]{border-color:var(--green-text);box-shadow:0 0 0 1px var(--green-text)}
+.rcard .n{font:800 16px/1.2 var(--display);color:var(--fg)}
+.bar{height:6px;background:var(--sunk);border-radius:999px;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;width:100%;background:var(--green);border-radius:999px;transform-origin:left center}
 .small{font-size:13px;color:var(--muted)}
-table.money{width:100%;border-collapse:collapse;font-size:14px}
+table.money{width:100%;border-collapse:collapse;font-size:15px}
 .tablewrap{overflow-x:auto}
-table.money th{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 18px;border-bottom:1px solid var(--line);white-space:nowrap}
-table.money td{padding:9px 18px;border-bottom:1px solid var(--line);vertical-align:top}
+table.money th{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.money td{padding:12px 16px;border-bottom:1px solid var(--line);vertical-align:top}
 table.money td.r,table.money th.r{text-align:right}
-.status{min-height:20px;padding:0 18px 12px;font-size:13px;color:var(--muted)}
-@media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
+.status{min-height:20px;padding:0 16px 12px;font-size:13px;color:var(--muted)}
+/* Motion (DESIGN.md): an admin page is a working screen, so it changes instantly. Only pressed states
+   (150 ms) and progress bars filling (250 ms), transform and opacity only, and only without reduced motion. */
+@media (prefers-reduced-motion:no-preference){
+  .btn,.filters button,.nav a{transition:transform .15s var(--e-out)}
+  .btn:active,.filters button:active{transform:scale(.97)}
+  .bar i{transition:transform .25s var(--e-out)}
+}
 </style>
 
 <div class="shell">
@@ -309,13 +330,13 @@ function viewHome() {
     : el("div", { class: "empty" }, el("b", { text: S.loaded.has("todos") ? "Nothing due this week" : "Loading" }), S.loaded.has("todos") ? "Late steps, deadlines in the next two weeks and your Do first to-dos show here." : "");
   const [y, m] = thisMonth().split("-");
   return [
-    title("Today", `${fmt(today())} · ${late ? late + " late, " : ""}${items.length} to look at`),
+    title("Today", `${fmt(today())} · ${items.length} to look at`, late ? el("span", { class: "chip ginger", style: "font-size:13px;padding:4px 12px", text: late + " late" }) : null),
     panel("Due and late", "Onboarding steps, deadlines in the next 14 days, and Do first", null, list),
     panel("Money this month", `${MON[+m - 1]} ${y}`, el("a", { class: "out", href: "#money", text: "Open Money" }),
       el("div", { class: "stats" },
         el("div", { class: "stat" }, el("div", { class: "l", text: "Spent" }), el("div", { class: "v num", text: tsh(mt.spent) })),
         el("div", { class: "stat" }, el("div", { class: "l", text: "Invoiced" }), el("div", { class: "v num", text: tsh(mt.invoiced) })),
-        el("div", { class: "stat" + (mt.received ? " hot" : "") }, el("div", { class: "l", text: "Received" }), el("div", { class: "v num", text: tsh(mt.received) }))),
+        el("div", { class: "stat" }, el("div", { class: "l", text: "Received" }), el("div", { class: "v num", text: tsh(mt.received) }))),
       mt.count ? null : el("div", { class: "msg", text: "Nothing recorded this month yet. Add expenses under Money, or record one while filing a receipt from the Inbox." })),
   ];
 }
@@ -353,7 +374,7 @@ function fileRow(f, inInbox) {
         el("div", { class: "d", text: [f.modifiedTime ? "Changed " + fmt(new Date(Date.parse(f.modifiedTime) + 3 * 3600e3).toISOString().slice(0, 10)) : "", ui.searchHits && tree.map.has(f.parentId) ? "in " + pathOf(f.parentId) : ""].filter(Boolean).join(" · ") })),
       el("div", { class: "end" },
         f.viewUrl ? el("a", { class: "out", href: f.viewUrl, target: "_blank", rel: "noopener", text: "Open ↗" }) : null,
-        !isFolder ? el("button", { class: "btn " + (inInbox ? "green" : "ghost") + " small", onclick: () => { ui.edit = editing ? null : { id: f.id, file: f, s: suggest(f), money: false }; render.force = true; render(); }, text: editing ? "Close" : inInbox ? "File it" : "Rename / move" }) : null)),
+        !isFolder ? el("button", { class: "btn " + (inInbox && !editing ? "green" : "ghost") + " small", onclick: () => { ui.edit = editing ? null : { id: f.id, file: f, s: suggest(f), money: false }; render.force = true; render(); }, text: editing ? "Close" : inInbox ? "File it" : "Rename / move" }) : null)),
     editing ? editor(f) : null);
   return row;
 }
@@ -393,8 +414,8 @@ function editor(f) {
   return el("div", {},
     el("div", { class: "form" }, inp("date", "Date", { placeholder: "2026-11-20" }), inp("who", "Who (counterparty)", { placeholder: "SakuraHost" }), inp("what", "What", { placeholder: "Domain receipt" }),
       el("div", { class: "f wide" }, el("label", { for: "e-folder", text: "Folder" }), sel),
-      el("div", { class: "f wide small" }, el("label", { for: "e-keep", style: "text-transform:none;letter-spacing:0;font-size:13px;display:flex;gap:6px;align-items:center" }, keepName, "Keep the current name, only move it")),
-      el("div", { class: "f wide small" }, el("label", { for: "e-money", style: "text-transform:none;letter-spacing:0;font-size:13px;display:flex;gap:6px;align-items:center" }, mBox, "Also record it in Money")),
+      el("div", { class: "f wide small" }, el("label", { for: "e-keep", class: "check" }, keepName, "Keep the current name, only move it")),
+      el("div", { class: "f wide small" }, el("label", { for: "e-money", class: "check" }, mBox, "Also record it in Money")),
       E.money ? el("div", { class: "f" }, el("label", { for: "e-mtype", text: "Type" }), mType) : null,
       E.money ? el("div", { class: "f" }, el("label", { for: "e-amt", text: "Amount (TSh)" }), mAmt) : null),
     E.confirming ? el("div", { class: "confirm" }, el("div", { class: "ft" }, "From: ", el("b", { text: f.title }), tree.map.has(f.parentId) ? " in " + pathOf(f.parentId) : ""), el("div", { class: "ft" }, "To: ", el("b", { text: E.keep ? f.title : houseName(s) }), " in " + pathOf(s.folderId))) : el("div", { class: "msg" }, "New name: ", preview),
@@ -436,20 +457,20 @@ function viewRestaurants() {
   const list = el("div", {}, S.restaurants.slice().sort((a, b) => summary(b).late.length - summary(a).late.length || (a.created || "").localeCompare(b.created || "")).map((r) => { const s = summary(r);
     return el("button", { class: "rcard", type: "button", "aria-current": cur && cur.id === r.id ? "true" : "false", onclick: () => go("restaurants--" + r.id) },
       el("div", { class: "n", text: r.name || r.id }), el("div", { class: "small", style: "display:flex;justify-content:space-between" }, el("span", { text: s.phase ? s.phase.name : "Onboarded" }), el("span", { class: "num", text: `${s.done} of ${s.total}` })),
-      el("div", { class: "bar" }, el("i", { style: `width:${s.pct}%` })),
-      el("div", { class: "small" }, s.next ? ["Next: ", el("b", { style: "color:var(--text);font-weight:600", text: s.next.title })] : "Paid and filed", " ", s.late.length ? el("span", { class: "chip late", text: s.late.length + " late" }) : null)); }),
+      el("div", { class: "bar" }, el("i", { style: `transform:scaleX(${s.pct / 100})` })),
+      el("div", { class: "small" }, s.next ? ["Next: ", el("b", { style: "color:var(--fg);font-weight:600", text: s.next.title })] : "Paid and filed", " ", s.late.length ? el("span", { class: "chip late", text: s.late.length + " late" }) : null)); }),
     addRestaurant());
   return [title("Restaurants", "Every restaurant from first contact to first payment. Ticks, dates and short notes only; documents stay in Drive."),
     el("div", { class: "rgrid" }, list, cur ? restaurantDetail(cur) : el("div", { class: "panel empty" }, el("b", { text: S.restaurants.length ? "Pick a restaurant" : "No restaurants yet" }), "Each one gets the same steps. Tick a step and it records today's date."))];
 }
 function addRestaurant() {
-  const status = el("div", { class: "status" }), n = el("input", { id: "rn", placeholder: "Name diners know" }), r = el("input", { id: "rr", placeholder: "link name, e.g. mamas-kitchen" });
+  const status = el("div", { class: "status" }), n = el("input", { id: "rn", placeholder: "Name diners know", "aria-label": "Restaurant name" }), r = el("input", { id: "rr", placeholder: "link name, e.g. mamas-kitchen" });
   const slug = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
   n.addEventListener("input", () => { if (!r.dataset.touched) r.value = slug(n.value); }); r.addEventListener("input", () => { r.dataset.touched = "1"; });
   return el("form", { class: "panel", style: "padding:12px 14px;display:grid;gap:8px", onsubmit: async (e) => { e.preventDefault(); const id = slug(r.value), name = n.value.trim().slice(0, 80);
       if (!name || id.length < 2) { status.textContent = "Give it a name and a link name."; return; } if (S.restaurants.some((x) => x.id === id)) { status.textContent = "That link name is already here."; return; }
       if (await create("restaurants", id, { name, created: today(), signed: "", setupDay: "", goLive: "", screens: "", printing: "", printBox: "", steps: {} }, status)) go("restaurants--" + id); } },
-    el("label", { for: "rn", class: "small", style: "font-weight:600", text: "Add a restaurant" }), n, r, el("button", { class: "btn", type: "submit", text: "Add" }), status);
+    el("label", { for: "rn", class: "small", style: "font-weight:600", text: "Add a restaurant" }), el("div", { class: "f" }, n), el("div", { class: "f" }, el("label", { for: "rr", text: "Link name" }), r), el("button", { class: "btn green", type: "submit", text: "Add" }), status);
 }
 function restaurantDetail(r) {
   const s = summary(r), status = el("div", { class: "status", "aria-live": "polite" });
@@ -502,7 +523,7 @@ function viewTodos() {
       has && openMore ? el("div", { class: "more" }, t.why ? el("div", {}, rich(t.why)) : null, t.steps && t.steps.length ? el("ol", {}, t.steps.map((s) => el("li", {}, rich(s)))) : null,
         t.links && t.links.length ? el("div", { class: "meta" }, t.links.filter((l) => /^https:\/\//.test(l.url || "")).map((l) => el("a", { class: "out", href: l.url, target: "_blank", rel: "noopener", text: l.label + " ↗" }))) : null) : null); };
   const sections = SECTIONS.map(([k, name]) => { const list = open.filter((t) => (SECTIONS.some((s) => s[0] === t.section) ? t.section : "later") === k).sort(byOrder); return list.length ? panel(name, String(list.length), null, el("div", { class: "rows" }, list.map(card))) : null; });
-  return [title("To-dos", `${open.length} to do · ${done.length} done. Claude adds to this list with every request and ticks off what it can confirm.`, el("button", { class: "btn", onclick: () => { ui.todoForm = !ui.todoForm; render.force = true; render(); }, text: ui.todoForm ? "Close" : "Add a to-do" })),
+  return [title("To-dos", `${open.length} to do · ${done.length} done. Claude adds to this list with every request and ticks off what it can confirm.`, el("button", { class: "btn green", onclick: () => { ui.todoForm = !ui.todoForm; render.force = true; render(); }, text: ui.todoForm ? "Close" : "Add a to-do" })),
     ui.todoForm ? todoForm() : null, ...sections,
     done.length ? el("details", { class: "panel" }, el("summary", { class: "ph", style: "cursor:pointer" }, el("h2", { text: "Done" }), el("span", { class: "sub", text: String(done.length) })), el("div", { class: "rows" }, done.sort((a, b) => String(b.done).localeCompare(String(a.done))).map(card))) : null,
     S.todos.length || !S.loaded.has("todos") ? null : el("div", { class: "panel empty" }, el("b", { text: "No to-dos" }), "When a request needs something from you, Claude adds it here.")].filter(Boolean);
@@ -512,7 +533,7 @@ function todoForm() {
   return el("form", { class: "panel", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) { status.textContent = "Write the to-do first."; return; }
       if (await create("todos", "own-" + Date.now().toString(36), { title: t.value.trim().slice(0, 200), section: s.value, status: "open", added: today(), done: null, order: 50 }, status)) { ui.todoForm = false; render.force = true; render(); } } },
     el("div", { class: "form" }, el("div", { class: "f wide" }, el("label", { for: "nt", text: "To-do" }), t), el("div", { class: "f" }, el("label", { for: "ns", text: "Section" }), s)),
-    el("div", { class: "actions" }, el("button", { class: "btn", type: "submit", text: "Add" })), status);
+    el("div", { class: "actions" }, el("button", { class: "btn green", type: "submit", text: "Add" })), status);
 }
 
 // ======================================================================= Money
@@ -521,7 +542,7 @@ function nextInvoiceNo() { const y = today().slice(0, 4), ns = S.money.filter((m
 function viewMoney() {
   const months = [...new Set(S.money.map((m) => (m.date || "").slice(0, 7)).filter(Boolean).concat(thisMonth()))].sort().reverse();
   const mt = monthTotals(ui.month || thisMonth()), status = el("div", { class: "status", "aria-live": "polite" });
-  const msel = el("select", { id: "msel", style: "padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)" }, months.map((m) => el("option", { value: m, text: MON[+m.slice(5) - 1] + " " + m.slice(0, 4), selected: m === (ui.month || thisMonth()) })));
+  const msel = el("select", { id: "msel", class: "inline-in", "aria-label": "Month", style: "width:auto" }, months.map((m) => el("option", { value: m, text: MON[+m.slice(5) - 1] + " " + m.slice(0, 4), selected: m === (ui.month || thisMonth()) })));
   msel.addEventListener("change", () => { ui.month = msel.value; render.force = true; render(); });
   const rows = S.money.filter((m) => (m.date || "").startsWith(ui.month || thisMonth())).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const table = rows.length ? el("div", { class: "tablewrap" }, el("table", { class: "money" },
@@ -529,12 +550,12 @@ function viewMoney() {
       el("tbody", {}, rows.map((m) => el("tr", {}, el("td", { class: "num", text: fmt(m.date) }), el("td", {}, TYPES[m.type] || m.type, m.number ? el("div", { class: "small num", text: m.number }) : null), el("td", { text: m.counterparty || "" }), el("td", { text: m.what || "" }),
         el("td", { class: "r num", text: tsh(m.amount) }), el("td", {}, m.fileUrl && /^https:\/\//.test(m.fileUrl) ? el("a", { class: "out", href: m.fileUrl, target: "_blank", rel: "noopener", text: "Open ↗" }) : ""))))))
     : el("div", { class: "empty" }, el("b", { text: "Nothing this month" }), "Add an expense, invoice or payment, or record one while filing from the Inbox.");
-  return [title("Money", "Wasabi's expenses (paid personally until registration), invoices and payments, in TSh.", el("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, el("button", { class: "btn", onclick: () => { ui.moneyForm = ui.moneyForm ? null : { type: "expense", date: today() }; render.force = true; render(); }, text: ui.moneyForm ? "Close" : "Add" }), el("button", { class: "btn ghost", onclick: (e) => csvToDrive(e.currentTarget, status), text: "Save copy to Drive" }))),
+  return [title("Money", "Wasabi's expenses (paid personally until registration), invoices and payments, in TSh.", el("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, el("button", { class: "btn green", onclick: () => { ui.moneyForm = ui.moneyForm ? null : { type: "expense", date: today() }; render.force = true; render(); }, text: ui.moneyForm ? "Close" : "Add" }), el("button", { class: "btn ghost", onclick: (e) => csvToDrive(e.currentTarget, status), text: "Save copy to Drive" }))),
     status, ui.moneyForm ? moneyForm() : null,
     panel("Totals", null, msel, el("div", { class: "stats" },
       el("div", { class: "stat" }, el("div", { class: "l", text: "Spent" }), el("div", { class: "v num", text: tsh(mt.spent) })),
       el("div", { class: "stat" }, el("div", { class: "l", text: "Invoiced" }), el("div", { class: "v num", text: tsh(mt.invoiced) })),
-      el("div", { class: "stat" + (mt.received ? " hot" : "") }, el("div", { class: "l", text: "Received" }), el("div", { class: "v num", text: tsh(mt.received) })))),
+      el("div", { class: "stat" }, el("div", { class: "l", text: "Received" }), el("div", { class: "v num", text: tsh(mt.received) })))),
     panel("Entries", rows.length ? rows.length + " this month" : null, null, table),
     S.settings.csvAt ? el("p", { class: "small", text: `Last copy saved to Drive (04 Money) on ${fmt(S.settings.csvAt)}.` }) : null].filter(Boolean);
 }
@@ -553,7 +574,7 @@ function moneyForm() {
     el("div", { class: "ph" }, el("h2", { text: "Add to Money" })),
     el("div", { class: "form" }, el("div", { class: "f" }, el("label", { for: "m-type", text: "Type" }), type), inp("date", "Date", { type: "date" }), inp("counterparty", M.type === "expense" ? "Paid to" : "Restaurant", { placeholder: M.type === "expense" ? "SakuraHost" : "Crafty Dee's" }),
       inp("amount", "Amount (TSh)", { inputmode: "numeric", placeholder: "130000" }), M.type === "invoice" ? inp("number", "Invoice number") : null, inp("what", "What", { placeholder: M.type === "expense" ? "Domain wasabi.co.tz, 1 year" : "Subscription, December" }), inp("fileUrl", "Receipt or invoice in Drive (link, optional)", { placeholder: "https://drive.google.com/…" })),
-    el("div", { class: "actions" }, el("button", { class: "btn", type: "submit", text: "Save" }), M.type !== "expense" ? el("span", { class: "small", text: "Invoicing waits for the business name registration." }) : null), status);
+    el("div", { class: "actions" }, el("button", { class: "btn green", type: "submit", text: "Save" }), M.type !== "expense" ? el("span", { class: "small", text: "Invoicing waits for the business name registration." }) : null), status);
 }
 async function csvToDrive(btn, status) {
   if (!S.settings.moneyId) { status.textContent = "The 04 Money folder isn't linked yet."; return; }
@@ -578,11 +599,11 @@ function viewDeadlines() {
   const row = (d) => { const st = d.done ? "" : dueState(d.date) || (d.date && days(today(), d.date) <= 14 ? "soon" : "");
     const box = el("input", { type: "checkbox", class: "tick", id: "dl-" + d.id, checked: !!d.done, "aria-label": "Done: " + d.title });
     box.addEventListener("change", async () => { if (box.checked && d.repeat === "yearly" && d.date) await save("deadlines", d.id, { date: addDays(d.date, 365), lastDone: today() }, status); else await save("deadlines", d.id, { done: box.checked ? today() : null }, status); });
-    const date = el("input", { type: "date", id: "dd-" + d.id, value: d.date || "", "aria-label": "Date for " + d.title, style: "padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" });
+    const date = el("input", { type: "date", id: "dd-" + d.id, value: d.date || "", "aria-label": "Date for " + d.title, class: "inline-in", style: "width:auto" });
     date.addEventListener("change", () => save("deadlines", d.id, { date: date.value || "" }, status));
     return el("div", { class: "row" + (d.done ? " done" : "") }, box, el("label", { for: "dl-" + d.id }, el("div", { class: "t", text: d.title }), d.note ? el("div", { class: "d", text: d.note }) : null, el("div", { class: "meta" }, d.repeat === "yearly" ? el("span", { class: "chip", text: "Every year" }) : null, d.lastDone ? el("span", { class: "chip ok", text: "Last done " + fmt(d.lastDone) }) : null)),
       el("div", { class: "end" }, d.done ? el("span", { class: "small", text: "Done " + fmt(d.done) }) : d.date ? el("span", { class: "chip " + st, text: (st === "late" ? "Was due " : "") + fmt(d.date) }) : el("span", { class: "chip", text: "Set a date" }), d.done ? null : date)); };
-  return [title("Deadlines", "Registrations, renewals and filing dates. Ticking a yearly one moves it to next year.", el("button", { class: "btn", onclick: () => { ui.dlForm = !ui.dlForm; render.force = true; render(); }, text: ui.dlForm ? "Close" : "Add a deadline" })),
+  return [title("Deadlines", "Registrations, renewals and filing dates. Ticking a yearly one moves it to next year.", el("button", { class: "btn green", onclick: () => { ui.dlForm = !ui.dlForm; render.force = true; render(); }, text: ui.dlForm ? "Close" : "Add a deadline" })),
     ui.dlForm ? dlForm() : null, status,
     panel("Coming up", open.length + " open", null, open.length ? el("div", { class: "rows" }, open.map(row)) : el("div", { class: "empty" }, el("b", { text: "No deadlines" }), "Add BRELA, PDPC, TRA, licence and domain dates here.")),
     done.length ? panel("Done", null, null, el("div", { class: "rows" }, done.map(row))) : null].filter(Boolean);
@@ -592,7 +613,7 @@ function dlForm() {
   return el("form", { class: "panel", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) { status.textContent = "Name the deadline."; return; }
       if (await create("deadlines", null, { title: t.value.trim().slice(0, 120), date: d.value || "", repeat: rep.value, note: n.value.trim().slice(0, 200), done: null, added: today() }, status)) { ui.dlForm = false; render.force = true; render(); } } },
     el("div", { class: "form" }, el("div", { class: "f wide" }, el("label", { for: "dt", text: "Deadline" }), t), el("div", { class: "f" }, el("label", { for: "dd", text: "Date" }), d), el("div", { class: "f" }, el("label", { for: "dr", text: "Repeats" }), rep), el("div", { class: "f wide" }, el("label", { for: "dn", text: "Note" }), n)),
-    el("div", { class: "actions" }, el("button", { class: "btn", type: "submit", text: "Add" })), status);
+    el("div", { class: "actions" }, el("button", { class: "btn green", type: "submit", text: "Add" })), status);
 }
 
 // ======================================================================= start
