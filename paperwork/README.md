@@ -28,11 +28,22 @@ scans and the files used to fill them live only in Google Drive (`Wasabi / 05 Cu
 
 One master list, `lib/onboarding-steps.js` (decided with Vandan on 20 Nov 2026), drives three things, so
 they never disagree: the printed checklist, the restaurant's Getting started sheet (its `client` wording),
-and the **Onboarding tracker** page on claude.ai (https://claude.ai/artifact/TKkpvAjDDLj4VPiaD75u4J), where
-each restaurant's ticks, dates and notes are kept. The tracker's source is `tracker/onboarding-tracker.html`;
+and the **Restaurants** section of **Wasabi HQ** (https://claude.ai/artifact/KFi19U6639W1vf8nvCx698), where
+each restaurant's ticks, dates and notes are kept. (The separate Onboarding tracker page was retired into HQ on
+20 Nov; its source stays in `tracker/`.) HQ's source is `dashboard/wasabi-hq.html`;
 `node paperwork/tracker/make.mjs` puts the master list into it (in `out/`), and that file is republished as
 the artifact whenever either changes. The tracker holds ticks, dates and short notes only: never contact
 details or documents (those go in Drive).
+
+## Wasabi HQ
+
+Vandan's dashboard on claude.ai (`dashboard/wasabi-hq.html`): Today (due and late, money this month), Files
+(the Wasabi folder in Google Drive through the viewer's Google Drive connector: browse, search, Inbox filing
+with suggested house-style names and folders, rename and move after a confirm, never delete), Restaurants
+(onboarding), To-dos, Money (expenses, invoices, payments; a CSV copy to 04 Money on request) and Deadlines.
+Its records (todos, restaurants, money, deadlines, rules, settings) live in the artifact's own database, never
+in this repository; folder ids are in its `settings/main` record. The daily 9:44 check reads and ticks its
+`todos`.
 
 The rules in the list: everything from first contact to first payment; go live within 7 days of signing,
 on a quiet weekday, every table, Wasabi on site; the 30-day free trial starts on the go-live night; check-ins

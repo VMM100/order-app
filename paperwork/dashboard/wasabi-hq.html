@@ -1,0 +1,612 @@
+<title>Wasabi HQ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Work+Sans:wght@400;500;600&display=swap">
+<!-- Source: paperwork/dashboard/wasabi-hq.html in VMM100/order-app. The onboarding master list between
+     STEPS-START and STEPS-END is a copy of paperwork/lib/onboarding-steps.js (node paperwork/tracker/make.mjs
+     puts it in). Data lives in this artifact's database (todos, restaurants, money, deadlines, rules,
+     settings); files live in Google Drive and are reached through the viewer's Google Drive connector.
+     Folder ids and all records are data, never in this source. -->
+<style>
+/* Layout: a side rail of sections on wide screens (laptop, iPad landscape), a scrolling tab strip on narrow
+   ones; each section is one column of panels. Wasabi look: rice paper and ink, wasabi green for done and
+   for actions, ginger pink for the one thing that needs attention. */
+:root{
+  --bg:#f6f4ee; --surface:#ffffff; --sunk:#eceee4; --line:#d6dac9; --ink:#1a2117; --text:#1f251b; --muted:#5f6656;
+  --green:#9cc43c; --green-deep:#4a6716; --green-soft:#e6efcf; --pink:#f2a493; --pink-ink:#1a2117; --late:#b3401f; --late-soft:#f7ddd3;
+  --violet-soft:#e9e1f7; --violet:#4b2f7a;
+  --display:"Bricolage Grotesque","Work Sans",system-ui,sans-serif; --body:"Work Sans",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a12; --surface:#1d2519; --sunk:#252e20; --line:#36412f; --ink:#eef2e4; --text:#e2e7d8; --muted:#a3ab96;
+  --green:#a9d14a; --green-deep:#c4e27a; --green-soft:#2c3a1c; --late:#ff8a66; --late-soft:#45241a; --violet-soft:#33284a; --violet:#d6c6f2; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a12; --surface:#1d2519; --sunk:#252e20; --line:#36412f; --ink:#eef2e4; --text:#e2e7d8; --muted:#a3ab96;
+  --green:#a9d14a; --green-deep:#c4e27a; --green-soft:#2c3a1c; --late:#ff8a66; --late-soft:#45241a; --violet-soft:#33284a; --violet:#d6c6f2; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:15px/1.5 var(--body);margin:0}
+h1,h2,h3{font-family:var(--display);font-weight:800;color:var(--ink);letter-spacing:-.015em;line-height:1.1;margin:0;text-wrap:balance}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--green-deep);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.shell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}
+.rail{position:sticky;top:0;align-self:start;height:100vh;padding:22px 14px;padding-left:max(14px,env(safe-area-inset-left,0px));border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;align-items:center;gap:9px;padding:0 8px 18px}
+.brand svg{width:28px;height:28px;flex:none}
+.brand b{font:800 21px/1 var(--display);color:var(--ink)}
+.brand span{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:3px}
+.nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600}
+.nav a:hover{background:var(--sunk)}
+.nav a[aria-current="page"]{background:var(--ink);color:var(--bg)}
+.nav .badge{font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--pink);color:var(--pink-ink)}
+.nav a[aria-current="page"] .badge{background:var(--green);color:#1a2117}
+.rail .foot{margin-top:auto;font-size:12px;color:var(--muted);padding:0 8px}
+main{padding-block:26px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));min-width:0}
+.page{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.ptitle{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ptitle h1{font-size:30px}
+.ptitle p{margin:4px 0 0;color:var(--muted)}
+@media (max-width:860px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .rail{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;height:auto;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);background:var(--bg);padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+  body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+  .brand{padding:0 6px 0 0}.brand div,.rail .foot{display:none}
+  .nav{display:flex;gap:4px}.nav a{white-space:nowrap;padding:7px 11px}
+}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.ph{display:flex;align-items:baseline;gap:10px;padding:14px 18px 10px;flex-wrap:wrap}
+.ph h2{font-size:18px}.ph .sub{color:var(--muted);font-size:13.5px}.ph .right{margin-left:auto}
+.btn{border:0;border-radius:10px;padding:8px 14px;font-weight:600;cursor:pointer;background:var(--ink);color:var(--bg);min-height:38px}
+.btn.green{background:var(--green);color:#1a2117}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn.small{padding:4px 10px;min-height:30px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap;background:var(--sunk);color:var(--muted)}
+.chip.late{background:var(--late-soft);color:var(--late)} .chip.soon{background:var(--pink);color:var(--pink-ink)} .chip.ok{background:var(--green-soft);color:var(--green-deep)}
+.chip.collect{background:var(--violet-soft);color:var(--violet)} .chip.deliver{background:var(--green-soft);color:var(--green-deep)}
+.rows>*{border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;padding:11px 18px;align-items:start}
+.row .t{font-weight:600;color:var(--text);overflow-wrap:anywhere}
+.row .d{color:var(--muted);font-size:13.5px;overflow-wrap:anywhere}
+.row .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.row .end{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.ico{width:22px;height:22px;flex:none;color:var(--muted);margin-top:1px}
+.tick{width:22px;height:22px;margin:1px 0 0;accent-color:var(--green-deep);cursor:pointer}
+.empty{padding:26px 18px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font:700 16px var(--display);margin-bottom:4px}
+.msg{padding:10px 18px;font-size:13.5px;color:var(--muted)}
+.msg.err{color:var(--late)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;padding:4px 18px 18px}
+.stat{background:var(--sunk);border-radius:12px;padding:12px 14px}
+.stat .l{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:800 24px/1.15 var(--display);color:var(--ink);margin-top:4px}
+.stat.hot{background:var(--pink)} .stat.hot .l,.stat.hot .v{color:var(--pink-ink)}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 12px;padding:6px 18px 16px}
+.f label{display:block;font-size:11.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.f input,.f select,.f textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);min-height:40px}
+.f.wide{grid-column:1/-1}
+.f input[type="checkbox"]{width:18px;height:18px;min-height:0;padding:0;flex:none;accent-color:var(--green-deep)}
+.f .calc{min-height:40px;display:flex;align-items:center;font-weight:600}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 18px 16px}
+.confirm{margin:0 18px 16px;padding:12px 14px;border-radius:12px;background:var(--green-soft);display:grid;gap:8px}
+.confirm .ft{font-size:13.5px;overflow-wrap:anywhere}.confirm .ft b{font-weight:600}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:0 18px 10px;font-size:14px}
+.crumbs button{background:none;border:0;padding:2px 4px;color:var(--green-deep);font-weight:600;cursor:pointer}
+.crumbs span{color:var(--muted)}
+.search{display:flex;gap:8px;padding:0 18px 12px}
+.search input{flex:1;min-width:0;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);min-height:40px}
+a.out{color:var(--green-deep);font-weight:600;text-decoration:none}
+a.out:hover{text-decoration:underline}
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.filters button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.more{padding:0 18px 14px 52px;color:var(--muted);font-size:14px}
+.more ol{margin:6px 0 0;padding-left:18px;display:grid;gap:4px;color:var(--text)}
+.more code{font:500 13px ui-monospace,Menlo,monospace;background:var(--sunk);padding:1px 4px;border-radius:4px;overflow-wrap:anywhere}
+.done .t{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+.na{opacity:.55}
+.note{grid-column:2/4;width:100%;border:1px dashed var(--line);background:transparent;border-radius:8px;padding:6px 9px;font-size:13.5px;min-height:34px;resize:vertical}
+.rgrid{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:980px){.rgrid{grid-template-columns:minmax(0,1fr)}}
+.rcard{display:block;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;margin-bottom:8px}
+.rcard[aria-current="true"]{border-color:var(--green-deep);box-shadow:0 0 0 1px var(--green-deep)}
+.rcard .n{font:700 16px/1.2 var(--display);color:var(--ink)}
+.bar{height:6px;background:var(--sunk);border-radius:999px;overflow:hidden;margin:8px 0 6px}
+.bar i{display:block;height:100%;background:var(--green);border-radius:999px}
+.small{font-size:13px;color:var(--muted)}
+table.money{width:100%;border-collapse:collapse;font-size:14px}
+.tablewrap{overflow-x:auto}
+table.money th{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 18px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.money td{padding:9px 18px;border-bottom:1px solid var(--line);vertical-align:top}
+table.money td.r,table.money th.r{text-align:right}
+.status{min-height:20px;padding:0 18px 12px;font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="var(--green)" fill-rule="evenodd" d="M31.0 33.0L21.4 52.7A26 26 0 1 0 11.3 42.6ZM31.3 28.7L25.2 13.9L28.4 29.6ZM34.9 31.2L45.1 18.9L32.8 29.1ZM34.4 35.6L50.1 38.8L35.3 32.7Z"/><path fill="var(--green)" d="M29.7 31.7L32.3 34.3L9.3 60.1a2.1 2.1 0 0 1-3-3Z"/></svg><div><b>Wasabi HQ</b><span>Vandan's dashboard</span></div></div>
+    <nav class="nav" aria-label="Sections" id="nav"></nav>
+    <div class="foot" id="railfoot"></div>
+  </aside>
+  <main><div class="page" id="page"></div></main>
+</div>
+
+<script>
+/* STEPS-START (copy of paperwork/lib/onboarding-steps.js) */
+/*STEPS*/
+/* STEPS-END */
+</script>
+<script>
+(function () {
+"use strict";
+// ======================================================================= basics
+const O = window.ONBOARDING;
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue;
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? "" : v); }
+  for (const k of kids.flat(9)) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e; };
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const today = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);   // Dar es Salaam date
+const thisMonth = () => today().slice(0, 7);
+const addDays = (d, n) => { const t = new Date(d + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+const days = (a, b) => Math.round((new Date(b + "T12:00:00Z") - new Date(a + "T12:00:00Z")) / 864e5);
+const fmt = (d) => { if (!d) return ""; const [y, m, x] = d.split("-"); return `${+x} ${MON[+m - 1]}${y !== today().slice(0, 4) ? " " + y : ""}`; };
+const tsh = (n) => "TSh " + Math.round(Number(n) || 0).toLocaleString("en-US");
+const icon = (path) => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("class", "ico"); s.setAttribute("fill", "none"); s.setAttribute("stroke", "currentColor"); s.setAttribute("stroke-width", "2"); s.setAttribute("stroke-linecap", "round"); s.setAttribute("stroke-linejoin", "round"); s.setAttribute("aria-hidden", "true"); s.innerHTML = path; return s; };
+const I = { folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>', file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', check: '<path d="m5 12 5 5 9-10"/>', store: '<path d="M4 10v10h16V10M3 6l2-3h14l2 3v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"/>', coin: '<circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9M12 6v2M12 16v2"/>' };
+
+let db = null, mcp = null;
+const S = { todos: [], restaurants: [], money: [], deadlines: [], rules: [], settings: {}, loaded: new Set() };
+const route = () => { const h = decodeURIComponent(location.hash.slice(1)); const [view, ...rest] = h.split("--"); return { view: view || "home", arg: rest.join("--") }; };
+let ui = { rest: null, rfilter: "all", folder: null, edit: null, todoOpen: new Set(), moneyForm: null, dlForm: null, todoForm: false };
+try { ui.todoOpen = new Set(JSON.parse(localStorage.getItem("hq-todo-open") || "[]")); } catch {}
+
+async function save(col, id, patch, statusEl) {
+  try { await db.collection(col).doc(id).update(patch); if (statusEl) statusEl.textContent = "Saved"; return true; }
+  catch (e) { if (statusEl) statusEl.textContent = e && e.code === "invalid_argument" ? "You can view this but not change it." : "Couldn't save. Check your connection and try again."; return false; }
+}
+async function create(col, id, data, statusEl) {
+  try { const ref = id ? db.collection(col).doc(id) : db.collection(col).doc(); await ref.set(data); return ref.id; }
+  catch (e) { if (statusEl) statusEl.textContent = e && e.code === "quota_exceeded" ? "The store is full." : "Couldn't save. Check your connection and try again."; return null; }
+}
+
+// ======================================================================= Google Drive
+const DRIVE = "Google Drive", FOLDER = "application/vnd.google-apps.folder";
+const driveMsg = (e) => {
+  const c = e && e.code;
+  if (c === "needs_reauth") return "Google Drive needs reconnecting: claude.ai → Settings → Connectors → Google Drive.";
+  if (c === "server_not_connected" || c === "selection_required") return "Add Google Drive in claude.ai → Settings → Connectors to see your files here.";
+  if (c === "not_in_manifest" || c === "approval_required" || c === "consent_required") return "This page isn't allowed to use Google Drive yet. Tap Try again and choose Allow.";
+  if (c === "blocked_by_policy") return "Your organisation's settings block Google Drive here.";
+  if (c === "server_unavailable" || c === "rate_limited") return "Google Drive didn't answer. Try again in a moment.";
+  if (c === "tool_error") return "Google Drive refused that: " + String(e.message || "").slice(0, 160);
+  if (c === "not_granted" || c === "capability_disabled" || c === "capability_removed") return "Files can't be reached in this view. Open Wasabi HQ on claude.ai, signed in.";
+  return "Something went wrong with Google Drive. Try again.";
+};
+async function drive(tool, input, read) {
+  if (!mcp) throw { code: "capability_disabled" };
+  const r = await mcp.callTool(DRIVE, tool, input, read ? { cache: { staleTime: 60000, gcTime: 600000 } } : { cache: false });
+  return r.payload;
+}
+const q = (s) => String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function listIn(parentId, onlyFolders) {
+  let out = [], token;
+  for (let i = 0; i < 6; i++) {
+    const p = await drive("search_files", { query: `parentId = '${q(parentId)}' and trashed = false${onlyFolders ? ` and mimeType = '${FOLDER}'` : ""}`, pageSize: 100, excludeContentSnippets: true, ...(token ? { pageToken: token } : {}) }, true);
+    out = out.concat((p && p.files) || []); token = p && p.nextPageToken; if (!token) break;
+  }
+  return out;
+}
+// All folders under the Wasabi folder, worked out once per visit (for paths, the folder picker and search).
+const tree = { map: new Map(), ready: null };
+function loadTree(force) {
+  if (tree.ready && !force) return tree.ready;
+  const root = S.settings.rootId;
+  tree.ready = (async () => {
+    tree.map = new Map([[root, { id: root, title: "Wasabi", parentId: null }]]);
+    let level = [root];
+    for (let depth = 0; depth < 5 && level.length; depth++) {
+      const next = [];
+      for (let i = 0; i < level.length; i += 12) {
+        const ids = level.slice(i, i + 12);
+        const p = await drive("search_files", { query: `mimeType = '${FOLDER}' and trashed = false and (${ids.map((x) => `parentId = '${q(x)}'`).join(" or ")})`, pageSize: 100, excludeContentSnippets: true }, true);
+        for (const f of (p && p.files) || []) if (!tree.map.has(f.id)) { tree.map.set(f.id, { id: f.id, title: f.title, parentId: f.parentId }); next.push(f.id); }
+      }
+      level = next;
+    }
+    return tree.map;
+  })();
+  tree.ready.catch(() => { tree.ready = null; });
+  return tree.ready;
+}
+const pathOf = (id) => { const parts = []; let cur = tree.map.get(id); let n = 0; while (cur && n++ < 10) { parts.unshift(cur.title); cur = tree.map.get(cur.parentId); } return parts.join(" / "); };
+const folderOptions = () => [...tree.map.values()].filter((f) => f.parentId).map((f) => ({ id: f.id, path: pathOf(f.id).replace(/^Wasabi \/ /, "") })).filter((f) => !/^_to_delete/.test(f.path)).sort((a, b) => a.path.localeCompare(b.path));
+
+// House-style file names: "2026-11-20 Counterparty - What.pdf"
+function suggest(file) {
+  const t = file.title || "", ext = (t.match(/\.[A-Za-z0-9]{2,5}$/) || [""])[0], base = t.slice(0, t.length - ext.length);
+  const dm = base.match(/(20\d\d)[-_. ]?(\d\d)[-_. ]?(\d\d)/);
+  const date = dm ? `${dm[1]}-${dm[2]}-${dm[3]}` : (file.createdTime ? new Date(Date.parse(file.createdTime) + 3 * 3600e3).toISOString().slice(0, 10) : today());
+  const low = base.toLowerCase(), rule = S.rules.find((r) => r.match && low.includes(String(r.match).toLowerCase()));
+  let what = base.replace(dm ? dm[0] : "", "").replace(/[_]+/g, " ");
+  if (rule) what = what.replace(new RegExp(rule.match.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "");
+  what = what.replace(/^[\s\-–·]+|[\s\-–·]+$/g, "").replace(/\s{2,}/g, " ");
+  const m = base.match(/^(\d{4}-\d{2}-\d{2}) (.+?) - (.+)$/);   // already in house style
+  if (m) return { date: m[1], who: m[2], what: m[3], ext, folderId: rule ? rule.folderId : "" };
+  return { date, who: rule ? rule.counterparty : "", what: what || "", ext, folderId: rule ? rule.folderId : "" };
+}
+const houseName = (s) => `${s.date} ${s.who.trim()} - ${s.what.trim()}${s.ext}`.replace(/\s+/g, " ").replace(/[\/\\:*?"<>|]/g, "-");
+
+// ======================================================================= onboarding logic (same as the tracker)
+const PH = O.phases, ST = O.steps;
+const ost = (r, s) => (r.steps && r.steps[s.id]) || {};
+const applies = (r, s) => !(s.needs === "printing" && r.printing === "no");
+const isNA = (r, s) => !applies(r, s) || ost(r, s).na === true;
+const isDone = (r, s) => !!ost(r, s).done;
+const dueOf = (r, s) => { if (!s.due) return ""; const base = s.due[0] === "live" ? r.goLive : r.signed; return base ? addDays(base, s.due[1]) : ""; };
+const dueState = (d) => { if (!d) return ""; const n = days(today(), d); return n < 0 ? "late" : n <= 2 ? "soon" : ""; };
+const stepState = (r, s) => (isDone(r, s) || isNA(r, s)) ? "" : dueState(dueOf(r, s));
+function summary(r) {
+  const open = ST.filter((s) => !isDone(r, s) && !isNA(r, s)), total = ST.filter((s) => !isNA(r, s)).length;
+  const next = open[0];
+  return { next, phase: next ? PH.find((p) => p.id === next.phase) : null, done: total - open.length, total, late: open.filter((s) => stepState(r, s) === "late"), pct: total ? Math.round(((total - open.length) / total) * 100) : 0 };
+}
+
+// ======================================================================= navigation
+const VIEWS = [["home", "Today"], ["files", "Files"], ["restaurants", "Restaurants"], ["todos", "To-dos"], ["money", "Money"], ["deadlines", "Deadlines"]];
+function renderNav() {
+  const { view } = route(), counts = {
+    todos: S.todos.filter((t) => t.status !== "done" && t.section === "now").length,
+    restaurants: S.restaurants.reduce((n, r) => n + summary(r).late.length, 0),
+    deadlines: S.deadlines.filter((d) => !d.done && d.date && days(today(), d.date) <= 14).length,
+    files: ui.inboxCount || 0,
+  };
+  $("#nav").replaceChildren(...VIEWS.map(([k, t]) => el("a", { href: "#" + k, "aria-current": view === k ? "page" : "false" }, t, counts[k] ? el("span", { class: "badge num", text: counts[k] }) : null)));
+  $("#railfoot").textContent = "Today is " + fmt(today()) + ".";
+}
+function render() {
+  renderNav();
+  const { view } = route(), page = $("#page");
+  const fn = { home: viewHome, files: viewFiles, restaurants: viewRestaurants, todos: viewTodos, money: viewMoney, deadlines: viewDeadlines }[view] || viewHome;
+  // Keep what's being typed: don't redraw over a focused field.
+  const a = document.activeElement; if (a && page.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && !render.force) return;
+  render.force = false;
+  page.replaceChildren(...[].concat(fn()));
+}
+window.addEventListener("hashchange", () => { ui.edit = null; render.force = true; render(); window.scrollTo(0, 0); });
+const go = (h) => { location.hash = h; };
+const title = (t, sub, right) => el("div", { class: "ptitle" }, el("div", {}, el("h1", { text: t }), sub ? el("p", { text: sub }) : null), right || null);
+const panel = (h, sub, right, ...body) => el("section", { class: "panel" }, el("div", { class: "ph" }, el("h2", { text: h }), sub ? el("span", { class: "sub", text: sub }) : null, right ? el("div", { class: "right" }, right) : null), ...body);
+const loading = (what) => el("div", { class: "empty" }, el("b", { text: "Loading " + what }), "This takes a moment the first time.");
+
+// ======================================================================= Today
+function dueItems() {
+  const out = [], t = today();
+  // Onboarding: one line per restaurant (its first late or soon step), not every step.
+  for (const r of S.restaurants) { const due = ST.filter((s) => { const d = dueOf(r, s); return !isDone(r, s) && !isNA(r, s) && d && days(t, d) <= 7; });
+    if (!due.length) continue; const late = due.filter((s) => stepState(r, s) === "late").length, first = due[0];
+    out.push({ kind: "Onboarding", title: `${r.name}: ${first.title}`, sub: late > 1 ? `${late} steps late` : due.length > 1 ? `${due.length} steps due this week` : "", date: dueOf(r, first), state: stepState(r, first), href: "#restaurants--" + r.id }); }
+  for (const d of S.deadlines) if (!d.done && d.date && days(t, d.date) <= 14) out.push({ kind: "Deadline", title: d.title, sub: d.note || "", date: d.date, state: dueState(d.date), href: "#deadlines" });
+  out.sort((a, b) => (a.date || "9").localeCompare(b.date || "9"));
+  for (const td of S.todos.filter((x) => x.status !== "done" && x.section === "now")) out.push({ kind: "Do first", title: td.title, sub: "", date: "", state: "", href: "#todos" });
+  return out;
+}
+function monthTotals(month) {
+  const m = S.money.filter((x) => (x.date || "").startsWith(month)), sum = (type) => m.filter((x) => x.type === type).reduce((n, x) => n + (Number(x.amount) || 0), 0);
+  return { spent: sum("expense"), invoiced: sum("invoice"), received: sum("payment"), count: m.length };
+}
+function viewHome() {
+  const items = dueItems(), late = items.filter((i) => i.state === "late").length, mt = monthTotals(thisMonth());
+  const list = items.length ? el("div", { class: "rows" }, items.map((i) => el("a", { class: "row", href: i.href, style: "text-decoration:none;color:inherit" },
+      icon(i.kind === "Deadline" ? I.cal : i.kind === "Onboarding" ? I.store : I.check),
+      el("div", {}, el("div", { class: "t", text: i.title }), el("div", { class: "d", text: [i.kind, i.sub].filter(Boolean).join(" · ") })),
+      el("div", { class: "end" }, i.date ? el("span", { class: "chip " + i.state, text: (i.state === "late" ? "Was due " : "Due ") + fmt(i.date) }) : el("span", { class: "chip", text: "Do first" })))))
+    : el("div", { class: "empty" }, el("b", { text: S.loaded.has("todos") ? "Nothing due this week" : "Loading" }), S.loaded.has("todos") ? "Late steps, deadlines in the next two weeks and your Do first to-dos show here." : "");
+  const [y, m] = thisMonth().split("-");
+  return [
+    title("Today", `${fmt(today())} · ${late ? late + " late, " : ""}${items.length} to look at`),
+    panel("Due and late", "Onboarding steps, deadlines in the next 14 days, and Do first", null, list),
+    panel("Money this month", `${MON[+m - 1]} ${y}`, el("a", { class: "out", href: "#money", text: "Open Money" }),
+      el("div", { class: "stats" },
+        el("div", { class: "stat" }, el("div", { class: "l", text: "Spent" }), el("div", { class: "v num", text: tsh(mt.spent) })),
+        el("div", { class: "stat" }, el("div", { class: "l", text: "Invoiced" }), el("div", { class: "v num", text: tsh(mt.invoiced) })),
+        el("div", { class: "stat" + (mt.received ? " hot" : "") }, el("div", { class: "l", text: "Received" }), el("div", { class: "v num", text: tsh(mt.received) }))),
+      mt.count ? null : el("div", { class: "msg", text: "Nothing recorded this month yet. Add expenses under Money, or record one while filing a receipt from the Inbox." })),
+  ];
+}
+
+// ======================================================================= Files
+function viewFiles() {
+  const out = [title("Files", "Your Wasabi folder in Google Drive. Renames and moves happen only after you confirm; nothing is deleted.")];
+  if (!S.loaded.has("settings") || !ui.mcpReady) { out.push(panel("Files", null, null, loading("your Drive"))); return out; }
+  if (!mcp) { out.push(panel("Files", null, null, el("div", { class: "msg err", text: "Files can't be reached in this view. Open Wasabi HQ on claude.ai, signed in, with Google Drive connected." }))); return out; }
+  if (!S.settings.rootId) { out.push(panel("Not set up", null, null, el("div", { class: "msg", text: "The Wasabi folder isn't linked yet. Ask Claude to link it." }))); return out; }
+  const inboxBody = ui.inboxErr ? el("div", {}, el("div", { class: "msg err", role: "alert", text: ui.inboxErr }), el("div", { class: "actions" }, el("button", { class: "btn ghost small", onclick: () => loadInbox(true), text: "Try again" })))
+    : !ui.inboxFiles ? loading("the Inbox")
+    : ui.inboxFiles.length ? el("div", { class: "rows" }, ui.inboxFiles.map((f) => fileRow(f, true))) : el("div", { class: "empty" }, el("b", { text: "Inbox is empty" }), "Drop files into Wasabi / 00 Inbox in Drive (or on your Mac) and they show here to be filed.");
+  const inbox = panel("Inbox", "Files waiting to be filed", el("button", { class: "btn ghost small", onclick: () => loadInbox(true), text: "Refresh" }), inboxBody);
+  out.push(inbox);
+  out.push(browser());
+  if (!ui.inboxFiles && !ui.inboxErr && !ui.inboxLoading) loadInbox();
+  return out;
+}
+async function loadInbox(force) {
+  ui.inboxLoading = true;
+  try {
+    await loadTree();
+    if (force) await mcp.invalidate(DRIVE, "search_files").catch(() => {});
+    const files = (await listIn(S.settings.inboxId)).filter((f) => f.mimeType !== FOLDER).sort((a, b) => String(b.createdTime).localeCompare(String(a.createdTime)));
+    ui.inboxCount = files.length; ui.inboxFiles = files; ui.inboxErr = "";
+  } catch (e) { ui.inboxErr = driveMsg(e); }
+  ui.inboxLoading = false; render.force = true; render();
+}
+function fileRow(f, inInbox) {
+  const isFolder = f.mimeType === FOLDER, editing = ui.edit && ui.edit.id === f.id;
+  const row = el("div", {},
+    el("div", { class: "row" }, icon(isFolder ? I.folder : I.file),
+      el("div", {}, isFolder ? el("button", { style: "all:unset;cursor:pointer", class: "t", onclick: () => openFolder(f.id), text: f.title }) : el("div", { class: "t", text: f.title }),
+        el("div", { class: "d", text: [f.modifiedTime ? "Changed " + fmt(new Date(Date.parse(f.modifiedTime) + 3 * 3600e3).toISOString().slice(0, 10)) : "", ui.searchHits && tree.map.has(f.parentId) ? "in " + pathOf(f.parentId) : ""].filter(Boolean).join(" · ") })),
+      el("div", { class: "end" },
+        f.viewUrl ? el("a", { class: "out", href: f.viewUrl, target: "_blank", rel: "noopener", text: "Open ↗" }) : null,
+        !isFolder ? el("button", { class: "btn " + (inInbox ? "green" : "ghost") + " small", onclick: () => { ui.edit = editing ? null : { id: f.id, file: f, s: suggest(f), money: false }; render.force = true; render(); }, text: editing ? "Close" : inInbox ? "File it" : "Rename / move" }) : null)),
+    editing ? editor(f) : null);
+  return row;
+}
+function editor(f) {
+  const E = ui.edit, s = E.s, status = el("div", { class: "status", "aria-live": "polite" });
+  const opts = folderOptions();
+  const inp = (key, label, attrs = {}) => { const i = el("input", { id: "e-" + key, value: s[key] || "", ...attrs }); i.addEventListener("input", () => { s[key] = i.value; preview.textContent = houseName(s); }); return el("div", { class: "f" }, el("label", { for: i.id, text: label }), i); };
+  const sel = el("select", { id: "e-folder" }, el("option", { value: "", text: "Choose a folder" }), opts.map((o) => el("option", { value: o.id, text: o.path, selected: o.id === (s.folderId || "") })));
+  sel.addEventListener("change", () => { s.folderId = sel.value; });
+  const preview = el("b", { text: houseName(s) });
+  const keepName = el("input", { type: "checkbox", id: "e-keep" }); keepName.addEventListener("change", () => { E.keep = keepName.checked; });
+  // Optional: record it in Money while filing (receipts and invoices).
+  const mBox = el("input", { type: "checkbox", id: "e-money", checked: E.money }); mBox.addEventListener("change", () => { E.money = mBox.checked; render.force = true; render(); });
+  const mType = el("select", { id: "e-mtype" }, [["expense", "Expense (Wasabi paid)"], ["payment", "Payment received"]].map(([v, t]) => el("option", { value: v, text: t, selected: (E.mtype || "expense") === v })));
+  mType.addEventListener("change", () => { E.mtype = mType.value; });
+  const mAmt = el("input", { id: "e-amt", inputmode: "numeric", placeholder: "45000", value: E.amount || "" }); mAmt.addEventListener("input", () => { E.amount = mAmt.value; });
+  const go = async (btn) => {
+    if (!s.folderId) { status.textContent = "Choose a folder first."; return; }
+    if (!E.keep && (!s.who.trim() || !s.what.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(s.date))) { status.textContent = "Fill in the date (YYYY-MM-DD), who it's from or for, and what it is."; return; }
+    if (!E.confirming) { E.confirming = true; render.force = true; render(); return; }
+    btn.disabled = true; status.textContent = "Moving…";
+    const newTitle = E.keep ? f.title : houseName(s);
+    try {
+      await drive("update_file", { fileId: f.id, title: newTitle, parentId: s.folderId });
+      // Learn the counterparty → folder for next time.
+      if (!E.keep && s.who.trim()) { const key = s.who.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
+        if (key) await db.collection("rules").doc(key).set({ match: s.who.trim().toLowerCase().split(/\s+/)[0], counterparty: s.who.trim(), folderId: s.folderId, folder: pathOf(s.folderId), updated: today() }).catch(() => {}); }
+      if (E.money && Number(String(E.amount).replace(/\D/g, ""))) await create("money", null, { type: E.mtype || "expense", date: s.date, counterparty: s.who.trim(), what: s.what.trim(), amount: Number(String(E.amount).replace(/\D/g, "")), fileId: f.id, fileUrl: f.viewUrl || "", paidFrom: "personal", created: today() });
+      ui.edit = null; await mcp.invalidate(DRIVE, "search_files").catch(() => {});
+      status.textContent = "Filed";
+      loadInbox(true); if (ui.folder) openFolder(ui.folder, true);
+    } catch (e) { btn.disabled = false; E.confirming = false; status.textContent = driveMsg(e) + " Nothing may have changed; refresh before trying again."; }
+  };
+  const btn = el("button", { class: "btn green", onclick: (e) => go(e.currentTarget), text: E.confirming ? "Yes, move and rename" : "Check" });
+  return el("div", {},
+    el("div", { class: "form" }, inp("date", "Date", { placeholder: "2026-11-20" }), inp("who", "Who (counterparty)", { placeholder: "SakuraHost" }), inp("what", "What", { placeholder: "Domain receipt" }),
+      el("div", { class: "f wide" }, el("label", { for: "e-folder", text: "Folder" }), sel),
+      el("div", { class: "f wide small" }, el("label", { for: "e-keep", style: "text-transform:none;letter-spacing:0;font-size:13px;display:flex;gap:6px;align-items:center" }, keepName, "Keep the current name, only move it")),
+      el("div", { class: "f wide small" }, el("label", { for: "e-money", style: "text-transform:none;letter-spacing:0;font-size:13px;display:flex;gap:6px;align-items:center" }, mBox, "Also record it in Money")),
+      E.money ? el("div", { class: "f" }, el("label", { for: "e-mtype", text: "Type" }), mType) : null,
+      E.money ? el("div", { class: "f" }, el("label", { for: "e-amt", text: "Amount (TSh)" }), mAmt) : null),
+    E.confirming ? el("div", { class: "confirm" }, el("div", { class: "ft" }, "From: ", el("b", { text: f.title }), tree.map.has(f.parentId) ? " in " + pathOf(f.parentId) : ""), el("div", { class: "ft" }, "To: ", el("b", { text: E.keep ? f.title : houseName(s) }), " in " + pathOf(s.folderId))) : el("div", { class: "msg" }, "New name: ", preview),
+    el("div", { class: "actions" }, btn, el("button", { class: "btn ghost", onclick: () => { ui.edit = null; render.force = true; render(); }, text: "Cancel" })),
+    status);
+}
+function browser() {
+  const crumbs = el("div", { class: "crumbs" });
+  if (ui.folder && tree.map.size) { const chain = []; let cur = tree.map.get(ui.folder); let n = 0; while (cur && n++ < 10) { chain.unshift(cur); cur = tree.map.get(cur.parentId); }
+    chain.forEach((c, i) => { if (i) crumbs.append(el("span", { text: "/" })); crumbs.append(el("button", { onclick: () => openFolder(c.id), text: c.title })); }); }
+  const sq = el("input", { id: "fsearch", type: "search", placeholder: "Search file names and contents in the Wasabi folder", value: ui.search || "" });
+  const doSearch = async () => { ui.search = sq.value.trim(); if (!ui.search) { ui.searchHits = null; openFolder(ui.folder || S.settings.rootId, true); return; }
+    ui.folderFiles = null; ui.folderErr = ""; render.force = true; render();
+    try { await loadTree(); const t = q(ui.search); const p = await drive("search_files", { query: `(title contains '${t}' or fullText contains '${t}') and trashed = false`, pageSize: 100, excludeContentSnippets: true }, true);
+      ui.folderFiles = ((p && p.files) || []).filter((f) => tree.map.has(f.parentId)); ui.searchHits = true;
+    } catch (e) { ui.folderErr = driveMsg(e); }
+    render.force = true; render(); };
+  sq.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+  if (!ui.folderFiles && !ui.folderErr && !ui.folderLoading) openFolder(ui.folder || S.settings.rootId);
+  const fbody = ui.folderErr ? el("div", {}, el("div", { class: "msg err", role: "alert", text: ui.folderErr }), el("div", { class: "actions" }, el("button", { class: "btn ghost small", onclick: () => openFolder(ui.folder || S.settings.rootId), text: "Try again" })))
+    : !ui.folderFiles ? loading(ui.search ? "search results" : "files")
+    : ui.folderFiles.length ? el("div", { class: "rows" }, ui.folderFiles.map((f) => fileRow(f, false)))
+    : el("div", { class: "empty" }, el("b", { text: ui.searchHits ? "Nothing found" : "Empty folder" }), ui.searchHits ? "Search looks inside the Wasabi folder only." : "Nothing here yet.");
+  return panel("Browse", ui.searchHits ? "Search results" : null, el("a", { class: "out", href: "https://drive.google.com/drive/folders/" + encodeURIComponent(ui.folder || S.settings.rootId), target: "_blank", rel: "noopener", text: "Open in Drive ↗" }),
+    el("div", { class: "search" }, sq, el("button", { class: "btn ghost", onclick: doSearch, text: "Search" })), ui.searchHits ? null : crumbs, fbody);
+}
+async function openFolder(id, force) {
+  ui.folder = id; ui.searchHits = null; ui.folderLoading = true; ui.folderErr = ""; if (!force) { ui.folderFiles = null; render.force = true; render(); }
+  try { await loadTree(); const files = await listIn(id);
+    files.sort((a, b) => (a.mimeType === FOLDER ? 0 : 1) - (b.mimeType === FOLDER ? 0 : 1) || String(a.title).localeCompare(String(b.title)));
+    ui.folderFiles = files;
+  } catch (e) { ui.folderErr = driveMsg(e); }
+  ui.folderLoading = false; render.force = true; render();
+}
+
+// ======================================================================= Restaurants (onboarding)
+function viewRestaurants() {
+  const { arg } = route(), cur = S.restaurants.find((r) => r.id === arg) || (!arg && innerWidth > 980 ? S.restaurants[0] : null);
+  const list = el("div", {}, S.restaurants.slice().sort((a, b) => summary(b).late.length - summary(a).late.length || (a.created || "").localeCompare(b.created || "")).map((r) => { const s = summary(r);
+    return el("button", { class: "rcard", type: "button", "aria-current": cur && cur.id === r.id ? "true" : "false", onclick: () => go("restaurants--" + r.id) },
+      el("div", { class: "n", text: r.name || r.id }), el("div", { class: "small", style: "display:flex;justify-content:space-between" }, el("span", { text: s.phase ? s.phase.name : "Onboarded" }), el("span", { class: "num", text: `${s.done} of ${s.total}` })),
+      el("div", { class: "bar" }, el("i", { style: `width:${s.pct}%` })),
+      el("div", { class: "small" }, s.next ? ["Next: ", el("b", { style: "color:var(--text);font-weight:600", text: s.next.title })] : "Paid and filed", " ", s.late.length ? el("span", { class: "chip late", text: s.late.length + " late" }) : null)); }),
+    addRestaurant());
+  return [title("Restaurants", "Every restaurant from first contact to first payment. Ticks, dates and short notes only; documents stay in Drive."),
+    el("div", { class: "rgrid" }, list, cur ? restaurantDetail(cur) : el("div", { class: "panel empty" }, el("b", { text: S.restaurants.length ? "Pick a restaurant" : "No restaurants yet" }), "Each one gets the same steps. Tick a step and it records today's date."))];
+}
+function addRestaurant() {
+  const status = el("div", { class: "status" }), n = el("input", { id: "rn", placeholder: "Name diners know" }), r = el("input", { id: "rr", placeholder: "link name, e.g. mamas-kitchen" });
+  const slug = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  n.addEventListener("input", () => { if (!r.dataset.touched) r.value = slug(n.value); }); r.addEventListener("input", () => { r.dataset.touched = "1"; });
+  return el("form", { class: "panel", style: "padding:12px 14px;display:grid;gap:8px", onsubmit: async (e) => { e.preventDefault(); const id = slug(r.value), name = n.value.trim().slice(0, 80);
+      if (!name || id.length < 2) { status.textContent = "Give it a name and a link name."; return; } if (S.restaurants.some((x) => x.id === id)) { status.textContent = "That link name is already here."; return; }
+      if (await create("restaurants", id, { name, created: today(), signed: "", setupDay: "", goLive: "", screens: "", printing: "", printBox: "", steps: {} }, status)) go("restaurants--" + id); } },
+    el("label", { for: "rn", class: "small", style: "font-weight:600", text: "Add a restaurant" }), n, r, el("button", { class: "btn", type: "submit", text: "Add" }), status);
+}
+function restaurantDetail(r) {
+  const s = summary(r), status = el("div", { class: "status", "aria-live": "polite" });
+  const dateIn = (key, label) => { const i = el("input", { type: "date", id: "d-" + key, value: r[key] || "" }); i.addEventListener("change", () => save("restaurants", r.id, { [key]: i.value || "" }, status)); return el("div", { class: "f" }, el("label", { for: i.id, text: label }), i); };
+  const sel = (key, label, opts) => { const i = el("select", { id: "s-" + key }, opts.map(([v, t]) => el("option", { value: v, text: t, selected: (r[key] || "") === v }))); i.addEventListener("change", () => save("restaurants", r.id, { [key]: i.value }, status)); return el("div", { class: "f" }, el("label", { for: i.id, text: label }), i); };
+  const calc = (label, text, hot) => el("div", { class: "f" }, el("label", { text: label }), el("div", { class: "calc" }, hot && text ? el("span", { class: "chip soon", text }) : text || "–"));
+  const head = el("section", { class: "panel" },
+    el("div", { class: "ph" }, el("h2", { style: "font-size:24px", text: r.name || r.id }), el("span", { class: "sub", text: "Drive: 05 Customers / " + (r.name || r.id) + " (" + r.id + ")" }), el("span", { class: "right chip " + (s.next ? "" : "ok"), text: s.phase ? s.phase.name : "Onboarded" })),
+    el("div", { class: "form" }, dateIn("signed", "Papers signed"), calc("Go live by", r.signed ? fmt(addDays(r.signed, O.liveWithinDays)) : ""), dateIn("setupDay", "Set-up day"), dateIn("goLive", "Go-live night"), calc("Free trial ends", r.goLive ? fmt(addDays(r.goLive, O.trialDays)) : "", true),
+      sel("screens", "Bar and kitchen screens", [["", "Not agreed yet"], ["theirs", "Their tablets or phones"], ["wasabi", "Wasabi supplies"]]),
+      sel("printing", "Ticket printing", [["", "Not agreed yet"], ["yes", "Yes, through a print box"], ["no", "No, screens only"]]),
+      sel("printBox", "Print box from", [["", "Not agreed yet"], ["wasabi", "Wasabi (stays Wasabi's)"], ["theirs", "The restaurant"], ["none", "Not needed"]])),
+    status);
+  const fbar = el("div", { class: "filters" }, [["all", "All"], ["open", "Still to do"], ["collect", "Collect"], ["deliver", "Deliver"], ["do", "Do"]].map(([k, t]) => el("button", { type: "button", "aria-pressed": ui.rfilter === k ? "true" : "false", onclick: () => { ui.rfilter = k; render.force = true; render(); }, text: t })), el("span", { class: "small num", style: "margin-left:auto", text: `${s.done} of ${s.total} done` }));
+  const secs = PH.map((p) => { let list = ST.filter((x) => x.phase === p.id); const pd = list.filter((x) => isDone(r, x) || isNA(r, x)).length, pt = list.length;
+    if (ui.rfilter === "open") list = list.filter((x) => !isDone(r, x) && !isNA(r, x)); else if (ui.rfilter !== "all") list = list.filter((x) => x.kind === ui.rfilter);
+    if (!list.length) return null;
+    return panel(p.name, p.goal, el("span", { class: "small num", text: `${pd} / ${pt}` }), el("div", { class: "rows" }, list.map((x) => stepRow(r, x, status)))); });
+  return el("div", { style: "display:flex;flex-direction:column;gap:12px;min-width:0" }, head, fbar, secs);
+}
+function stepRow(r, x, status) {
+  const v = ost(r, x), done = isDone(r, x), na = isNA(r, x), due = dueOf(r, x), ds = stepState(r, x);
+  const box = el("input", { type: "checkbox", class: "tick", id: "t-" + x.id, checked: done, disabled: na, "aria-label": x.title });
+  box.addEventListener("change", () => save("restaurants", r.id, { steps: { [x.id]: { done: box.checked ? today() : "" } } }, status));
+  const note = el("textarea", { class: "note", rows: 1, id: "n-" + x.id, placeholder: "A short note (no phone numbers or emails)", "aria-label": "Note for " + x.title, hidden: !v.note });
+  note.value = v.note || ""; note.addEventListener("change", () => save("restaurants", r.id, { steps: { [x.id]: { note: note.value.slice(0, 500) } } }, status));
+  const end = el("div", { class: "end" });
+  if (done) end.append(el("span", { class: "small", text: "Done " + fmt(v.done) })); else if (!applies(r, x)) end.append(el("span", { class: "small", text: "No printing" })); else if (due) end.append(el("span", { class: "chip " + ds, text: (ds === "late" ? "Was due " : "Due ") + fmt(due) }));
+  if (!v.note) end.append(el("button", { class: "btn ghost small", type: "button", onclick: (e) => { note.hidden = false; note.focus(); e.currentTarget.remove(); }, text: "Note" }));
+  if ((x.opt || x.needs) && applies(r, x) && !done) end.append(el("button", { class: "btn ghost small", type: "button", onclick: () => save("restaurants", r.id, { steps: { [x.id]: { na: !v.na } } }, status), text: v.na ? "Needed after all" : "Not needed" }));
+  return el("div", { class: "row" + (done ? " done" : "") + (na ? " na" : "") }, box,
+    el("label", { for: "t-" + x.id }, el("div", { class: "t", text: x.title }), x.detail ? el("div", { class: "d", text: x.detail }) : null,
+      el("div", { class: "meta" }, el("span", { class: "chip " + x.kind, text: { collect: "Collect", deliver: "Deliver", do: "Do" }[x.kind] }), el("span", { class: "chip", text: { W: "Wasabi", R: "Restaurant", "W+R": "Together" }[x.who] }), x.file ? el("span", { class: "chip", text: "Drive: " + x.file }) : null)),
+    end, note);
+}
+
+// ======================================================================= To-dos
+const SECTIONS = [["now", "Do first"], ["test", "Try it yourself"], ["decide", "Decide"], ["pilot", "Pilot"], ["build", "Claude builds before launch"], ["later", "Later"]];
+const rich = (s) => { const span = el("span"); String(s || "").split(/(`[^`]+`|\*\*[^*]+\*\*)/).forEach((p) => { if (/^`.+`$/.test(p)) span.append(el("code", { text: p.slice(1, -1) })); else if (/^\*\*.+\*\*$/.test(p)) span.append(el("b", { text: p.slice(2, -2) })); else if (p) span.append(p); }); return span; };
+function viewTodos() {
+  const open = S.todos.filter((t) => t.status !== "done"), done = S.todos.filter((t) => t.status === "done");
+  const byOrder = (a, b) => (a.order ?? 999) - (b.order ?? 999) || String(a.added).localeCompare(String(b.added));
+  const card = (t) => { const isDone = t.status === "done", openMore = ui.todoOpen.has(t.id), status = el("span");
+    const box = el("input", { type: "checkbox", class: "tick", id: "td-" + t.id, checked: isDone, "aria-label": (isDone ? "Mark as not done: " : "Mark as done: ") + t.title });
+    box.addEventListener("change", () => save("todos", t.id, { status: box.checked ? "done" : "open", done: box.checked ? today() : null }, status));
+    const has = t.why || (t.steps && t.steps.length) || (t.links && t.links.length);
+    return el("div", { class: isDone ? "done" : "" },
+      el("div", { class: "row" }, box, el("div", {}, el("div", { class: "t" }, rich(t.title)), el("div", { class: "d", text: [t.time, isDone ? "Done " + fmt(t.done) : t.added ? "Added " + fmt(t.added) : ""].filter(Boolean).join(" · ") }), status),
+        has ? el("button", { class: "btn ghost small", "aria-expanded": openMore ? "true" : "false", onclick: () => { openMore ? ui.todoOpen.delete(t.id) : ui.todoOpen.add(t.id); try { localStorage.setItem("hq-todo-open", JSON.stringify([...ui.todoOpen])); } catch {} render.force = true; render(); }, text: openMore ? "Hide" : "Steps" }) : el("span")),
+      has && openMore ? el("div", { class: "more" }, t.why ? el("div", {}, rich(t.why)) : null, t.steps && t.steps.length ? el("ol", {}, t.steps.map((s) => el("li", {}, rich(s)))) : null,
+        t.links && t.links.length ? el("div", { class: "meta" }, t.links.filter((l) => /^https:\/\//.test(l.url || "")).map((l) => el("a", { class: "out", href: l.url, target: "_blank", rel: "noopener", text: l.label + " ↗" }))) : null) : null); };
+  const sections = SECTIONS.map(([k, name]) => { const list = open.filter((t) => (SECTIONS.some((s) => s[0] === t.section) ? t.section : "later") === k).sort(byOrder); return list.length ? panel(name, String(list.length), null, el("div", { class: "rows" }, list.map(card))) : null; });
+  return [title("To-dos", `${open.length} to do · ${done.length} done. Claude adds to this list with every request and ticks off what it can confirm.`, el("button", { class: "btn", onclick: () => { ui.todoForm = !ui.todoForm; render.force = true; render(); }, text: ui.todoForm ? "Close" : "Add a to-do" })),
+    ui.todoForm ? todoForm() : null, ...sections,
+    done.length ? el("details", { class: "panel" }, el("summary", { class: "ph", style: "cursor:pointer" }, el("h2", { text: "Done" }), el("span", { class: "sub", text: String(done.length) })), el("div", { class: "rows" }, done.sort((a, b) => String(b.done).localeCompare(String(a.done))).map(card))) : null,
+    S.todos.length || !S.loaded.has("todos") ? null : el("div", { class: "panel empty" }, el("b", { text: "No to-dos" }), "When a request needs something from you, Claude adds it here.")].filter(Boolean);
+}
+function todoForm() {
+  const status = el("div", { class: "status" }), t = el("input", { id: "nt", placeholder: "What needs doing" }), s = el("select", { id: "ns" }, SECTIONS.map(([k, n]) => el("option", { value: k, text: n, selected: k === "pilot" })));
+  return el("form", { class: "panel", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) { status.textContent = "Write the to-do first."; return; }
+      if (await create("todos", "own-" + Date.now().toString(36), { title: t.value.trim().slice(0, 200), section: s.value, status: "open", added: today(), done: null, order: 50 }, status)) { ui.todoForm = false; render.force = true; render(); } } },
+    el("div", { class: "form" }, el("div", { class: "f wide" }, el("label", { for: "nt", text: "To-do" }), t), el("div", { class: "f" }, el("label", { for: "ns", text: "Section" }), s)),
+    el("div", { class: "actions" }, el("button", { class: "btn", type: "submit", text: "Add" })), status);
+}
+
+// ======================================================================= Money
+const TYPES = { expense: "Expense", invoice: "Invoice sent", payment: "Payment received" };
+function nextInvoiceNo() { const y = today().slice(0, 4), ns = S.money.filter((m) => m.type === "invoice" && String(m.number || "").startsWith(`WSB-${y}-`)).map((m) => Number(String(m.number).split("-")[2]) || 0); return `WSB-${y}-${String((ns.length ? Math.max(...ns) : 0) + 1).padStart(3, "0")}`; }
+function viewMoney() {
+  const months = [...new Set(S.money.map((m) => (m.date || "").slice(0, 7)).filter(Boolean).concat(thisMonth()))].sort().reverse();
+  const mt = monthTotals(ui.month || thisMonth()), status = el("div", { class: "status", "aria-live": "polite" });
+  const msel = el("select", { id: "msel", style: "padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)" }, months.map((m) => el("option", { value: m, text: MON[+m.slice(5) - 1] + " " + m.slice(0, 4), selected: m === (ui.month || thisMonth()) })));
+  msel.addEventListener("change", () => { ui.month = msel.value; render.force = true; render(); });
+  const rows = S.money.filter((m) => (m.date || "").startsWith(ui.month || thisMonth())).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const table = rows.length ? el("div", { class: "tablewrap" }, el("table", { class: "money" },
+      el("thead", {}, el("tr", {}, ["Date", "Type", "Who", "What", "Amount", "File"].map((h, i) => el("th", { class: i === 4 ? "r" : "", text: h })))),
+      el("tbody", {}, rows.map((m) => el("tr", {}, el("td", { class: "num", text: fmt(m.date) }), el("td", {}, TYPES[m.type] || m.type, m.number ? el("div", { class: "small num", text: m.number }) : null), el("td", { text: m.counterparty || "" }), el("td", { text: m.what || "" }),
+        el("td", { class: "r num", text: tsh(m.amount) }), el("td", {}, m.fileUrl && /^https:\/\//.test(m.fileUrl) ? el("a", { class: "out", href: m.fileUrl, target: "_blank", rel: "noopener", text: "Open ↗" }) : ""))))))
+    : el("div", { class: "empty" }, el("b", { text: "Nothing this month" }), "Add an expense, invoice or payment, or record one while filing from the Inbox.");
+  return [title("Money", "Wasabi's expenses (paid personally until registration), invoices and payments, in TSh.", el("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, el("button", { class: "btn", onclick: () => { ui.moneyForm = ui.moneyForm ? null : { type: "expense", date: today() }; render.force = true; render(); }, text: ui.moneyForm ? "Close" : "Add" }), el("button", { class: "btn ghost", onclick: (e) => csvToDrive(e.currentTarget, status), text: "Save copy to Drive" }))),
+    status, ui.moneyForm ? moneyForm() : null,
+    panel("Totals", null, msel, el("div", { class: "stats" },
+      el("div", { class: "stat" }, el("div", { class: "l", text: "Spent" }), el("div", { class: "v num", text: tsh(mt.spent) })),
+      el("div", { class: "stat" }, el("div", { class: "l", text: "Invoiced" }), el("div", { class: "v num", text: tsh(mt.invoiced) })),
+      el("div", { class: "stat" + (mt.received ? " hot" : "") }, el("div", { class: "l", text: "Received" }), el("div", { class: "v num", text: tsh(mt.received) })))),
+    panel("Entries", rows.length ? rows.length + " this month" : null, null, table),
+    S.settings.csvAt ? el("p", { class: "small", text: `Last copy saved to Drive (04 Money) on ${fmt(S.settings.csvAt)}.` }) : null].filter(Boolean);
+}
+function moneyForm() {
+  const M = ui.moneyForm, status = el("div", { class: "status" });
+  const inp = (k, label, attrs = {}) => { const i = el("input", { id: "m-" + k, value: M[k] || "", ...attrs }); i.addEventListener("input", () => { M[k] = i.value; }); return el("div", { class: "f" + (k === "what" ? " wide" : "") }, el("label", { for: i.id, text: label }), i); };
+  const type = el("select", { id: "m-type" }, Object.entries(TYPES).map(([v, t]) => el("option", { value: v, text: t, selected: M.type === v })));
+  type.addEventListener("change", () => { M.type = type.value; if (M.type === "invoice" && !M.number) M.number = nextInvoiceNo(); render.force = true; render(); });
+  if (M.type === "invoice" && !M.number) M.number = nextInvoiceNo();
+  return el("form", { class: "panel", onsubmit: async (e) => { e.preventDefault(); const amount = Number(String(M.amount || "").replace(/[^\d]/g, ""));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(M.date || "") || !amount || !(M.counterparty || "").trim()) { status.textContent = "Fill in the date, who, and an amount in TSh."; return; }
+      if (M.fileUrl && !/^https:\/\/(drive|docs)\.google\.com\//.test(M.fileUrl)) { status.textContent = "The file link should be a Google Drive link."; return; }
+      const rec = { type: M.type, date: M.date, counterparty: M.counterparty.trim().slice(0, 80), what: (M.what || "").trim().slice(0, 200), amount, fileUrl: M.fileUrl || "", created: today() };
+      if (M.type === "invoice") rec.number = (M.number || nextInvoiceNo()).trim(); if (M.type === "expense") rec.paidFrom = "personal";
+      if (await create("money", null, rec, status)) { ui.moneyForm = null; render.force = true; render(); } } },
+    el("div", { class: "ph" }, el("h2", { text: "Add to Money" })),
+    el("div", { class: "form" }, el("div", { class: "f" }, el("label", { for: "m-type", text: "Type" }), type), inp("date", "Date", { type: "date" }), inp("counterparty", M.type === "expense" ? "Paid to" : "Restaurant", { placeholder: M.type === "expense" ? "SakuraHost" : "Crafty Dee's" }),
+      inp("amount", "Amount (TSh)", { inputmode: "numeric", placeholder: "130000" }), M.type === "invoice" ? inp("number", "Invoice number") : null, inp("what", "What", { placeholder: M.type === "expense" ? "Domain wasabi.co.tz, 1 year" : "Subscription, December" }), inp("fileUrl", "Receipt or invoice in Drive (link, optional)", { placeholder: "https://drive.google.com/…" })),
+    el("div", { class: "actions" }, el("button", { class: "btn", type: "submit", text: "Save" }), M.type !== "expense" ? el("span", { class: "small", text: "Invoicing waits for the business name registration." }) : null), status);
+}
+async function csvToDrive(btn, status) {
+  if (!S.settings.moneyId) { status.textContent = "The 04 Money folder isn't linked yet."; return; }
+  if (!btn.dataset.armed) { btn.dataset.armed = "1"; btn.textContent = "Tap again to save to 04 Money"; status.textContent = "This writes a new CSV of every entry into 04 Money and moves the previous copy to Drive's trash."; return; }
+  btn.disabled = true; status.textContent = "Saving…";
+  const cols = ["date", "type", "number", "counterparty", "what", "amount", "paidFrom", "fileUrl"], cell = (v) => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const csv = "﻿" + [cols.join(","), ...S.money.slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).map((m) => cols.map((c) => cell(c === "type" ? TYPES[m.type] || m.type : m[c])).join(","))].join("\r\n") + "\r\n";
+  try {
+    const f = await drive("create_file", { title: `${today()} Wasabi - Money log.csv`, parentId: S.settings.moneyId, textContent: csv, contentMimeType: "text/csv", disableConversionToGoogleType: true });
+    const old = S.settings.csvId; const newId = f && (f.id || (f.file && f.file.id));
+    await db.collection("settings").doc("main").update({ csvId: newId || "", csvAt: today() });
+    if (old && newId && old !== newId) await drive("trash_file", { fileId: old }).catch(() => {});
+    status.textContent = "Saved to 04 Money.";
+  } catch (e) { status.textContent = driveMsg(e) + " Check 04 Money before trying again: the file may have been made."; }
+  btn.disabled = false; delete btn.dataset.armed; btn.textContent = "Save copy to Drive";
+}
+
+// ======================================================================= Deadlines
+function viewDeadlines() {
+  const status = el("div", { class: "status", "aria-live": "polite" });
+  const open = S.deadlines.filter((d) => !d.done).sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999")), done = S.deadlines.filter((d) => d.done);
+  const row = (d) => { const st = d.done ? "" : dueState(d.date) || (d.date && days(today(), d.date) <= 14 ? "soon" : "");
+    const box = el("input", { type: "checkbox", class: "tick", id: "dl-" + d.id, checked: !!d.done, "aria-label": "Done: " + d.title });
+    box.addEventListener("change", async () => { if (box.checked && d.repeat === "yearly" && d.date) await save("deadlines", d.id, { date: addDays(d.date, 365), lastDone: today() }, status); else await save("deadlines", d.id, { done: box.checked ? today() : null }, status); });
+    const date = el("input", { type: "date", id: "dd-" + d.id, value: d.date || "", "aria-label": "Date for " + d.title, style: "padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" });
+    date.addEventListener("change", () => save("deadlines", d.id, { date: date.value || "" }, status));
+    return el("div", { class: "row" + (d.done ? " done" : "") }, box, el("label", { for: "dl-" + d.id }, el("div", { class: "t", text: d.title }), d.note ? el("div", { class: "d", text: d.note }) : null, el("div", { class: "meta" }, d.repeat === "yearly" ? el("span", { class: "chip", text: "Every year" }) : null, d.lastDone ? el("span", { class: "chip ok", text: "Last done " + fmt(d.lastDone) }) : null)),
+      el("div", { class: "end" }, d.done ? el("span", { class: "small", text: "Done " + fmt(d.done) }) : d.date ? el("span", { class: "chip " + st, text: (st === "late" ? "Was due " : "") + fmt(d.date) }) : el("span", { class: "chip", text: "Set a date" }), d.done ? null : date)); };
+  return [title("Deadlines", "Registrations, renewals and filing dates. Ticking a yearly one moves it to next year.", el("button", { class: "btn", onclick: () => { ui.dlForm = !ui.dlForm; render.force = true; render(); }, text: ui.dlForm ? "Close" : "Add a deadline" })),
+    ui.dlForm ? dlForm() : null, status,
+    panel("Coming up", open.length + " open", null, open.length ? el("div", { class: "rows" }, open.map(row)) : el("div", { class: "empty" }, el("b", { text: "No deadlines" }), "Add BRELA, PDPC, TRA, licence and domain dates here.")),
+    done.length ? panel("Done", null, null, el("div", { class: "rows" }, done.map(row))) : null].filter(Boolean);
+}
+function dlForm() {
+  const status = el("div", { class: "status" }), t = el("input", { id: "dt", placeholder: "e.g. Business licence renewal" }), d = el("input", { id: "dd", type: "date" }), rep = el("select", { id: "dr" }, el("option", { value: "", text: "Once" }), el("option", { value: "yearly", text: "Every year" })), n = el("input", { id: "dn", placeholder: "Where or how (optional)" });
+  return el("form", { class: "panel", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) { status.textContent = "Name the deadline."; return; }
+      if (await create("deadlines", null, { title: t.value.trim().slice(0, 120), date: d.value || "", repeat: rep.value, note: n.value.trim().slice(0, 200), done: null, added: today() }, status)) { ui.dlForm = false; render.force = true; render(); } } },
+    el("div", { class: "form" }, el("div", { class: "f wide" }, el("label", { for: "dt", text: "Deadline" }), t), el("div", { class: "f" }, el("label", { for: "dd", text: "Date" }), d), el("div", { class: "f" }, el("label", { for: "dr", text: "Repeats" }), rep), el("div", { class: "f wide" }, el("label", { for: "dn", text: "Note" }), n)),
+    el("div", { class: "actions" }, el("button", { class: "btn", type: "submit", text: "Add" })), status);
+}
+
+// ======================================================================= start
+render();
+(async () => {
+  db = window.claude && await window.claude.use("db");
+  if (!db) { $("#page").replaceChildren(el("div", { class: "panel empty" }, el("b", { text: "Sign in to claude.ai to open Wasabi HQ" }), "Your to-dos, restaurants, money and deadlines are kept with this page.")); return; }
+  const timer = setTimeout(() => { if (!S.loaded.size) $("#railfoot").textContent = "Can't reach your data yet; it will appear when the connection is back."; }, 10000);
+  for (const col of ["todos", "restaurants", "money", "deadlines", "rules"]) db.collection(col).onSnapshot((snap) => {
+    if (!snap.metadata.fromCache) clearTimeout(timer);
+    S[col] = snap.docs.filter((d) => d.exists).map((d) => ({ id: d.id, ...d.data() })); S.loaded.add(col); render();
+  }, () => { $("#railfoot").textContent = "Some of your data couldn't load. Reopen the page to try again."; });
+  db.doc("settings/main").onSnapshot((d) => { const first = !S.settings.rootId; S.settings = d.exists ? d.data() : {}; S.loaded.add("settings"); if (first) { ui.folderFiles = null; ui.inboxFiles = null; } render(); }, () => {});
+  mcp = window.claude && await window.claude.use("mcp");
+  ui.mcpReady = true; ui.inboxFiles = null; ui.folderFiles = null;
+  render.force = true; render();
+  // The Inbox count in the side rail, without opening Files first.
+  if (mcp && S.settings.inboxId && route().view !== "files") loadInbox().catch(() => {});
+})();
+})();
+</script>
