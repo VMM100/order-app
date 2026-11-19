@@ -263,6 +263,10 @@ Text must reach 4.5:1 contrast in light and dark. Never show status by colour al
 - **Spacing** steps are 4, 8, 12, 16 and 24px (`spacing`).
 - **Safe areas:** anything fixed to the top or bottom respects the notch and home bar.
 - The basket bar sits fixed at the bottom; page content leaves room for it.
+- **Thumb reach:** the screen's main action sits in the bottom third, full width: Place order, Send, Bill
+  please, Start / Ready, Open a table. Never only in a top corner.
+- **Fewer choices:** at most one main action and three others on a card or screen; anything more goes
+  under **More** (or ☰). A waiter's table card shows the one next step the table needs.
 
 ## Elevation & Depth
 
@@ -298,7 +302,7 @@ The tokens above give each component's exact colours, type, corners and padding.
   and are disabled while the request runs.
 - **Announcements:** toasts and live changes are announced (`#toast` has `role="status"`). Errors use
   `role="alert"`.
-- **Motion:** only under `prefers-reduced-motion: no-preference`; animate `transform` and `opacity` only.
+- **Motion:** see [Motion](#motion) below.
 - **Zoom** is never disabled.
 
 ## Do's and Don'ts
@@ -312,6 +316,44 @@ The tokens above give each component's exact colours, type, corners and padding.
 - Do keep money as `TSh 12,500` with tabular figures.
 - Don't add shadows to things that don't float.
 - Don't use emoji as icons or in the interface.
+- Do let only the urgent stand out: on staff screens, calls (Call waiter, Bill please) and ready items get
+  the one strong colour (`primary` fill or ring); on diner screens only Place order and Bill please use the
+  primary fill. Everything else stays neutral.
+- Don't animate staff screens except to call attention to something new.
+- Do answer every tap within 0.1 s (pressed state, "Sending…"), and update the screen before the
+  network answers; correct it only if the save fails.
+
+## Motion
+
+From the 19 principles of UX and animation, fitted to a restaurant app on cheap phones. Previews:
+https://claude.ai/artifact/AeMEN3hHYGm9WMG9LTNMkX (before / after for each rule).
+
+**Where motion is allowed**
+- **Staff screens** (waiter, kitchen, bar, grill) change **instantly**: they're tapped hundreds of times a
+  night. The only motion is attention: a new order or call glows (twice, `flash`), a wrong PIN shakes.
+- **Diner screens:** a little delight at **three moments only**:
+  1. **Add to basket:** the count badge bumps (150 ms) and the basket bar slides up the first time (250 ms).
+  2. **Opening the basket:** the sheet grows out of the bar that was tapped (origin), 250 ms.
+  3. **Place order (the peak):** "Sending…" at once, then one drawn tick, "Sent to the kitchen and bar",
+     who is bringing it, and Sent / Preparing / Ready.
+  Nothing moves on scroll; no staggered menus.
+- **The end of the night (the bill)** is calm and clear: the diner's own amount first and biggest, others
+  quieter, then a short "Thanks for coming" when the table closes. No confetti.
+
+**Timing and easing**
+
+| Use | Duration | Easing |
+| --- | --- | --- |
+| Small things: counts, chips, pressed states | 150 ms | ease out, `cubic-bezier(.2,.8,.2,1)` |
+| Sheets, panels, menus, dialogs appearing | 250 ms | ease out, `cubic-bezier(.2,.8,.2,1)` |
+| Anything leaving | 150 ms | ease in, `cubic-bezier(.4,0,1,1)` |
+
+- Never over 300 ms. No bounce or overshoot on staff screens.
+- **Interruptible:** a sheet closes on a tap outside or the back arrow even while it is opening; nothing
+  blocks taps while it moves.
+- Animate `transform` and `opacity` only, and only under `prefers-reduced-motion: no-preference`.
+- **Left out on purpose:** squash and stretch, curved paths, tilt toward the pointer, wind-ups,
+  follow-through. They cost smoothness on cheap Androids and add nothing to ordering.
 
 ## Words
 
@@ -342,3 +384,5 @@ screens.
 3. Run the screen through `docs/design/vendor/web-interface-guidelines/command.md`.
 4. Make the same change in `demo/` if the live demo has that screen.
 5. If a colour, size or corner changed in `styles.css`, change the tokens at the top of this file too.
+6. Motion follows [Motion](#motion): staff screens instant, diner delight only at the three moments, 150 /
+   250 ms, nothing that blocks a tap.
