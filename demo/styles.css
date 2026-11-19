@@ -284,7 +284,7 @@ header.top .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .cp{min-width:64px;text-align:right}
 /* Bill: your share first. */
 .myshare{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--hop-soft)}
-.myshare{margin-top:4px;padding:16px}.myshare span{font-weight:600}.myshare b{font-family:var(--display);font-size:40px;line-height:1;white-space:nowrap}
+.myshare{margin-top:4px;padding:16px;flex-wrap:wrap;row-gap:4px}.myshare .mynote{flex-basis:100%;margin:0}.myshare span{font-weight:600}.myshare b{font-family:var(--display);font-size:40px;line-height:1;white-space:nowrap}
 .billrow.quiet{padding:8px 0;color:var(--muted)}.billrow.quiet .amt{font-size:17px}.billrow.quiet > div > div:first-child{font-weight:500 !important}
 .billask{margin-top:16px}
 .thanks{text-align:center;padding:48px 8px 16px}.thanks h2{font-family:var(--display);font-size:34px;text-transform:uppercase;margin:0 0 8px}.thanks p{color:var(--muted);margin:0 0 20px}

@@ -530,10 +530,9 @@ function billHtml(t, lines, staff, me) {
   const all = shares(t, lines), mine = me && all.find((s) => s.pid === me);
   // A diner sees what they pay first and big; everyone else is listed quieter below. Staff see all rows alike.
   const rows = mine ? all.filter((s) => s !== mine) : all;
-  const myCard = mine ? `<div class="myshare"><div style="min-width:0"><span>${mine.paid ? "You've paid" : "You pay"}</span>
-      ${mine.covers.length ? `<div class="note" style="margin:0">Includes ${esc(mine.covers.join(", "))}</div>` : ""}
-      ${t.split !== "equal" && mine.items.length ? `<div class="note" style="margin:0">${mine.items.map((l) => esc(l.n)).join(", ")}</div>` : ""}</div>
-    <b class="num ${mine.paid ? "paid" : ""}">TSh ${fmt(mine.amt)}</b></div>` : "";
+  const myCard = mine ? `<div class="myshare"><span>${mine.paid ? "You've paid" : "You pay"}</span><b class="num ${mine.paid ? "paid" : ""}">TSh ${fmt(mine.amt)}</b>
+      ${mine.covers.length ? `<div class="note mynote">Includes ${esc(mine.covers.join(", "))}</div>` : ""}
+      ${t.split !== "equal" && mine.items.length ? `<div class="note mynote">${mine.items.map((l) => esc(l.n)).join(", ")}</div>` : ""}</div>` : "";
   return `${myCard}<div class="seg" role="group" aria-label="Split method"${mine ? ` style="margin-top:12px"` : ""}>
     <button aria-pressed="${t.split !== "equal"}" data-split="order" data-g="${t.session}">By what they ordered</button>
     <button aria-pressed="${t.split === "equal"}" data-split="equal" data-g="${t.session}">Equally</button></div>
