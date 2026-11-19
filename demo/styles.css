@@ -479,6 +479,10 @@ body.otk-open{overflow:hidden}
 .otk-head b{font-family:var(--display);font-size:22px;text-transform:var(--dcase,uppercase)}
 .otk-who{gap:6px;flex-wrap:wrap}
 .otk-chip{display:inline-flex;align-items:center;padding:0 3px 0 0}
+/* The guest chip holds its own buttons (name, pen, tick) and the name box: no enlarged tap layer on top of
+   them (the phone rule for .chip below would swallow every tap); the pen gets a bigger target instead. */
+.otk-chip::after{content:none}
+@media (pointer:coarse){.otk-pen{width:40px;height:40px;margin:-6px 0}.otk-chipn{padding:9px 2px 9px 12px}}
 .otk-chipn{background:none;border:0;padding:6px 2px 6px 12px;font:inherit;color:inherit;cursor:pointer}
 .otk-pen{background:none;border:0;color:var(--muted);display:inline-grid;place-items:center;width:32px;height:32px;margin:-4px 0;border-radius:999px;cursor:pointer;animation:otkpen .2s ease-out}
 .otk-pen:hover{color:var(--fg)}
