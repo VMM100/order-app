@@ -81,7 +81,9 @@ for (const job of jobs) {
     else await page.waitForFunction(() => window.FILL_DONE === true, null, { timeout: 15000 });
     await page.evaluate(() => document.fonts.ready);
     // Anything cut off at the bottom of an A4 sheet is a mistake: say so instead of printing it.
-    const over = await page.evaluate(() => [...document.querySelectorAll(".sheet .body")].map((b, i) => b.scrollHeight > b.clientHeight + 1 ? i + 1 : 0).filter(Boolean));
+    // (a sheet's footer pushed below the page edge counts too, not only an over-full body)
+    const over = await page.evaluate(() => [...document.querySelectorAll(".sheet")].map((s, i) => { const b = s.querySelector(".body"), f = s.querySelector(".foot");
+      return b.scrollHeight > b.clientHeight + 1 || (f && f.getBoundingClientRect().bottom > s.getBoundingClientRect().bottom + 1) ? i + 1 : 0; }).filter(Boolean));
     if (over.length) { console.error(`✗ ${job.name}: too long for the page on sheet ${over.join(", ")}`); problems++; }
     const title = variant || (await page.title()).replace(/ · Wasabi$/, "");
     const no = variant && DATA.number ? " " + DATA.number : "";

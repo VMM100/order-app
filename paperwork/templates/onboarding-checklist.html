@@ -5,47 +5,69 @@
 <title>Onboarding checklist · Wasabi</title>
 <link rel="stylesheet" href="../lib/wasabi.css">
 <style>
-  table.check td{padding:1.9mm 0;font-size:9pt}
-  table.check td.box{width:7mm} table.check td.who{width:24mm;color:var(--muted)} table.check td.date{width:24mm}
-  table.check tr.grp td{border-bottom:.8pt solid var(--ink);font:700 10pt var(--display);padding-top:4.5mm;color:var(--ink)}
-  .sq{display:inline-block;width:3.6mm;height:3.6mm;border:.8pt solid var(--ink);border-radius:.6mm;vertical-align:-.6mm}
+  .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:2.5mm 5mm;margin:3mm 0 1mm}
+  .hw{display:grid;grid-template-columns:auto 1fr;gap:1.6mm 5mm;font-size:8.6pt;margin-top:2.5mm;align-items:center}
+  .hw .lbl{margin:0}
+  table.check td{padding:1.2mm 0;font-size:8.5pt;line-height:1.3}
+  table.check td.bx{width:6.5mm} table.check td.who{width:19mm;color:var(--muted);font-size:7.8pt} table.check td.who b{display:block;font-size:6.6pt;letter-spacing:.07em;text-transform:uppercase;color:var(--wasabi-deep)} table.check td.due{width:24mm;color:var(--muted);font-size:7.6pt}
+  table.check td.date{width:20mm}
+  table.check .d{display:block;color:var(--muted);font-size:7.6pt}
+  table.check .tags{display:block;font-size:6.8pt;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:.4mm}
+  table.check .tags b{font-weight:700;color:var(--wasabi-deep)}
+  table.check tr.grp td{border-bottom:.8pt solid var(--ink);padding-top:3mm}
+  table.check tr.grp b{font:700 10.5pt var(--display);color:var(--ink)} table.check tr.grp span{color:var(--muted);font-size:8pt;margin-left:2mm}
+  .sq{display:inline-block;width:3.5mm;height:3.5mm;border:.8pt solid var(--ink);border-radius:.6mm;vertical-align:-.6mm}
+  .sq.na{background:repeating-linear-gradient(45deg,transparent 0 .6mm,#9aa08e .6mm .9mm)}
 </style>
 </head>
 <body>
-<!-- Blank template. One copy per restaurant, kept in its Drive folder, 04 Setup. -->
-<section class="page" data-kind="Onboarding checklist">
-  <h1>Getting <span data-k="restaurant" data-w="60"></span> live</h1>
-  <p class="muted" style="margin:2mm 0 4mm">Tick each step as it's done. W = Wasabi, R = restaurant.</p>
-  <table class="check">
-    <thead><tr><th></th><th>Step</th><th>Who</th><th>Done on</th></tr></thead>
-    <tbody>
-      <tr class="grp"><td colspan="4">Before the set-up visit</td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Restaurant registers online at wasabi.co.tz (or on the visit)</td><td class="who">R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Application form filled from the sign-up, checked and signed</td><td class="who">W + R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Menu sent (Wasabi template, spreadsheet, PDF or photos), with prices and allergy notes</td><td class="who">R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Logo file and colours sent; number of tables confirmed</td><td class="who">R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Bar and kitchen printers: make, model, network cable to the router</td><td class="who">R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Restaurant approved on the company page; agreement (or pilot letter) signed</td><td class="who">W</td><td class="date"></td></tr>
-      <tr class="grp"><td colspan="4">Set-up visit</td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Menu loaded and checked with the owner, item by item</td><td class="who">W</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Look set: logo, two colours, font</td><td class="who">W + R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Tables set; table cards printed, cut and placed (Owner → Tables &amp; QR)</td><td class="who">W</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Waiters added with PINs; managers added (Owner → Staff)</td><td class="who">W + R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Kitchen and bar screens opened with their staff codes; sound and ringing tested</td><td class="who">W</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Print box plugged in, printers on fixed addresses, test ticket printed at each</td><td class="who">W</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Test: order from a table → kitchen and bar → waiter → bill split</td><td class="who">W + R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Staff trained; quick-start cards left at each station</td><td class="who">W</td><td class="date"></td></tr>
-      <tr class="grp"><td colspan="4">First night</td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Paper order pad at the bar, in case of a power or network problem</td><td class="who">R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Wasabi on site or on call; problems noted</td><td class="who">W</td><td class="date"></td></tr>
-      <tr class="grp"><td colspan="4">First week</td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Feedback from owner, waiters, bar and kitchen; fixes agreed</td><td class="who">W + R</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Pro-forma invoice sent before the free trial ends on <span class="pink" data-date="trialEnd" data-w="30"></span></td><td class="who">W</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>Paid: invoice and receipt sent, paid-until date set on the company page</td><td class="who">W</td><td class="date"></td></tr>
-      <tr><td class="box"><span class="sq"></span></td><td>All signed papers scanned into the restaurant's Drive folder</td><td class="who">W</td><td class="date"></td></tr>
-    </tbody>
-  </table>
-</section>
+<!-- Built from lib/onboarding-steps.js, the same master list as the Onboarding tracker page. One copy per
+     restaurant, kept in its Drive folder, 04 Setup. -->
+<script src="../lib/onboarding-steps.js"></script>
+<script>
+(function () {
+  const O = window.ONBOARDING, D = window.DATA || {}, WHO = { W: "Wasabi", R: "Restaurant", "W+R": "Together" };
+  const KIND = { collect: "Collect", deliver: "Deliver", do: "Do" };
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const add = (d, n) => { const t = new Date(d + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + n); const s = t.toISOString().slice(0, 10); return `${+s.slice(8)} ${MON[+s.slice(5, 7) - 1]}`; };
+  const dueText = (s) => { if (!s.due) return ""; const [from, n] = s.due, base = from === "live" ? D.goLive : D.signed;
+    return base ? "By " + add(base, n) : (from === "live" ? "Go-live + " : "Signed + ") + n + (n === 1 ? " day" : " days"); };
+  const pages = [["lead", "signup"], ["collect", "prepare"], ["setup", "live", "follow", "paid"]];
+  const h = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  let out = "";
+  pages.forEach((ids, i) => {
+    out += `<section class="page" data-kind="Onboarding checklist">`;
+    if (i === 0) out += `<h1>Bringing <span data-k="restaurant" data-w="70"></span> on board</h1>
+      <div class="keys">
+        <div class="field"><label>Link name</label><span class="v" data-k="rid"></span></div>
+        <div class="field"><label>Papers signed</label><span class="v" data-date="signed"></span></div>
+        <div class="field"><label>Go live by (signed + ${O.liveWithinDays} days)</label><span class="v"><span class="pink" data-date="liveBy" data-w="30"></span></span></div>
+        <div class="field"><label>Go-live night</label><span class="v" data-date="goLive"></span></div>
+      </div>`;
+    else out += `<div class="keys" style="margin-top:0"><div class="field"><label>Restaurant</label><span class="v" data-k="restaurant"></span></div><div class="field"><label>Set-up day</label><span class="v" data-date="setupDay"></span></div>
+      <div class="field"><label>Go-live night</label><span class="v" data-date="goLive"></span></div><div class="field"><label>${i === 1 ? "Go live by" : "Free trial ends (go-live + " + O.trialDays + " days)"}</label><span class="v"><span class="pink" data-date="${i === 1 ? "liveBy" : "trialEnd"}" data-w="30"></span></span></div></div>`;
+    if (i === 1) out += `<div class="hw"><span class="lbl">Bar and kitchen screens</span><span><span class="tick">Their tablets or phones</span><span class="tick">Wasabi supplies</span></span>
+        <span class="lbl">Ticket printing</span><span><span class="tick">Yes, through a print box</span><span class="tick">No, screens only</span></span>
+        <span class="lbl">Print box from</span><span><span class="tick">Wasabi (stays Wasabi's)</span><span class="tick">The restaurant</span></span></div>`;
+    out += `<table class="check"><tbody>`;
+    for (const pid of ids) {
+      const p = O.phases.find((x) => x.id === pid);
+      out += `<tr class="grp"><td colspan="5"><b>${h(p.name)}</b><span>${h(p.goal)}</span></td></tr>`;
+      for (const s of O.steps.filter((x) => x.phase === pid)) {
+        const tags = [s.file ? "Drive: " + h(s.file) : "", s.opt ? "if they have it" : "", s.needs === "printing" ? "only with printing" : ""].filter(Boolean).join(" · ");
+        out += `<tr><td class="bx"><span class="sq"></span></td><td>${h(s.title)}${s.detail ? `<span class="d">${h(s.detail)}</span>` : ""}${tags ? `<span class="tags">${tags}</span>` : ""}</td>
+          <td class="who">${WHO[s.who]}<b>${KIND[s.kind]}</b></td><td class="due">${h(dueText(s))}</td><td class="date"><span class="blank" style="min-width:18mm"></span></td></tr>`;
+      }
+    }
+    out += `</tbody></table></section>`;
+  });
+  document.body.insertAdjacentHTML("afterbegin", out);
+  // Dates worked out from the two that are filled in.
+  const iso = (d, n) => { const t = new Date(d + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+  if (D.signed && !D.liveBy) D.liveBy = iso(D.signed, O.liveWithinDays);
+  if (D.goLive && !D.trialEnd) D.trialEnd = iso(D.goLive, O.trialDays);
+})();
+</script>
 <script src="../lib/frame.js"></script>
 <script src="../lib/fill.js"></script>
 </body>

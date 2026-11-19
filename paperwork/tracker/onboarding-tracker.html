@@ -1,0 +1,330 @@
+<title>Wasabi Onboarding</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Work+Sans:wght@400;500;600&display=swap">
+<!-- Source: paperwork/tracker/onboarding-tracker.html in VMM100/order-app. The master list between
+     STEPS-START and STEPS-END is a copy of paperwork/lib/onboarding-steps.js: republish when that changes.
+     Restaurants live in this artifact's database (collection "restaurants"): ticks, dates and short notes
+     only, never contact details or documents (those go in Drive). -->
+<style>
+/* Layout: restaurants down the left, the chosen restaurant's checklist on the right; one column on phones.
+   Wasabi look (DESIGN.md): rice paper and ink, wasabi green for done, ginger pink for the one thing due. */
+:root{
+  --bg:#f6f4ee; --surface:#ffffff; --sunk:#eceee4; --line:#d6dac9; --ink:#1a2117; --text:#1f251b; --muted:#5f6656;
+  --green:#9cc43c; --green-deep:#4a6716; --green-soft:#e6efcf; --pink:#f2a493; --pink-soft:#fbe3dc; --late:#b3401f; --late-soft:#f7ddd3;
+  --display:"Bricolage Grotesque","Work Sans",system-ui,sans-serif; --body:"Work Sans",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a12; --surface:#1d2519; --sunk:#252e20; --line:#36412f; --ink:#eef2e4; --text:#e2e7d8; --muted:#a3ab96;
+  --green:#a9d14a; --green-deep:#c4e27a; --green-soft:#2c3a1c; --pink:#f2a493; --pink-soft:#4a2e26; --late:#ff8a66; --late-soft:#45241a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a12; --surface:#1d2519; --sunk:#252e20; --line:#36412f; --ink:#eef2e4; --text:#e2e7d8; --muted:#a3ab96;
+  --green:#a9d14a; --green-deep:#c4e27a; --green-soft:#2c3a1c; --pink:#f2a493; --pink-soft:#4a2e26; --late:#ff8a66; --late-soft:#45241a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:15px/1.5 var(--body);margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);font-weight:800;color:var(--ink);letter-spacing:-.015em;line-height:1.1;margin:0;text-wrap:balance}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--green-deep);outline-offset:2px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:30px;height:30px;flex:none}
+.brand h1{font-size:24px}
+.tabs{display:flex;gap:4px;background:var(--sunk);border-radius:999px;padding:4px}
+.tabs a{padding:7px 14px;border-radius:999px;text-decoration:none;color:var(--muted);font-weight:600;font-size:14px}
+.tabs a[aria-current="page"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.grid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)} .grid.has-detail .list{display:none} .grid:not(.has-detail) .detail{display:none}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.list{display:flex;flex-direction:column;gap:10px}
+.rcard{display:block;text-align:left;width:100%;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);cursor:pointer}
+.rcard[aria-current="true"]{border-color:var(--green-deep);box-shadow:0 0 0 1px var(--green-deep)}
+.rcard .n{font:700 17px/1.2 var(--display);color:var(--ink)}
+.rcard .sub{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:13px;margin-top:2px}
+.bar{height:6px;background:var(--sunk);border-radius:999px;overflow:hidden;margin:10px 0 8px}
+.bar i{display:block;height:100%;background:var(--green);border-radius:999px}
+.next{font-size:13px;display:flex;gap:6px;align-items:baseline}
+.next b{font-weight:600;color:var(--text)}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap;background:var(--sunk);color:var(--muted)}
+.chip.late{background:var(--late-soft);color:var(--late)}
+.chip.soon{background:var(--pink);color:#1a2117}
+.chip.ok{background:var(--green-soft);color:var(--green-deep)}
+.add{padding:14px 16px;display:grid;gap:8px}
+.add label{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.add input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.btn{border:0;border-radius:10px;padding:9px 14px;font-weight:600;cursor:pointer;background:var(--ink);color:var(--bg)}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.privacy{font-size:12.5px;color:var(--muted);padding:0 4px}
+.detail{display:flex;flex-direction:column;gap:16px;min-width:0}
+.dhead{padding:18px 20px;display:grid;gap:14px}
+.dhead .row1{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.dhead h2{font-size:28px}
+.dhead .rid{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.back{display:none;background:none;border:0;padding:0;color:var(--green-deep);font-weight:600;cursor:pointer;margin-bottom:4px}
+@media (max-width:860px){.back{display:inline}}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px 14px}
+.f label{display:block;font-size:11.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.f input,.f select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);min-height:40px}
+.f .calc{min-height:40px;display:flex;align-items:center;font-weight:600;font-variant-numeric:tabular-nums}
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.filters button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.filters .count{margin-left:auto;color:var(--muted);font-size:13px}
+.phase{padding:6px 0 4px}
+.phase>header{display:flex;align-items:baseline;gap:10px;padding:12px 20px 8px;flex-wrap:wrap}
+.phase>header h3{font-size:18px}
+.phase>header .goal{color:var(--muted);font-size:13.5px}
+.phase>header .pc{margin-left:auto;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.step{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:4px 12px;padding:11px 20px;border-top:1px solid var(--line);align-items:start}
+.step .tick{width:22px;height:22px;margin:1px 0 0;accent-color:var(--green-deep);cursor:pointer}
+.step .t{font-weight:600;color:var(--text)}
+.step.done .t{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+.step.na{opacity:.55}
+.step .d{color:var(--muted);font-size:13.5px;margin-top:1px}
+.step .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.kind{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:6px}
+.kind.collect{background:#e9e1f7;color:#4b2f7a} .kind.deliver{background:var(--green-soft);color:var(--green-deep)} .kind.do{background:var(--sunk);color:var(--muted)}
+:root[data-theme="dark"] .kind.collect{background:#33284a;color:#d6c6f2}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .kind.collect{background:#33284a;color:#d6c6f2}}
+.right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.right .when{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mini{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--muted)}
+.note{grid-column:2/4;width:100%;border:1px dashed var(--line);background:transparent;border-radius:8px;padding:6px 9px;font-size:13.5px;min-height:34px;resize:vertical}
+.empty{padding:28px 20px;text-align:center;color:var(--muted)}
+.empty h3{margin-bottom:6px}
+.status{font-size:13px;color:var(--muted);min-height:20px}
+.master{display:grid;gap:16px}
+.mcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.mcols .panel{padding:18px 20px}
+.mcols h2{font-size:20px;margin-bottom:4px}
+.mcols p.lead{color:var(--muted);margin:0 0 10px;font-size:14px}
+.mcols ol{margin:0;padding-left:20px;display:grid;gap:6px}
+.mcols li span{color:var(--muted);font-size:13px}
+.timeline{display:flex;flex-wrap:wrap;gap:8px;padding:16px 20px}
+.timeline div{flex:1 1 130px;background:var(--sunk);border-radius:12px;padding:10px 12px}
+.timeline b{display:block;font:700 15px var(--display);color:var(--ink)}
+.timeline span{font-size:13px;color:var(--muted)}
+.timeline .hot{background:var(--pink)} .timeline .hot b,.timeline .hot span{color:#1a2117}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><path fill="var(--green)" fill-rule="evenodd" d="M31.0 33.0L21.4 52.7A26 26 0 1 0 11.3 42.6ZM31.3 28.7L25.2 13.9L28.4 29.6ZM34.9 31.2L45.1 18.9L32.8 29.1ZM34.4 35.6L50.1 38.8L35.3 32.7Z"/><path fill="var(--green)" d="M29.7 31.7L32.3 34.3L9.3 60.1a2.1 2.1 0 0 1-3-3Z"/></svg>
+      <h1>Onboarding</h1>
+    </div>
+    <nav class="tabs" aria-label="Views"><a href="#" id="tab-r">Restaurants</a><a href="#master" id="tab-m">What we collect and deliver</a></nav>
+  </div>
+
+  <section id="view-r">
+    <div class="grid" id="grid">
+      <div class="list">
+        <div id="rlist"><div class="panel empty"><h3>Loading restaurants</h3><p>Each restaurant you're bringing on shows here, with what's next.</p></div></div>
+        <form class="panel add" id="addform" hidden>
+          <label for="newname">Add a restaurant</label>
+          <input id="newname" placeholder="Name diners know, e.g. Mama's Kitchen" autocomplete="off" required>
+          <input id="newrid" placeholder="Link name, e.g. mamas-kitchen" autocomplete="off" pattern="[a-z0-9-]{2,40}" required>
+          <button class="btn" type="submit">Add</button>
+          <div class="status" id="addstatus"></div>
+        </form>
+        <p class="privacy">Ticks, dates and short notes only. Phone numbers, emails and documents go in the restaurant's Drive folder.</p>
+      </div>
+      <div class="detail" id="detail"></div>
+    </div>
+  </section>
+
+  <section id="view-m" class="master" hidden></section>
+</div>
+
+<script>
+/* STEPS-START (copy of paperwork/lib/onboarding-steps.js) */
+/*STEPS*/
+/* STEPS-END */
+</script>
+<script>
+(function () {
+  const O = window.ONBOARDING, PH = O.phases, ST = O.steps;
+  const $ = (s, r = document) => r.querySelector(s);
+  const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (k === "text") e.textContent = v; else e.setAttribute(k, v === true ? "" : v); }
+    for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k))); return e; };
+  const KIND = { collect: "Collect", deliver: "Deliver", do: "Do" };
+  const WHO = { W: "Wasabi", R: "Restaurant", "W+R": "Together" };
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  // Dates are plain YYYY-MM-DD in Dar es Salaam time.
+  const today = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+  const addDays = (d, n) => { const t = new Date(d + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+  const days = (a, b) => Math.round((new Date(b + "T12:00:00Z") - new Date(a + "T12:00:00Z")) / 864e5);
+  const fmt = (d) => { if (!d) return ""; const [y, m, x] = d.split("-"); return `${+x} ${MON[+m - 1]}`; };
+
+  let db = null, rows = [], current = null, filter = "all";
+
+  // ---------- per-restaurant logic ----------
+  const st = (r, s) => (r.steps && r.steps[s.id]) || {};
+  const applies = (r, s) => !(s.needs === "printing" && r.printing === "no");
+  const isNA = (r, s) => !applies(r, s) || st(r, s).na === true;
+  const isDone = (r, s) => !!st(r, s).done;
+  const dueOf = (r, s) => { if (!s.due) return ""; const base = s.due[0] === "live" ? r.goLive : r.signed; return base ? addDays(base, s.due[1]) : ""; };
+  const dueState = (r, s) => { const d = dueOf(r, s); if (!d || isDone(r, s) || isNA(r, s)) return ""; const n = days(today(), d); return n < 0 ? "late" : n <= 2 ? "soon" : ""; };
+  function summary(r) {
+    const open = ST.filter((s) => !isDone(r, s) && !isNA(r, s));
+    const total = ST.filter((s) => !isNA(r, s)).length, done = total - open.length;
+    const next = open[0], phase = next ? PH.find((p) => p.id === next.phase) : null;
+    const late = open.filter((s) => dueState(r, s) === "late");
+    return { next, phase, done, total, late, pct: total ? Math.round((done / total) * 100) : 0 };
+  }
+
+  // ---------- list ----------
+  function renderList() {
+    const host = $("#rlist"); host.replaceChildren();
+    if (!rows.length) { host.append(el("div", { class: "panel empty" }, el("h3", { text: "No restaurants yet" }), el("p", { text: "Add the first one below. It starts at First contact, and the list shows what's next." }))); return; }
+    const sorted = rows.slice().sort((a, b) => summary(b).late.length - summary(a).late.length || (a.created || "").localeCompare(b.created || ""));
+    for (const r of sorted) {
+      const s = summary(r);
+      const nextChip = !s.next ? el("span", { class: "chip ok", text: "Done" }) : s.late.length ? el("span", { class: "chip late", text: `${s.late.length} late` }) : null;
+      host.append(el("button", { class: "rcard", type: "button", "aria-current": current === r.id ? "true" : "false", onclick: () => go(r.id) },
+        el("div", { class: "n", text: r.name || r.id }),
+        el("div", { class: "sub" }, el("span", { text: s.phase ? s.phase.name : "Onboarded" }), el("span", { class: "num", text: `${s.done} of ${s.total}` })),
+        el("div", { class: "bar" }, el("i", { style: `width:${s.pct}%` })),
+        el("div", { class: "next" }, s.next ? [el("span", { text: "Next:" }), el("b", { text: s.next.title })] : el("span", { text: "Paid and filed" }), nextChip)));
+    }
+  }
+
+  // ---------- detail ----------
+  async function save(r, patch, status) {
+    try { await db.collection("restaurants").doc(r.id).update(patch); if (status) status.textContent = "Saved"; }
+    catch (e) { if (status) status.textContent = e && e.code === "invalid_argument" ? "You can view this list but not change it." : "Couldn't save. Check your connection and try again."; }
+  }
+  function field(label, input) { return el("div", { class: "f" }, el("label", { for: input.id, text: label }), input); }
+  function calc(label, text, hot) { return el("div", { class: "f" }, el("label", { text: label }), el("div", { class: "calc" }, hot ? el("span", { class: "chip soon", text }) : text || "–")); }
+
+  function renderDetail() {
+    const host = $("#detail"), grid = $("#grid"); host.replaceChildren();
+    const r = rows.find((x) => x.id === current);
+    grid.classList.toggle("has-detail", !!r);
+    document.querySelectorAll(".rcard").forEach((c) => c.setAttribute("aria-current", "false"));
+    if (!r) { host.append(el("div", { class: "panel empty" }, el("h3", { text: rows.length ? "Pick a restaurant" : "Your onboarding checklist" }), el("p", { text: "Each restaurant gets the same steps, from first contact to first payment. Tick a step and it records today's date." }))); return; }
+    const s = summary(r), status = el("div", { class: "status", "aria-live": "polite" });
+    const dateIn = (key) => { const i = el("input", { type: "date", id: "d-" + key, value: r[key] || "" }); i.addEventListener("change", () => save(r, { [key]: i.value || "" }, status)); return i; };
+    const sel = (key, opts) => { const i = el("select", { id: "s-" + key }, opts.map(([v, t]) => el("option", { value: v, text: t, selected: (r[key] || "") === v }))); i.addEventListener("change", () => save(r, { [key]: i.value }, status)); return i; };
+    const trialEnd = r.goLive ? addDays(r.goLive, O.trialDays) : "";
+    const liveBy = r.signed ? addDays(r.signed, O.liveWithinDays) : "";
+    host.append(el("div", { class: "panel dhead" },
+      el("div", {}, el("button", { class: "back", type: "button", onclick: () => go(""), text: "‹ All restaurants" })),
+      el("div", { class: "row1" }, el("div", {}, el("h2", { text: r.name || r.id }), el("div", { class: "rid", text: `Link name: ${r.id}  ·  Drive: 05 Customers / ${r.name || r.id} (${r.id})` })),
+        el("span", { class: "chip " + (s.next ? "" : "ok"), text: s.phase ? s.phase.name : "Onboarded" })),
+      el("div", { class: "fields" },
+        field("Papers signed", dateIn("signed")), calc("Go live by", fmt(liveBy)),
+        field("Set-up day", dateIn("setupDay")), field("Go-live night", dateIn("goLive")),
+        calc("Free trial ends", fmt(trialEnd), !!trialEnd)),
+      el("div", { class: "fields" },
+        field("Bar and kitchen screens", sel("screens", [["", "Not agreed yet"], ["theirs", "Their tablets or phones"], ["wasabi", "Wasabi supplies"]])),
+        field("Ticket printing", sel("printing", [["", "Not agreed yet"], ["yes", "Yes, through a print box"], ["no", "No, screens only"]])),
+        field("Print box from", sel("printBox", [["", "Not agreed yet"], ["wasabi", "Wasabi (stays Wasabi's)"], ["theirs", "The restaurant"], ["none", "Not needed"]]))),
+      status));
+
+    const fbar = el("div", { class: "filters", role: "group", "aria-label": "Show" });
+    for (const [k, t] of [["all", "All"], ["open", "Still to do"], ["collect", "Collect"], ["deliver", "Deliver"], ["do", "Do"]])
+      fbar.append(el("button", { type: "button", "aria-pressed": filter === k ? "true" : "false", onclick: () => { filter = k; renderDetail(); }, text: t }));
+    fbar.append(el("span", { class: "count num", text: `${s.done} of ${s.total} done` }));
+    host.append(fbar);
+
+    for (const p of PH) {
+      let list = ST.filter((x) => x.phase === p.id);
+      const pd = list.filter((x) => isDone(r, x) || isNA(r, x)).length, pt = list.length;
+      if (filter === "open") list = list.filter((x) => !isDone(r, x) && !isNA(r, x));
+      else if (filter !== "all") list = list.filter((x) => x.kind === filter);
+      if (!list.length) continue;
+      const sec = el("section", { class: "panel phase" }, el("header", {}, el("h3", { text: p.name }), el("span", { class: "goal", text: p.goal }), el("span", { class: "pc", text: `${pd} / ${pt}` })));
+      for (const x of list) sec.append(stepRow(r, x, status));
+      host.append(sec);
+    }
+  }
+
+  function stepRow(r, x, status) {
+    const v = st(r, x), done = isDone(r, x), na = isNA(r, x), due = dueOf(r, x), ds = dueState(r, x);
+    const box = el("input", { type: "checkbox", class: "tick", id: "t-" + x.id, checked: done, disabled: na, "aria-label": x.title });
+    box.addEventListener("change", () => save(r, { steps: { [x.id]: { done: box.checked ? today() : "" } } }, status));
+    // The note box only shows when there's a note, or after "Note" is tapped.
+    const note = el("textarea", { class: "note", rows: 1, id: "n-" + x.id, placeholder: "A short note (no phone numbers or emails)", "aria-label": "Note for " + x.title, hidden: !v.note });
+    note.value = v.note || "";
+    note.addEventListener("change", () => save(r, { steps: { [x.id]: { note: note.value.slice(0, 500) } } }, status));
+    const right = el("div", { class: "right" });
+    if (!v.note) right.append(el("button", { class: "mini", type: "button", text: "Note", onclick: (e) => { note.hidden = false; note.focus(); e.currentTarget.remove(); } }));
+    if (done) right.append(el("span", { class: "when", text: "Done " + fmt(v.done) }));
+    else if (!applies(r, x)) right.append(el("span", { class: "when", text: "No printing" }));
+    else if (due) right.append(el("span", { class: "chip " + ds, text: (ds === "late" ? "Was due " : "Due ") + fmt(due) }));
+    if ((x.opt || x.needs) && applies(r, x) && !done) right.append(el("button", { class: "mini", type: "button", onclick: () => save(r, { steps: { [x.id]: { na: !v.na } } }, status), text: v.na ? "Needed after all" : "Not needed" }));
+    return el("div", { class: "step" + (done ? " done" : "") + (na ? " na" : "") },
+      box,
+      el("label", { for: "t-" + x.id }, el("div", { class: "t", text: x.title }), x.detail ? el("div", { class: "d", text: x.detail }) : null,
+        el("div", { class: "meta" }, el("span", { class: "kind " + x.kind, text: KIND[x.kind] }), el("span", { class: "chip", text: WHO[x.who] }), x.file ? el("span", { class: "chip", text: "Drive: " + x.file }) : null, x.opt ? el("span", { class: "chip", text: "If they have it" }) : null)),
+      right, note);
+  }
+
+  // ---------- master list (what we collect and deliver) ----------
+  function renderMaster() {
+    const host = $("#view-m"); if (host.childElementCount) return;
+    const li = (x) => el("li", {}, x.title, x.detail ? el("span", { text: " · " + x.detail }) : null);
+    const coll = ST.filter((x) => x.kind === "collect" && x.phase !== "lead" && x.phase !== "paid");
+    const deliv = ST.filter((x) => x.kind === "deliver" && x.phase !== "lead");
+    host.append(
+      el("div", { class: "panel timeline" },
+        el("div", {}, el("b", { text: "Yes" }), el("span", { text: "Demo, then a yes and a plan" })),
+        el("div", {}, el("b", { text: "Signed" }), el("span", { text: "Papers, details, hardware agreed" })),
+        el("div", {}, el("b", { text: "Set-up day" }), el("span", { text: "Within 6 days of signing" })),
+        el("div", { class: "hot" }, el("b", { text: "Go live" }), el("span", { text: `Within ${O.liveWithinDays} days of signing; ${O.trialDays} days free from tonight` })),
+        el("div", {}, el("b", { text: "Day 3 and 7" }), el("span", { text: "Call, then a visit for feedback" })),
+        el("div", {}, el("b", { text: "Day 23 to 30" }), el("span", { text: "Pro-forma, then first payment" }))),
+      el("div", { class: "mcols" },
+        el("div", { class: "panel" }, el("h2", { text: "What we collect" }), el("p", { class: "lead", text: "From the restaurant, before set-up day. Copies go in their Drive folder." }), el("ol", {}, coll.map(li))),
+        el("div", { class: "panel" }, el("h2", { text: "What we deliver" }), el("p", { class: "lead", text: "Included in the subscription. Hardware is agreed per restaurant." }), el("ol", {}, deliv.map(li)))));
+  }
+
+  // ---------- routing ----------
+  function go(id) { location.hash = id ? id : ""; if (!id) route(); }
+  function route() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    const master = h === "master";
+    $("#view-r").hidden = master; $("#view-m").hidden = !master;
+    $("#tab-r").setAttribute("aria-current", master ? "false" : "page"); $("#tab-m").setAttribute("aria-current", master ? "page" : "false");
+    if (master) { renderMaster(); return; }
+    current = h || (window.innerWidth > 860 && rows[0] ? rows[0].id : null);
+    renderList(); renderDetail();
+  }
+  window.addEventListener("hashchange", route);
+
+  // ---------- adding ----------
+  const slug = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  let ridTouched = false;
+  $("#newname").addEventListener("input", (e) => { if (!ridTouched) $("#newrid").value = slug(e.target.value); });
+  $("#newrid").addEventListener("input", () => { ridTouched = true; });
+  $("#addform").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("#newname").value.trim().slice(0, 80), rid = slug($("#newrid").value), out = $("#addstatus");
+    if (!name || rid.length < 2) { out.textContent = "Give it a name and a link name (letters, numbers and dashes)."; return; }
+    if (rid === "master") { out.textContent = "Pick another link name."; return; }
+    if (rows.some((r) => r.id === rid)) { out.textContent = "That link name is already on the list."; return; }
+    try { await db.collection("restaurants").doc(rid).set({ name, created: today(), signed: "", setupDay: "", goLive: "", screens: "", printing: "", printBox: "", steps: {} });
+      $("#newname").value = ""; $("#newrid").value = ""; ridTouched = false; out.textContent = ""; go(rid); }
+    catch (err) { out.textContent = err && err.code === "invalid_argument" ? "You can view this list but not add to it." : err && err.code === "quota_exceeded" ? "The list is full." : "Couldn't add it. Check your connection and try again."; }
+  });
+
+  // ---------- start ----------
+  route();
+  (async () => {
+    db = window.claude && (await window.claude.use("db"));
+    if (!db) { $("#rlist").replaceChildren(el("div", { class: "panel empty" }, el("h3", { text: "Sign in to see restaurants" }), el("p", { text: "The list is kept with this page on claude.ai. The master list is under What we collect and deliver." }))); return; }
+    $("#addform").hidden = false;
+    const timer = setTimeout(() => { if (!rows.length) $("#rlist").replaceChildren(el("div", { class: "panel empty" }, el("h3", { text: "Can't reach the list yet" }), el("p", { text: "It will appear as soon as the connection is back." }))); }, 10000);
+    db.collection("restaurants").onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) clearTimeout(timer);
+      rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const focused = document.activeElement && document.activeElement.classList.contains("note") ? document.activeElement.id : null;
+      if (focused) { renderList(); return; } // don't wipe a note being typed
+      if (location.hash.slice(1) === "master") return; route();
+    }, () => { clearTimeout(timer); $("#rlist").replaceChildren(el("div", { class: "panel empty" }, el("h3", { text: "The list isn't available" }), el("p", { text: "Reopen the page to try again." }))); });
+  })();
+})();
+</script>

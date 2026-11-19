@@ -15,13 +15,30 @@ scans and the files used to fill them live only in Google Drive (`Wasabi / 05 Cu
 | `../terms.html`, `../privacy.html` | The Terms and Privacy policy, printed from the website (same version as signed) | 02 Agreement & DPA |
 | `templates/invoice.html` | Pro-forma invoice, invoice and receipt (one template, three documents) | 03 Invoices & receipts |
 | `templates/welcome-letter.html` | Welcome letter to the owner | 05 Letters & notices |
-| `templates/onboarding-checklist.html` | Steps from sign-up to the first week | 04 Setup |
+| `templates/onboarding-checklist.html` | Wasabi's onboarding checklist, first contact to first payment (3 pages, for visits) | 04 Setup |
+| `templates/getting-started.html` | For the restaurant: what we need from you, what you get, how the week goes | 05 Letters & notices |
 | `templates/menu-guide.html` | How to send the menu; columns come from the app's menu template | 04 Setup |
 | `templates/staff-cards.html` | Quick-start cards for waiters, bar and kitchen (3 to an A4, cut) | 04 Setup |
 | `templates/letterhead.html` | Plain letterhead | |
 | `print/business-card.html` | Business card, 85 × 55 mm | |
 | `print/flyer-a5.html` | A5 flyer for owners | |
 | `print/one-pager.html` | A4 one-pager for owners (leave behind after a demo) | |
+
+## Onboarding
+
+One master list, `lib/onboarding-steps.js` (decided with Vandan on 20 Nov 2026), drives three things, so
+they never disagree: the printed checklist, the restaurant's Getting started sheet (its `client` wording),
+and the **Onboarding tracker** page on claude.ai (https://claude.ai/artifact/TKkpvAjDDLj4VPiaD75u4J), where
+each restaurant's ticks, dates and notes are kept. The tracker's source is `tracker/onboarding-tracker.html`;
+`node paperwork/tracker/make.mjs` puts the master list into it (in `out/`), and that file is republished as
+the artifact whenever either changes. The tracker holds ticks, dates and short notes only: never contact
+details or documents (those go in Drive).
+
+The rules in the list: everything from first contact to first payment; go live within 7 days of signing,
+on a quiet weekday, every table, Wasabi on site; the 30-day free trial starts on the go-live night; check-ins
+on day 3 (call), day 7 (visit) and a week before the trial ends (call and pro-forma invoice); table and tent
+cards printed and laminated by Wasabi, included; screens and print box agreed per restaurant; collect BRELA
+and TIN copies, owner's details (required), other contacts (optional), staff first names and roles only.
 
 Table cards and tent cards are printed from the app (Owner → Tables & QR → **Print table cards** /
 **Print tent cards**), because each QR code carries the table's secret key, which must never leave the app.

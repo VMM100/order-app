@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Getting started · Wasabi</title>
+<link rel="stylesheet" href="../lib/wasabi.css">
+<style>
+  .intro{font-size:10.4pt;max-width:150mm;margin:3mm 0 5mm}
+  .road{display:grid;grid-template-columns:repeat(5,1fr);gap:2.5mm;margin-bottom:6mm}
+  .road div{background:var(--paper);border-radius:2.5mm;padding:3mm 3.2mm}
+  .road b{display:block;font:800 10.5pt/1.15 var(--display);color:var(--ink)}
+  .road span{display:block;font-size:7.8pt;color:var(--muted);margin-top:1mm;line-height:1.35}
+  .road .hot{background:var(--wasabi)} .road .hot span{color:var(--ink)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:8mm}
+  .two h2{margin:0 0 1mm}
+  .two p.sub{color:var(--muted);font-size:8.4pt;margin:0 0 3mm}
+  ul.need,ul.get{list-style:none;padding:0;margin:0;display:grid;gap:2.2mm}
+  ul.need li,ul.get li{display:grid;grid-template-columns:5.5mm 1fr;font-size:9pt;line-height:1.38;margin:0}
+  ul.need li::before{content:"";width:3.4mm;height:3.4mm;border:.8pt solid var(--ink);border-radius:.6mm;margin-top:.5mm}
+  ul.get li::before{content:"";width:2.4mm;height:2.4mm;border-radius:50%;background:var(--wasabi);margin-top:1.3mm;margin-left:.5mm}
+  .foot-note{margin-top:6mm;font-size:8.2pt;color:var(--muted)}
+</style>
+</head>
+<body>
+<!-- For the restaurant: given when they say yes, with the welcome letter. Built from lib/onboarding-steps.js
+     (the "client" wording), so it always matches Wasabi's own checklist. -->
+<section class="page" data-kind="Getting started">
+  <div class="kicker">Welcome to Wasabi</div>
+  <h1>Getting <span data-k="restaurant" data-w="60"></span> started</h1>
+  <p class="intro">From signing to your first night takes about a week. Here's how it goes, what we need from you, and what you get from us.</p>
+  <div class="road" id="road"></div>
+  <div class="two">
+    <div><h2>What we need from you</h2><p class="sub">Before set-up day. Send it on WhatsApp to <span data-k="phone"></span> or by email to <span data-k="email"></span>.</p><ul class="need" id="need"></ul></div>
+    <div><h2>What you get from us</h2><p class="sub">All included in your subscription. Screens and the print box are agreed with you.</p><ul class="get" id="get"></ul></div>
+  </div>
+  <p class="foot-note">We keep copies of your papers in your own private file, never on public systems. You can ask for a copy or for them to be deleted when you leave, as set out in Wasabi's Terms. Questions any time: <span data-k="phone"></span>.</p>
+</section>
+<script src="../lib/onboarding-steps.js"></script>
+<script>
+(function () {
+  const O = window.ONBOARDING;
+  const li = (t) => { const e = document.createElement("li"); e.append(document.createElement("span")); e.lastChild.textContent = t; return e; };
+  O.steps.filter((s) => s.client && s.kind === "collect").forEach((s) => document.getElementById("need").append(li(s.client)));
+  O.steps.filter((s) => s.client && s.kind === "deliver").forEach((s) => document.getElementById("get").append(li(s.client)));
+  const road = [
+    ["Sign up", "Papers signed, your details and hardware agreed"],
+    ["Send us your menu", "Plus logo and staff names, within 3 days"],
+    ["Set-up day", "We set everything up and train your staff"],
+    ["First night", `Within ${O.liveWithinDays} days of signing, on a quiet weekday. We're there with you`],
+    [`${O.trialDays} days free`, "From your first night. We call on day 3 and visit on day 7"],
+  ];
+  road.forEach(([b, t], i) => { const d = document.createElement("div"); if (i === 4) d.innerHTML = '<b class="pink" style="display:inline-block"></b><span></span>'; else d.innerHTML = "<b></b><span></span>";
+    d.querySelector("b").textContent = b; d.querySelector("span").textContent = t; if (i === 3) d.className = "hot"; document.getElementById("road").append(d); });
+})();
+</script>
+<script src="../lib/frame.js"></script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>
