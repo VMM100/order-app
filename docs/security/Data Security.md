@@ -4,6 +4,12 @@
 Wasabi is the *data controller* for diner accounts and the company's own records, and the *processor* for the
 order data a restaurant's diners create, under Tanzania's **Personal Data Protection Act, Cap. 44 (PDPA)**.
 
+
+> **Pilot mode (since 19 Nov 2026):** until the business name and PDPC registration are done, `OPEN` in
+> `platform.js` switches off diner accounts (sign-in, My account, saved visits, WhatsApp offers and number),
+> phone (SMS) sign-in and public restaurant sign-up. Diners order with a first name only. Rows below about
+> diner accounts, visits, offers and waPhone describe data that isn't being collected while these are off.
+
 ## 1. What we hold (classified)
 
 | Data | Where | Sensitivity | Why we need it |

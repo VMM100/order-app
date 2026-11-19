@@ -21,7 +21,7 @@ import { auth, onUser, isAccount, ensureUser, authReady, googleSignIn, phoneStar
 import { computeMetrics } from "./metrics.js";
 import { genericPhoto } from "./photos.js";
 import { shares, tableTotal } from "./bill.js";
-import { COMPANY } from "./platform.js";
+import { COMPANY, OPEN, WA_TALK } from "./platform.js";
 import { menuToCsv, readFile, rowsToMenu, mergeMenu } from "./menuio.js";
 import { wasabiLockup, wasabiLeaf } from "./brand.js";
 
@@ -767,7 +767,7 @@ function adminGate(page, go) {
   const title = { setup: "Setup", owner: "Owner", manager: "Manager" }[page];
   $("#wrap").classList.add("wide"); $("#sub").textContent = title; document.title = title + " · " + rname();
   const G = { busy: false, err: "", u: null, done: false };
-  const signupLink = `<p class="note">New to ${esc(COMPANY.name)}? <a href="${BASE}#signup">Register your restaurant</a>.</p>`;
+  const signupLink = OPEN.publicSignup ? `<p class="note">New to ${esc(COMPANY.name)}? <a href="${BASE}#signup">Register your restaurant</a>.</p>` : `<p class="note">New to ${esc(COMPANY.name)}? <a href="${WA_TALK}" target="_blank" rel="noopener">Talk to us on WhatsApp</a>.</p>`;
   async function check() {
     paint(skPage());
     step("sign-in"); G.u = await authReady(); step("sign-in done");
@@ -784,7 +784,7 @@ function adminGate(page, go) {
           return `<a class="ticket ${st.live === false ? "" : "preparing"}" style="display:block;text-decoration:none;color:inherit" href="${BASE}?r=${esc(m.rid)}#${m.role === "manager" ? "manager" : page}">
             <b>${esc(m.name)}</b><div class="note" style="margin:2px 0 0">${m.role === "owner" ? "Owner" : "Manager"}${st.kind === "pending" ? " · waiting for approval" : st.kind === "suspended" ? " · paused" : st.kind === "expired" ? " · subscription ended" : ""}</div></a>`; }).join("")}</div>`
           : `<p><b>${who}</b> doesn't run a restaurant on ${esc(COMPANY.name)} yet.</p><p>Register your restaurant, or ask your restaurant's owner to add this email as a manager.</p>`}
-        <div class="row" style="margin-top:14px"><a class="btn primary" href="${BASE}#signup">Register a restaurant</a>${other}</div></section>`);
+        <div class="row" style="margin-top:14px">${OPEN.publicSignup ? `<a class="btn primary" href="${BASE}#signup">Register a restaurant</a>` : `<a class="btn primary" href="${WA_TALK}" target="_blank" rel="noopener">Talk to us on WhatsApp</a>`}${other}</div></section>`);
     }
     step("checking your access"); const role = await adminRole(G.u); step("access checked");
     if (!role) return show(`<section><div class="label" style="margin-top:0">Not an owner or manager here</div>
@@ -923,7 +923,7 @@ function dinerScreen() {
     // A new sign-in means a new identity: carry the table pass over to it before anything else.
     if (changed && S.proof && S.sid) { S.switching = true; try { await writePass(S.sid);
       if (S.proof.via === "code") { S.step = ""; S.authErr = ""; S.busy = false; if (isAccount(u)) recordTerms(u, "ask to join at table"); } if (S.proof.via === "code") askToJoin(S.sid, S.proof.table, (S.me && S.me.name) || S.name); else attach(S.sid); } catch (e) { console.error(e); } S.switching = false; }
-    S.user = isAccount(u) ? u : null; S.profile = null; S.visits = [];
+    S.user = OPEN.dinerAccounts && isAccount(u) ? u : null; S.profile = null; S.visits = [];
     // While the saved profile loads, show a skeleton, not the first-name question (it would flash up and vanish).
     if (S.user) { S.profileLoading = true; try { const p = await getDoc(dinerRef(u.uid)); S.profile = p.exists() ? p.data() : null;
       S.visits = (await myVisits(u.uid)).filter((v) => v.rid === RID); } catch {} S.profileLoading = false; }
@@ -950,7 +950,7 @@ function dinerScreen() {
     // A friend's code typed on the front page (?c=1234, no restaurant yet): find the restaurant, then join.
     if (!RID && c) return joinByInvite(c);
     if (!RID) { $("#cart").hidden = true; return paint(`<section><p class="empty">Scan the QR code on your table to see the menu and order.</p>
-      <p class="note" style="text-align:center">Run a restaurant? <a href="${BASE}#signup">Register it with ${esc(COMPANY.name)}</a> · <a href="${BASE}#owner">Owner sign-in</a></p></section>`); }
+      <p class="note" style="text-align:center">Run a restaurant? ${OPEN.publicSignup ? `<a href="${BASE}#signup">Register it with ${esc(COMPANY.name)}</a>` : `<a href="${WA_TALK}" target="_blank" rel="noopener">Talk to us</a>`} · <a href="${BASE}#owner">Owner sign-in</a></p></section>`); }
     startConfig();
     step("sign-in"); try { S.uid = (await ensureUser()).uid; } catch (e) { return paint(errorBox(e)); }
     step("menu and settings"); await Promise.race([cfgReady, new Promise((r) => setTimeout(r, 5000))]); step("checking your table");
@@ -1087,7 +1087,7 @@ function dinerScreen() {
       <form id="askform" class="grid"><label class="flabel" for="askin">Your first name <span>So your friends know it's you</span></label>
         <input class="field" id="askin" maxlength="16" autocomplete="given-name" placeholder="e.g. Amani" value="${esc(a.name)}">
         <button class="btn primary big">${a.state === "no" ? "Ask again" : "Ask to join"}</button></form>
-      ${S.user ? "" : `<div class="orline"><span>or sign in</span></div>
+      ${S.user || !OPEN.dinerAccounts ? "" : `<div class="orline"><span>or sign in</span></div>
       <div class="grid"><button class="btn big" data-act="auth-phone">Sign in with phone number</button>
         ${gBtn("auth-google", S.busy)}</div>${termsBox("signing in")}
       ${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}`}
@@ -1162,10 +1162,10 @@ function dinerScreen() {
       <form id="joinform" class="grid"><label class="flabel" for="namein">Your first name <span>Just your first name, no account needed</span></label>
         <input class="field" id="namein" maxlength="16" placeholder="e.g. Amani" autocomplete="given-name" value="${esc(S.name)}">
         <button class="btn primary big">Join ${unit}</button></form>
-      <div class="orline"><span>or sign in</span></div>
+      ${OPEN.dinerAccounts ? `<div class="orline"><span>or sign in</span></div>
       <div class="grid"><button class="btn big" data-act="auth-phone">Sign in with phone number</button>
         ${gBtn("auth-google", S.busy)}</div>${termsBox("signing in")}${err}
-      <p class="note">Signing in is optional: it keeps your receipts and lets you order your usual in one tap. Ordering and splitting the bill work the same either way.</p></section>`;
+      <p class="note">Signing in is optional: it keeps your receipts and lets you order your usual in one tap. Ordering and splitting the bill work the same either way.</p>` : ""}</section>`;
   }
   // Welcome card for signed-in diners: visit number here, their usual, and a link to their account.
   function welcomeCard() {
@@ -1179,7 +1179,7 @@ function dinerScreen() {
   }
   // Each person in a group is keyed by their sign-in, so the database knows whose orders are whose.
   async function joinAs(name, u) {
-    const pid = auth.currentUser.uid, person = { name, t: Date.now(), uid: pid, acct: isAccount(auth.currentUser) }, patch = {};
+    const pid = auth.currentUser.uid, person = { name, t: Date.now(), uid: pid, acct: OPEN.dinerAccounts && isAccount(auth.currentUser) }, patch = {};
     patch[`people.${pid}`] = person; if (!S.g.label) patch.label = name;
     const first = !Object.keys(S.g.people || {}).length && !S.g.waiter;
     await updateDoc(groupRef(S.sid), patch);
@@ -1710,7 +1710,7 @@ async function closeSession(g) {
   // Signed-in diners get this visit saved to their account: what they had and their share.
   const owed = shares(g, allLines);
   Object.entries(g.people || {}).forEach(([pid, p]) => {
-    if (!p.uid || p.acct === false) return; const sh = owed.find((x) => x.pid === pid);
+    if (!OPEN.dinerAccounts || !p.uid || p.acct === false) return; const sh = owed.find((x) => x.pid === pid);
     batch.set(doc(db, "visits", `${p.uid}_${sid}_${pid}`), { uid: p.uid, rid: RID, rname: rname(), table: g.table, session: sid, date: now,
       items: allLines.filter((l) => l.pid === pid).map((l) => ({ n: l.n, v: l.v || "", pr: l.pr })), share: sh ? sh.amt : 0, groupTotal: tableTotal(allLines) });
   });
@@ -2946,6 +2946,10 @@ function companyScreen() {
 function signupScreen() {
   $("#sub").textContent = "Sign up"; document.title = "Register · " + COMPANY.name;
   wasabiPage();
+  if (!OPEN.publicSignup) return paint(`<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Register your place</div>
+      <div class="wsign-title">Sign-up opens soon</div></div>
+    <div class="wsign-step"><p style="margin-top:0">We're setting up a small number of bars, cafés and restaurants ourselves for now. Tell us about your place and we'll get in touch.</p>
+      <a class="btn primary big" href="${WA_TALK}" target="_blank" rel="noopener" style="width:100%">Talk to us on WhatsApp</a></div></div></section>`);
   const U = { u: null, mine: [], busy: false, err: "", done: null, form: false };
   async function check() {
     paint(skPage());
@@ -3066,14 +3070,14 @@ function accountScreen() {
           <input class="field num" id="acsmsin" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
           <button class="btn primary big" ${S.busy ? "disabled" : ""}>${S.busy ? "Checking…" : "Sign in"}</button></form>
           <button class="btn ghost" data-act="ac-phone" style="margin-top:10px">Use a different number</button>`
-      : `<div class="grid"><button class="btn primary big" data-act="ac-phone">Sign in with phone number</button>
+      : `<div class="grid">${OPEN.phoneSignIn ? `<button class="btn primary big" data-act="ac-phone">Sign in with phone number</button>` : ""}
           ${gBtn("ac-google", S.busy)}</div>${termsBox()}
           <p class="note">Restaurant owners and managers: use the Google account registered for your restaurant.</p>`;
     return `<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Sign in</div>
-        <div class="wsign-title">For diners, restaurant owners and managers</div></div>
+        <div class="wsign-title">${OPEN.dinerAccounts ? "For diners, restaurant owners and managers" : "For restaurant owners and managers"}</div></div>
       <div class="wsign-step">${step}${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}</div></div>
       <p class="wsign-foot wsign-scan">To order without signing in, <button class="linkbtn" type="button" data-scan>scan the table QR code</button></p>
-      <p class="note wsign-foot">Signing in keeps your visits and offers in one place.</p>
+      ${OPEN.dinerAccounts ? `<p class="note wsign-foot">Signing in keeps your visits and offers in one place.</p>` : ""}
       <div style="text-align:center;margin-top:12px">${back()}</div></section>`;
   }
   function termsGateHtml() {
@@ -3102,8 +3106,8 @@ function accountScreen() {
     return `<section><div class="label" style="margin-top:0">How do you want to continue?</div>
       <p style="margin-top:0">Signed in as <b>${esc(who)}</b></p>
       <div class="picks">
-        <button class="pick" data-act="ac-guest"><span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
-          <span><b>As a guest</b><span class="note">Your visits at every restaurant, and offers</span></span></button>
+        ${OPEN.dinerAccounts ? `<button class="pick" data-act="ac-guest"><span class="avatar"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+          <span><b>As a guest</b><span class="note">Your visits at every restaurant, and offers</span></span></button>` : ""}
         ${S.roles.map((m) => { const twin = S.roles.filter((x) => x.name === m.name).length > 1; return `<a class="pick" href="${BASE}?r=${encodeURIComponent(m.rid)}#${m.role === "manager" ? "manager" : "owner"}"><span class="avatar">${ini(m.name)}</span>
           <span><b>${esc(m.name)}</b><span class="note">${m.role === "owner" ? "Owner" : "Manager"}${twin ? ` · ${esc(m.rid)}` : ""}${state(m)}</span></span></a>`; }).join("")}
         ${S.co ? `<a class="pick" href="${BASE}#company"><span class="avatar">${wasabiLeaf("wleaf", "#4a6716")}</span>
@@ -3130,7 +3134,12 @@ function accountScreen() {
     }
     // First sign-in: ask everyone for their first name once, before anything else.
     if (!(S.profile && S.profile.name)) return paint(nameHtml());
-    if (runs() && !S.guest) return paint(chooserHtml(S.user.email || S.user.phoneNumber || ""));
+    if (runs() && (!S.guest || !OPEN.dinerAccounts)) return paint(chooserHtml(S.user.email || S.user.phoneNumber || ""));
+    if (!OPEN.dinerAccounts) return paint(`<section class="wsign"><div class="wsign-card"><div class="wsign-head"><div class="wsign-rname">Diner accounts aren't open yet</div>
+        <div class="wsign-title">You don't need one to order</div></div>
+      <div class="wsign-step"><p style="margin-top:0">Scan the QR code on your table and type your first name. Sign in here is for restaurant owners and managers.</p>
+        <button class="btn primary big scanbtn" data-scan style="width:100%">Scan table QR</button>
+        <button class="btn" data-act="signout" style="margin-top:12px;width:100%">Log out</button></div></div></section>`);
     const by = {}; S.visits.forEach((v) => { (by[v.rid] ||= { name: v.rname, list: [] }).list.push(v); });
     const groups = Object.values(by).sort((a, b) => b.list[0].date - a.list[0].date);
     const who = S.user.phoneNumber || S.user.email || "";
